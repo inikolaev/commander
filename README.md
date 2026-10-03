@@ -45,7 +45,7 @@ The universal bundle is also available at `dist/universal/Commander.app`.
 | Command-D | Open the active pane’s current directory in the other pane, keeping focus |
 | Space | Toggle marking the current entry |
 | Shift + arrows | Extend or shrink a selection range |
-| Enter | Enter selected folder |
+| Enter | Enter selected folder or open file in its default app |
 | Left / Right | Move between name columns |
 | Home / End | First / last item |
 | Page Up / Page Down | Move by one visible page |
@@ -62,7 +62,7 @@ The universal bundle is also available at `dist/universal/Commander.app`.
 | F8 | Move selected file or folder to macOS Trash after confirmation |
 | F10 / Command-Q | Confirm quitting |
 
-Click to activate a pane; double-click to enter a folder. Mouse wheel/trackpad
+Click to activate a pane; double-click to enter a folder or open a file. Mouse wheel/trackpad
 scrolling moves selection; typing a filename prefix selects the first match.
 The prefix resets after one second or Escape. The bottom shortcut strip has ten numbered slots: 3 View, 4 Edit, 5 Copy, 6 Move, 7 Mkdir, 8 Delete,
 and 10 Quit. Other slots are empty; populated slots are clickable. The Navigate menu
@@ -93,7 +93,11 @@ black on the selection background. No configuration file is required.
 iCloud files that are not downloaded or are downloading show a cloud with a down
 arrow at the right of their filename column. The selected
 file's footer repeats the compact icon beside the usual metadata. Locally available
-files have no row icon. Status is a metadata snapshot, refreshed with Command-R,
+files have no row icon. Panes automatically refresh when filesystem changes are detected
+and when Commander becomes active, preserving the selected file and surviving marks.
+Filesystem identities keep selection and marks on files renamed within the displayed
+directory, with path-based fallback for replaced files and ambiguous hard links.
+Status is a metadata snapshot, also refreshed with Command-R,
 directory navigation, or closing the viewer; the indicator does not initiate a
 download. This uses Apple's iCloud metadata, not third-party cloud-provider status.
 
@@ -211,8 +215,8 @@ Escape cancels. Folders and their contents are moved together; symlinks are tras
 as links. Deletion never falls back to permanent removal if Trash is unavailable.
 Errors appear in a red dialog, and successful deletion refreshes affected panes.
 
-This draft does not support folder copying, permanent deletion, file launching, shell,
-automatic filesystem watching, or persistent navigation history.
+This draft does not support folder copying, permanent deletion, shell,
+or persistent navigation history.
 macOS privacy restrictions can prevent access to some directories; the pane reports
 the error and retains the previous listing.
 
@@ -299,3 +303,14 @@ path used by F4:
 Stage logging is opt-in and never includes document contents.
 See [the 100 MiB baseline](docs/performance/editor-loading.md) for measured results
 and the comparison conditions.
+
+### Opening files
+
+Enter or double-click opens the file under the cursor in its macOS default app,
+ignoring marks. If there is no default, a custom Open with dialog lists registered
+apps and Other…. Arrow keys, Home/End, Page Up/Down, and the mouse wheel navigate
+the list; Enter or double-click chooses an item. Escape cancels.
+Other… opens a custom folder browser starting in /Applications. Choose an .app,
+enter subfolders, use .. to go up, or Enter path… for a folder/application path
+(including ~). Cancel returns to the suggested apps. App choices apply only to
+this opening and do not change system defaults. Launch errors appear in a dialog.

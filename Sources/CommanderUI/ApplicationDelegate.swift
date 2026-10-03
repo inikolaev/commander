@@ -78,6 +78,7 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
     var onQuitRequested: () -> Void = { NSApp.terminate(nil) }
     private let panes: [PaneViewController]
     private var activeIndex = 0
+    private let fileOpenCoordinator = FileOpenCoordinator()
     private let copyCoordinator = CopyCoordinator()
     private let renameCoordinator = RenameCoordinator()
     private let shortcuts = TerminalKeyBar()
@@ -86,7 +87,7 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
     private let deleteCoordinator = DeleteCoordinator()
     private var editor: FileEditorCoordinator?
     private var viewer: FileViewerCoordinator?
-    var fileOperationInProgress: Bool { editor?.isBusy == true || renameCoordinator.isBusy || moveCoordinator.isBusy || createDirectoryCoordinator.isBusy || copyCoordinator.isBusy || deleteCoordinator.isBusy }
+    var fileOperationInProgress: Bool { fileOpenCoordinator.isBusy || editor?.isBusy == true || renameCoordinator.isBusy || moveCoordinator.isBusy || createDirectoryCoordinator.isBusy || copyCoordinator.isBusy || deleteCoordinator.isBusy }
     private var operationInProgress: Bool { isExitPromptVisible || fileOperationInProgress || viewer != nil || editor != nil }
     private var activePane: PaneViewController { panes[activeIndex] }
 
@@ -181,7 +182,11 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
             for (paneIndex, pane) in panes.enumerated() { pane.setActive(paneIndex == index) }
         case .switchPane: activate(1 - index)
         case .matchDirectory: matchDirectory(nil)
-        case .open: panes[index].openSelected()
+        case .open:
+            guard !operationInProgress, !panes[index].isLoading, let window,
+                  let row = panes[index].state.selectedRow else { return }
+            if row.isDirectory { panes[index].openSelected() }
+            else { fileOpenCoordinator.begin(file: row.url, window: window) }
         case .parent: panes[index].goToParent()
         case .viewFile: viewSelected()
         case .editFile: editSelected()

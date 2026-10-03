@@ -57,7 +57,7 @@ public struct PaneState: Sendable {
         let anchor = rangeAnchor ?? current
         markedURLs = marksBeforeRange
         for row in rows[min(anchor, index)...max(anchor, index)] {
-            if case .entry = row { markedURLs.insert(row.url.standardizedFileURL) }
+            if case .entry(let entry) = row { markedURLs.insert(entry.selectionURL) }
         }
         selectedIndex = index
     }
@@ -68,14 +68,14 @@ public struct PaneState: Sendable {
     }
 
     public func isMarked(_ row: PaneRow) -> Bool {
-        guard case .entry = row else { return false }
-        return markedURLs.contains(row.url.standardizedFileURL)
+        guard case .entry(let entry) = row else { return false }
+        return markedURLs.contains(entry.selectionURL)
     }
 
     public mutating func toggleMark() {
         endRangeSelection()
-        guard let row = selectedRow, case .entry = row else { return }
-        let url = row.url.standardizedFileURL
+        guard let row = selectedRow, case .entry(let entry) = row else { return }
+        let url = entry.selectionURL
         if !markedURLs.insert(url).inserted { markedURLs.remove(url) }
     }
 
@@ -100,12 +100,41 @@ public struct PaneState: Sendable {
 
     public mutating func replace(directory: URL, entries: [FileEntry], preferredSelection: URL? = nil, directoryModified: Date? = nil) {
         endRangeSelection()
-        if self.directory != directory.standardizedFileURL { markedURLs.removeAll() }
-        else { markedURLs.formIntersection(entries.map { $0.url.standardizedFileURL }) }
+        let sameDirectory = self.directory == directory.standardizedFileURL
+        let oldEntries = rows.compactMap { row -> FileEntry? in
+            if case .entry(let entry) = row { return entry }
+            return nil
+        }
+        let byURL = Dictionary(entries.map { ($0.url.standardizedFileURL, $0) }, uniquingKeysWith: { first, _ in first })
+        let byIdentity = Dictionary(grouping: entries, by: \.identity)
+        let oldByIdentity = Dictionary(grouping: oldEntries, by: \.identity)
+        func matchingURL(for old: FileEntry) -> URL? {
+            let atSamePath = byURL[old.url.standardizedFileURL]
+            if let identity = old.identity {
+                // A path disambiguates unchanged hard links; otherwise only follow an unambiguous identity.
+                if atSamePath?.identity == identity { return atSamePath?.url }
+                if oldByIdentity[identity]?.count == 1, let matches = byIdentity[identity], matches.count == 1 {
+                    return matches[0].url
+                }
+            }
+            // Preserve path-based behavior for atomic saves and filesystems without identifiers.
+            return atSamePath?.url
+        }
+        var selection = preferredSelection
+        if sameDirectory {
+            if let preferredSelection,
+               let old = oldEntries.first(where: { $0.url.standardizedFileURL == preferredSelection.standardizedFileURL }) {
+                selection = matchingURL(for: old)
+            }
+            markedURLs = Set(oldEntries.filter { markedURLs.contains($0.selectionURL) }
+                .compactMap { matchingURL(for: $0)?.standardizedFileURL })
+        } else {
+            markedURLs.removeAll()
+        }
         self.directory = directory.standardizedFileURL
         self.directoryModified = directoryModified
         rows = (parent.map { [PaneRow.parent($0)] } ?? []) + entries.map(PaneRow.entry)
-        selectedIndex = preferredSelection.flatMap { preferred in
+        selectedIndex = selection.flatMap { preferred in
             rows.firstIndex { $0.url.standardizedFileURL == preferred.standardizedFileURL }
         } ?? (rows.isEmpty ? nil : 0)
     }

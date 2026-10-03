@@ -7,6 +7,7 @@ import FileManagerCore
 @MainActor
 final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
     enum Mode {
+        case list(title: String, message: String, items: [String])
         case textInput(title: String, prompt: String, value: String, confirmTitle: String)
         case confirmation(sourceName: String, destination: String, isBatch: Bool = false)
         case progress(sourceName: String, destination: String)
@@ -15,6 +16,11 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
         case busy(title: String, message: String)
         case choice(title: String, message: String, buttons: [String])
     }
+    private(set) var selectedItem = 0
+    private var firstVisibleItem = 0
+    private var listItems: [String]? { if case .list(_, _, let items) = mode { items } else { nil } }
+    private var listRect: NSRect { NSRect(x: panelRect.minX + 26, y: panelRect.minY + 72, width: panelRect.width - 52, height: panelRect.height - 162) }
+    private var visibleItemCount: Int { max(1, Int(listRect.height / 22)) }
     let mode: Mode
     var onChoice: ((Int) -> Void)?
     var onConfirm: ((String) -> Void)?
@@ -42,7 +48,7 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
     private var background: NSColor { usesRed ? red : gray }
     var panelRect: NSRect {
         let width = min(660, max(1, bounds.width - 40))
-        let height: CGFloat = if case .progress = mode { 264 } else if isError { 226 } else { 206 }
+        let height: CGFloat = if listItems != nil { min(440, bounds.height - 24) } else if case .progress = mode { 264 } else if isError { 226 } else { 206 }
         return NSRect(x: floor((bounds.width - width) / 2), y: floor((bounds.height - height) / 2), width: width, height: height)
     }
     private var fieldRect: NSRect {
@@ -52,6 +58,7 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
     private var buttonRects: [NSRect] {
         let panel = panelRect
         if isBusy { return [] }
+        if listItems != nil { return [NSRect(x: panel.midX - 70, y: panel.maxY - 47, width: 140, height: 24)] }
         if let buttons = choiceButtons {
             let width = min(140, (panel.width - 52) / CGFloat(buttons.count))
             return buttons.indices.map { NSRect(x: panel.midX - width * CGFloat(buttons.count) / 2 + width * CGFloat($0), y: panel.maxY - 47, width: width, height: 24) }
@@ -146,7 +153,7 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
         }
         let title: String
         switch mode {
-        case .error(_, let heading), .decision(let heading, _, _, _), .busy(let heading, _), .textInput(let heading, _, _, _), .choice(let heading, _, _): title = heading
+        case .list(let heading, _, _), .error(_, let heading), .decision(let heading, _, _, _), .busy(let heading, _), .textInput(let heading, _, _, _), .choice(let heading, _, _): title = heading
         default: title = "Copy"
         }
         let titleWidth = ceil((title as NSString).size(withAttributes: [.font: TerminalTheme.font]).width) + 8
@@ -156,6 +163,14 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
         TerminalTheme.text(title.trimmingCharacters(in: .whitespaces), in: titleRect, color: foreground, alignment: .center)
 
         switch mode {
+        case .list(_, let message, let items):
+            label(message, y: 40)
+            for index in firstVisibleItem..<min(items.count, firstVisibleItem + visibleItemCount) {
+                let rect = NSRect(x: listRect.minX, y: listRect.minY + CGFloat(index - firstVisibleItem) * 22, width: listRect.width, height: 22)
+                if index == selectedItem { TerminalTheme.selection.setFill(); rect.fill() }
+                TerminalTheme.text(items[index], in: rect, color: foreground)
+            }
+            label("↑↓ Select · Enter Open · Esc Cancel   \(items.isEmpty ? 0 : selectedItem + 1)/\(items.count)", y: panel.height - 88)
         case .textInput(_, let prompt, _, _):
             TerminalTheme.selection.setFill()
             fieldRect.fill()
@@ -203,6 +218,7 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
         separator.stroke()
         let titles: [String]
         switch mode {
+        case .list: titles = ["Cancel"]
         case .confirmation: titles = ["Copy", "Cancel"]
         case .textInput(_, _, _, let confirmTitle): titles = [confirmTitle, "Cancel"]
         case .decision(_, _, let confirmTitle, _): titles = [confirmTitle, "Cancel"]
@@ -212,7 +228,7 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
         case .choice(_, _, let buttons): titles = buttons
         }
         for (index, rect) in buttonRects.enumerated() {
-            let focused = hasTextInput ? focusedControl == index + 1 : (isDecision || choiceButtons != nil) ? focusedControl == index : true
+            let focused = listItems != nil ? focusedControl == 1 : hasTextInput ? focusedControl == index + 1 : (isDecision || choiceButtons != nil) ? focusedControl == index : true
             let title = "[ \(titles[index]) ]"
             let titleSize = (title as NSString).size(withAttributes: [.font: TerminalTheme.font])
             let backgroundRect = rect.insetBy(dx: 2, dy: 2)
@@ -250,6 +266,7 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
 
     private func activateButton(_ index: Int) {
         guard !isBusy else { return }
+        if listItems != nil { onCancel?(); return }
         if choiceButtons != nil { onChoice?(index); return }
         if hasTextInput || isDecision {
             if index == 0 { onConfirm?(pathField.stringValue) }
@@ -278,6 +295,21 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
 
     override func keyDown(with event: NSEvent) {
         guard !isBusy else { return }
+        if let items = listItems {
+            switch event.keyCode {
+            case 53: onCancel?()
+            case 36, 76: if focusedControl == 1 { onCancel?() } else if !items.isEmpty { onChoice?(selectedItem) }
+            case 48: focusedControl = 1 - focusedControl; needsDisplay = true
+            case 125: selectListItem(selectedItem + 1)
+            case 126: selectListItem(selectedItem - 1)
+            case 115: selectListItem(0)
+            case 119: selectListItem(items.count - 1)
+            case 121: selectListItem(selectedItem + visibleItemCount)
+            case 116: selectListItem(selectedItem - visibleItemCount)
+            default: break
+            }
+            return
+        }
         switch event.keyCode {
         case 53: if isError { onDismiss?() } else if !cancelling { onCancel?() }
         case 36, 76: activateButton((isDecision || choiceButtons != nil) ? focusedControl : hasTextInput && focusedControl == 2 ? 1 : 0)
@@ -302,8 +334,26 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        if let items = listItems, listRect.contains(point) {
+            let index = firstVisibleItem + Int((point.y - listRect.minY) / 22)
+            if items.indices.contains(index) {
+                selectListItem(index)
+                if event.clickCount == 2 { onChoice?(index) }
+            }
+            return
+        }
         if let index = buttonRects.firstIndex(where: { $0.contains(point) }) { activateButton(index) }
         // All other clicks are consumed, so panes cannot change underneath a dialog.
     }
-    override func scrollWheel(with event: NSEvent) {}
+    private func selectListItem(_ index: Int) {
+        guard let items = listItems, !items.isEmpty else { return }
+        focusedControl = 0
+        selectedItem = min(max(0, index), items.count - 1)
+        firstVisibleItem = min(firstVisibleItem, selectedItem)
+        firstVisibleItem = max(firstVisibleItem, selectedItem - visibleItemCount + 1)
+        needsDisplay = true
+    }
+    override func scrollWheel(with event: NSEvent) {
+        if event.scrollingDeltaY != 0 { selectListItem(selectedItem + (event.scrollingDeltaY < 0 ? 1 : -1)) }
+    }
 }

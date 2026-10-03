@@ -13,6 +13,10 @@ final class PaneViewController: NSViewController {
     private let terminalView: TerminalPaneView
     private var loadTask: Task<Void, Never>?
     private var requestID = UUID()
+    private var directoryMonitor: DirectoryMonitor?
+    private var monitoredDirectory: URL?
+    private var refreshTask: Task<Void, Never>?
+    private var refreshPending = false
     private(set) var isLoading = false
     private var status = ""
     private var listingStatus = ""
@@ -25,8 +29,48 @@ final class PaneViewController: NSViewController {
         self.reader = reader
         terminalView = TerminalPaneView(name: title)
         super.init(nibName: nil, bundle: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(applicationDidBecomeActive),
+            name: NSApplication.didBecomeActiveNotification, object: nil)
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    isolated deinit {
+        NotificationCenter.default.removeObserver(self)
+        loadTask?.cancel()
+        refreshTask?.cancel()
+    }
+
+    @objc private func applicationDidBecomeActive() {
+        guard isViewLoaded else { return }
+        scheduleRefresh()
+    }
+
+    private func monitor(_ directory: URL) {
+        let directory = directory.standardizedFileURL
+        guard monitoredDirectory != directory || directoryMonitor == nil else { return }
+        directoryMonitor = nil
+        monitoredDirectory = directory
+        directoryMonitor = DirectoryMonitor(directory: directory) { [weak self] in
+            guard let self, self.monitoredDirectory == directory else { return }
+            self.scheduleRefresh()
+        }
+    }
+
+    private func scheduleRefresh() {
+        // Do not postpone indefinitely when a directory changes continuously.
+        guard refreshTask == nil else { return }
+        refreshTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(150)) }
+            catch { return }
+            guard let self else { return }
+            self.refreshTask = nil
+            if self.loadTask != nil {
+                self.refreshPending = true
+            } else {
+                self.load(self.state.directory, automatic: true)
+            }
+        }
+    }
 
     override func loadView() {
         view = terminalView
@@ -72,14 +116,25 @@ final class PaneViewController: NSViewController {
     func focus() { view.window?.makeFirstResponder(terminalView) }
 
     func load(_ directory: URL, preferredSelection: URL? = nil) {
+        load(directory, preferredSelection: preferredSelection, automatic: false)
+    }
+
+    private func load(_ directory: URL, preferredSelection: URL? = nil, automatic: Bool) {
         _ = view
+        refreshTask?.cancel()
+        refreshTask = nil
+        refreshPending = false
         loadTask?.cancel()
+        // Start observing before taking the snapshot so changes during a read are not lost.
+        monitor(directory)
         let id = UUID()
         requestID = id
-        isLoading = true
-        isError = false
-        status = "Loading…"
-        render()
+        if !automatic {
+            isLoading = true
+            isError = false
+            status = "Loading…"
+            render()
+        }
         let reader = self.reader
         let hidden = showHidden
         loadTask = Task { [weak self] in
@@ -91,18 +146,29 @@ final class PaneViewController: NSViewController {
                 }
             }.value
             guard !Task.isCancelled, let self, self.requestID == id else { return }
+            self.loadTask = nil
             self.isLoading = false
             switch result {
             case .success(let (entries, modified)):
-                self.state.replace(directory: directory, entries: entries, preferredSelection: preferredSelection, directoryModified: modified)
+                // Capture the cursor at completion: the user can move it during a background read.
+                let selection = automatic ? self.state.selectedRow?.url : preferredSelection
+                self.state.replace(directory: directory, entries: entries, preferredSelection: selection, directoryModified: modified)
+                let wasListingStatus = self.status == self.listingStatus
                 self.listingStatus = "\(entries.count) items\(hidden ? " · hidden shown" : "")"
-                self.status = self.listingStatus
-                self.isError = false
+                if !automatic || wasListingStatus || self.isError {
+                    self.status = self.listingStatus
+                    self.isError = false
+                }
             case .failure(let error):
                 self.status = "Cannot open folder: \(error.localizedDescription)"
                 self.isError = true
+                self.monitor(self.state.directory)
             }
             self.render()
+            if self.refreshPending {
+                self.refreshPending = false
+                self.scheduleRefresh()
+            }
         }
     }
 
@@ -122,10 +188,6 @@ final class PaneViewController: NSViewController {
         if row.isDirectory {
             if case .parent = row { goToParent() }
             else { load(row.url) }
-        } else {
-            status = "File opening is not included in this draft"
-            isError = false
-            render()
         }
     }
 
