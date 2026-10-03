@@ -42,6 +42,8 @@ The universal bundle is also available at `dist/universal/Commander.app`.
 | --- | --- |
 | Up / Down | Move selection |
 | Tab / Shift-Tab | Switch active pane |
+| Option-F1 / Command-1 | Choose location for the left pane |
+| Option-F2 / Command-2 | Choose location for the right pane |
 | Command-D | Open the active pane’s current directory in the other pane, keeping focus |
 | Space | Toggle marking the current entry |
 | Shift + arrows | Extend or shrink a selection range |
@@ -87,6 +89,24 @@ or macOS hidden flags) are muted, directories white, archives pink, executables
 green, and other files cyan. Executable status uses filesystem permissions and
 follows symlinks. Hidden coloring wins over categories; selected names remain
 black on the selection background. No configuration file is required.
+
+### Locations
+
+Option-F1 and Option-F2 open the left and right pane location pickers. Command-1
+and Command-2 are alternatives when macOS uses the function keys for system controls.
+The same commands are available in the Navigate menu. Holding Option/Alt shows
+`1 Left` and `2 Right` in the bottom shortcut bar; both labels are clickable.
+Use arrows and Enter, or
+double-click a location, to open it and focus that pane. Escape cancels without
+changing either pane or its focus.
+
+Locations include Home, iCloud Drive when its local folder exists, and visible,
+browsable mounted volumes, including external drives, disk images, and mounted
+network shares. The list is rediscovered each time it opens. iCloud Drive opens
+`~/Library/Mobile Documents/com~apple~CloudDocs`; Finder's virtual view may also
+include app-specific folders outside this directory. Browsing does not request
+file downloads. A missing or inaccessible location reports an error and retains
+the pane's previous listing. Favourites are not included yet.
 
 ### File viewer
 

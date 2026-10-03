@@ -50,6 +50,8 @@ public final class ApplicationDelegate: NSObject, NSApplicationDelegate {
 
         let navigation = NSMenu(title: "Navigate")
         navigation.addItem(withTitle: "Go to Folder…", action: #selector(CommanderWindowController.goToFolder(_:)), keyEquivalent: "l")
+        navigation.addItem(withTitle: "Left Pane Locations…", action: #selector(CommanderWindowController.leftLocations(_:)), keyEquivalent: "1")
+        navigation.addItem(withTitle: "Right Pane Locations…", action: #selector(CommanderWindowController.rightLocations(_:)), keyEquivalent: "2")
         let matchDirectory = navigation.addItem(withTitle: "Open Current Directory in Other Pane",
             action: #selector(CommanderWindowController.matchDirectory(_:)), keyEquivalent: "d")
         matchDirectory.keyEquivalentModifierMask = [.command]
@@ -79,6 +81,7 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
     private let panes: [PaneViewController]
     private var activeIndex = 0
     private let fileOpenCoordinator = FileOpenCoordinator()
+    private let locationCoordinator: LocationCoordinator
     private let copyCoordinator = CopyCoordinator()
     private let renameCoordinator = RenameCoordinator()
     private let shortcuts = TerminalKeyBar()
@@ -87,11 +90,12 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
     private let deleteCoordinator = DeleteCoordinator()
     private var editor: FileEditorCoordinator?
     private var viewer: FileViewerCoordinator?
-    var fileOperationInProgress: Bool { fileOpenCoordinator.isBusy || editor?.isBusy == true || renameCoordinator.isBusy || moveCoordinator.isBusy || createDirectoryCoordinator.isBusy || copyCoordinator.isBusy || deleteCoordinator.isBusy }
+    var fileOperationInProgress: Bool { locationCoordinator.isPresented || fileOpenCoordinator.isBusy || editor?.isBusy == true || renameCoordinator.isBusy || moveCoordinator.isBusy || createDirectoryCoordinator.isBusy || copyCoordinator.isBusy || deleteCoordinator.isBusy }
     private var operationInProgress: Bool { isExitPromptVisible || fileOperationInProgress || viewer != nil || editor != nil }
     private var activePane: PaneViewController { panes[activeIndex] }
 
-    init() {
+    init(locationReader: any LocationReading = LocalLocationReader()) {
+        locationCoordinator = LocationCoordinator(reader: locationReader)
         let home = FileManager.default.homeDirectoryForCurrentUser
         let reader = LocalDirectoryReader()
         panes = [
@@ -114,10 +118,15 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
         window.contentViewController = root
         for pane in panes { root.addChild(pane) }
 
-        window.onModifiersChanged = { [weak self] flags in self?.shortcuts.shiftPressed = flags.contains(.shift) }
+        window.onModifiersChanged = { [weak self] flags in
+            self?.shortcuts.shiftPressed = flags.contains(.shift)
+            self?.shortcuts.optionPressed = flags.contains(.option)
+        }
         shortcuts.onCommand = { [weak self] command in
             guard let self else { return }
             switch command {
+            case .leftLocations: self.chooseLocation(for: 0)
+            case .rightLocations: self.chooseLocation(for: 1)
             case .viewFile: self.viewSelected()
             case .editFile: self.editSelected()
             case .copy: self.copySelected()
@@ -182,6 +191,7 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
             for (paneIndex, pane) in panes.enumerated() { pane.setActive(paneIndex == index) }
         case .switchPane: activate(1 - index)
         case .matchDirectory: matchDirectory(nil)
+        case .locations(let paneIndex): chooseLocation(for: paneIndex)
         case .open:
             guard !operationInProgress, !panes[index].isLoading, let window,
                   let row = panes[index].state.selectedRow else { return }
@@ -199,8 +209,14 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
         }
     }
 
-    func windowDidResignKey(_ notification: Notification) { shortcuts.shiftPressed = false }
-    func windowDidBecomeKey(_ notification: Notification) { shortcuts.shiftPressed = NSEvent.modifierFlags.contains(.shift) }
+    func windowDidResignKey(_ notification: Notification) {
+        shortcuts.shiftPressed = false
+        shortcuts.optionPressed = false
+    }
+    func windowDidBecomeKey(_ notification: Notification) {
+        shortcuts.shiftPressed = NSEvent.modifierFlags.contains(.shift)
+        shortcuts.optionPressed = NSEvent.modifierFlags.contains(.option)
+    }
 
     private func renameSelected() {
         guard let window, !operationInProgress, !activePane.isLoading,
@@ -368,6 +384,18 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
                     }
                 }
             })
+    }
+
+    @objc func leftLocations(_ sender: Any?) { chooseLocation(for: 0) }
+    @objc func rightLocations(_ sender: Any?) { chooseLocation(for: 1) }
+
+    private func chooseLocation(for index: Int) {
+        guard let window, !operationInProgress, panes.indices.contains(index) else { return }
+        locationCoordinator.begin(paneName: index == 0 ? "Left pane" : "Right pane", window: window) { [weak self] url in
+            guard let self else { return }
+            self.panes[index].load(url)
+            self.activate(index)
+        }
     }
 
     @objc func refresh(_ sender: Any?) {

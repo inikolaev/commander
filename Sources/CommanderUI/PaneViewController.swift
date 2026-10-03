@@ -2,6 +2,7 @@ import AppKit
 import FileManagerCore
 
 enum PaneAction {
+    case locations(Int)
     case activate, switchPane, matchDirectory, open, parent, copy, move, rename, delete, viewFile, editFile, quit, createDirectory
 }
 
@@ -14,6 +15,7 @@ final class PaneViewController: NSViewController {
     private var loadTask: Task<Void, Never>?
     private var requestID = UUID()
     private var directoryMonitor: DirectoryMonitor?
+    private var monitorTask: Task<Void, Never>?
     private var monitoredDirectory: URL?
     private var refreshTask: Task<Void, Never>?
     private var refreshPending = false
@@ -38,6 +40,7 @@ final class PaneViewController: NSViewController {
         NotificationCenter.default.removeObserver(self)
         loadTask?.cancel()
         refreshTask?.cancel()
+        monitorTask?.cancel()
     }
 
     @objc private func applicationDidBecomeActive() {
@@ -47,12 +50,22 @@ final class PaneViewController: NSViewController {
 
     private func monitor(_ directory: URL) {
         let directory = directory.standardizedFileURL
-        guard monitoredDirectory != directory || directoryMonitor == nil else { return }
+        guard monitoredDirectory != directory || (directoryMonitor == nil && monitorTask == nil) else { return }
+        monitorTask?.cancel()
         directoryMonitor = nil
         monitoredDirectory = directory
-        directoryMonitor = DirectoryMonitor(directory: directory) { [weak self] in
-            guard let self, self.monitoredDirectory == directory else { return }
-            self.scheduleRefresh()
+        monitorTask = Task { [weak self] in
+            let monitor = await Task.detached(priority: .utility) { [weak self] in
+                DirectoryMonitor(directory: directory) { [weak self] in
+                    guard let self, self.monitoredDirectory == directory else { return }
+                    self.scheduleRefresh()
+                }
+            }.value
+            guard !Task.isCancelled, let self, self.monitoredDirectory == directory else { return }
+            self.monitorTask = nil
+            self.directoryMonitor = monitor
+            // Close the gap between the initial snapshot and watcher registration.
+            if monitor != nil { self.scheduleRefresh() }
         }
     }
 
@@ -89,6 +102,7 @@ final class PaneViewController: NSViewController {
             case .activate: self.onAction?(.activate)
             case .switchPane: self.onAction?(.switchPane)
             case .matchDirectory: self.onAction?(.matchDirectory)
+            case .locations(let index): self.onAction?(.locations(index))
             case .open: self.onAction?(.open)
             case .parent: self.onAction?(.parent)
             case .viewFile: self.onAction?(.viewFile)
@@ -125,7 +139,7 @@ final class PaneViewController: NSViewController {
         refreshTask = nil
         refreshPending = false
         loadTask?.cancel()
-        // Start observing before taking the snapshot so changes during a read are not lost.
+        // Register asynchronously; completion requests another snapshot to cover changes during setup.
         monitor(directory)
         let id = UUID()
         requestID = id

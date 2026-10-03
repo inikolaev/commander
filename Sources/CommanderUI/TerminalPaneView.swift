@@ -29,6 +29,7 @@ enum PaneInput {
     case toggleMark
     case extendSelection(Int), endRangeSelection
     case activate, switchPane, matchDirectory, open, parent, copy, move, rename, delete, viewFile, editFile, quit, createDirectory
+    case locations(Int)
     case select(Int)
 }
 
@@ -159,6 +160,14 @@ final class TerminalPaneView: NSView {
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         if modifiers == .command, event.charactersIgnoringModifiers?.lowercased() == "d" {
             onInput?(.matchDirectory)
+            return
+        }
+        if modifiers == .option, [122, 120].contains(event.keyCode) {
+            onInput?(.locations(event.keyCode == 122 ? 0 : 1))
+            return
+        }
+        if modifiers == .command, let key = event.charactersIgnoringModifiers, ["1", "2"].contains(key) {
+            onInput?(.locations(key == "1" ? 0 : 1))
             return
         }
         guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty else {
