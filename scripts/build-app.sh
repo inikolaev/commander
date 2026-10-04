@@ -21,10 +21,17 @@ swift build "${BUILD_ARGS[@]}"
 BIN_DIR="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)"
 mkdir -p "$APP/Contents/MacOS"
 mkdir -p "$APP/Contents/Resources"
+mkdir -p "$APP/Contents/Frameworks"
 cp Assets/Commander.icns "$APP/Contents/Resources/Commander.icns"
 cp LICENSE "$APP/Contents/Resources/LICENSE"
 cp THIRD-PARTY-NOTICES.txt "$APP/Contents/Resources/THIRD-PARTY-NOTICES.txt"
 cp "$BIN_DIR/Commander" "$APP/Contents/MacOS/Commander"
+SPARKLE_FRAMEWORK=$(find .build/artifacts -type d -name Sparkle.framework -print -quit)
+if [[ -z "$SPARKLE_FRAMEWORK" ]]; then
+    echo "Sparkle.framework was not found in SwiftPM artifacts" >&2
+    exit 1
+fi
+ditto "$SPARKLE_FRAMEWORK" "$APP/Contents/Frameworks/Sparkle.framework"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -39,11 +46,17 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleVersion</key><string>$APP_BUILD_NUMBER</string>
     <key>LSMinimumSystemVersion</key><string>13.0</string>
     <key>NSHighResolutionCapable</key><true/>
+    <key>SUFeedURL</key><string>https://inikolaev.github.io/commander/appcast.xml</string>
+    <key>SUPublicEDKey</key><string>XB/GxXy5jYTCKmNWcaEju+anDChdM3GfowpPI7Xa5FY=</string>
+    <key>SUEnableAutomaticChecks</key><true/>
+    <key>SUAllowsAutomaticUpdates</key><false/>
 </dict></plist>
 PLIST
 if [[ -n "${SIGNING_IDENTITY:-}" ]]; then
+    codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$APP/Contents/Frameworks/Sparkle.framework"
     codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$APP"
 else
+    codesign --force --sign - "$APP/Contents/Frameworks/Sparkle.framework"
     codesign --force --sign - "$APP"
 fi
 printf 'Built %s/%s\n' "$PWD" "$APP"
