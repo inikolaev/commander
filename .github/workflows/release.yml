@@ -167,47 +167,18 @@ jobs:
             dist/Commander-$APP_VERSION-macOS-x86_64.dmg.sha256 --clobber
           gh release edit "$RELEASE_TAG" --draft=false
 
-      - name: Generate architecture-specific Sparkle feeds
+      - name: Generate Sparkle appcast
         shell: bash
         run: |
           published=$(date -R)
-          for arch in arm64 x86_64; do
-            dmg="dist/Commander-$APP_VERSION-macOS-$arch.dmg"
-            length=$(stat -f%z "$dmg")
-            signature=$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' "dist/sparkle-signature-$arch.txt")
-            test -n "$signature"
-            cat > "docs/appcast-$arch.xml" <<APPCAST
-          <?xml version="1.0" encoding="utf-8"?>
-          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-            <channel>
-              <title>Commander Updates ($arch)</title>
-              <link>https://inikolaev.github.io/commander/appcast-$arch.xml</link>
-              <description>Commander $arch release updates</description>
-              <language>en</language>
-              <item>
-                <title>Commander $APP_VERSION</title>
-                <pubDate>$published</pubDate>
-                <sparkle:version>$APP_BUILD_NUMBER</sparkle:version>
-                <sparkle:shortVersionString>$APP_VERSION</sparkle:shortVersionString>
-                <enclosure
-                  url="https://github.com/$GITHUB_REPOSITORY/releases/download/v$APP_VERSION/Commander-$APP_VERSION-macOS-$arch.dmg"
-                  sparkle:edSignature="$signature"
-                  length="$length"
-                  type="application/x-apple-diskimage" />
-              </item>
-            </channel>
-          </rss>
-          APPCAST
-          done
-          # The currently shipped universal build still reads appcast.xml.
-          # Give it one architecture-aware crossover release. Apple silicon
-          # matches the arm64-qualified item; Intel skips it and uses x86_64.
           arm64_dmg="dist/Commander-$APP_VERSION-macOS-arm64.dmg"
           x86_dmg="dist/Commander-$APP_VERSION-macOS-x86_64.dmg"
           arm64_length=$(stat -f%z "$arm64_dmg")
           x86_length=$(stat -f%z "$x86_dmg")
           arm64_signature=$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' "dist/sparkle-signature-arm64.txt")
           x86_signature=$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' "dist/sparkle-signature-x86_64.txt")
+          test -n "$arm64_signature"
+          test -n "$x86_signature"
           cat > docs/appcast.xml <<APPCAST
           <?xml version="1.0" encoding="utf-8"?>
           <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
