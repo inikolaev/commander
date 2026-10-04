@@ -13,36 +13,30 @@ permissions:
   actions: read
 
 jobs:
-  release:
+  build:
     if: github.ref == 'refs/heads/main'
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
     runs-on: macos-15
     timeout-minutes: 60
-    permissions:
-      contents: write
-      actions: read
-      pages: write
-      id-token: write
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
       GH_TOKEN: ${{ github.token }}
-      GH_REPO: ${{ github.repository }}
     steps:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
 
       - name: Determine version
-        id: version
         shell: bash
         run: |
-          # The original run date and run number stay stable when retrying a run.
           created_at=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .created_at)
           year=${created_at:0:4}
           month=${created_at:5:2}
-          version="$year.$((10#$month)).$GITHUB_RUN_NUMBER"
-          echo "APP_VERSION=$version" >> "$GITHUB_ENV"
+          echo "APP_VERSION=$year.$((10#$month)).$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
           echo "APP_BUILD_NUMBER=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
-          echo "tag=v$version" >> "$GITHUB_OUTPUT"
 
       - name: Test
         run: |
@@ -58,100 +52,45 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: bash scripts/prepare-signing.sh
 
-      - name: Build, sign, notarize, and package universal app
+      - name: Build, sign, notarize, and package
         env:
           NOTARIZE: '1'
         run: |
-          bash scripts/package-app.sh
-          lipo dist/universal/Commander.app/Contents/MacOS/Commander -verify_arch arm64 x86_64
-          codesign --verify --deep --strict dist/universal/Commander.app
-          (cd dist && shasum -a 256 -c "Commander-$APP_VERSION-macOS-universal.zip.sha256")
-
-      - name: Create notarized DMG
-        env:
-          NOTARIZE: '1'
-        run: |
-          bash scripts/package-dmg.sh
-          (cd dist && shasum -a 256 -c "Commander-$APP_VERSION-macOS-universal.dmg.sha256")
+          bash scripts/package-app.sh "${{ matrix.arch }}"
+          file "dist/${{ matrix.arch }}/Commander.app/Contents/MacOS/Commander"
+          lipo "dist/${{ matrix.arch }}/Commander.app/Contents/MacOS/Commander" -verify_arch "${{ matrix.arch }}"
+          codesign --verify --deep --strict "dist/${{ matrix.arch }}/Commander.app"
+          bash scripts/package-dmg.sh "${{ matrix.arch }}"
+          (cd dist && shasum -a 256 -c "Commander-$APP_VERSION-macOS-${{ matrix.arch }}.zip.sha256")
+          (cd dist && shasum -a 256 -c "Commander-$APP_VERSION-macOS-${{ matrix.arch }}.dmg.sha256")
 
       - name: Sign Sparkle update
         env:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         shell: bash
         run: |
-          dmg="dist/Commander-$APP_VERSION-macOS-universal.dmg"
+          dmg="dist/Commander-$APP_VERSION-macOS-${{ matrix.arch }}.dmg"
           tools_dir=$(find .build/artifacts -type d -path '*/Sparkle/bin' -print -quit)
           test -n "$tools_dir"
           signature=$(printf '%s' "$SPARKLE_PRIVATE_KEY" | "$tools_dir/sign_update" --ed-key-file - "$dmg")
-          echo "SPARKLE_SIGNATURE=$signature" >> "$GITHUB_ENV"
+          printf '%s\n' "$signature" > "dist/sparkle-signature-${{ matrix.arch }}.txt"
 
-      - name: Publish release
-        env:
-          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+      - name: Stage release artifacts
         shell: bash
         run: |
-          archive="dist/Commander-$APP_VERSION-macOS-universal.zip"
-          dmg="dist/Commander-$APP_VERSION-macOS-universal.dmg"
-          # A draft lets a failed upload be retried without publishing an incomplete release.
-          if gh release view "$RELEASE_TAG" --json isDraft > "$RUNNER_TEMP/release.json"; then
-            if [[ $(jq -r .isDraft "$RUNNER_TEMP/release.json") == false ]]; then
-              echo "Release $RELEASE_TAG is already published; leaving its assets unchanged."
-              exit 0
-            fi
-          else
-            cat > "$RUNNER_TEMP/release-notes.md" <<NOTES
-          Universal macOS app for Apple silicon and Intel. Requires macOS 13 or later.
+          mkdir -p upload
+          cp "dist/Commander-$APP_VERSION-macOS-${{ matrix.arch }}.zip" upload/
+          cp "dist/Commander-$APP_VERSION-macOS-${{ matrix.arch }}.zip.sha256" upload/
+          cp "dist/Commander-$APP_VERSION-macOS-${{ matrix.arch }}.dmg" upload/
+          cp "dist/Commander-$APP_VERSION-macOS-${{ matrix.arch }}.dmg.sha256" upload/
+          cp "dist/sparkle-signature-${{ matrix.arch }}.txt" upload/
 
-          Download the DMG and drag Commander.app to Applications. The ZIP is also available for manual installation.
-          The app is Developer ID signed and notarized by Apple, with the notarization ticket stapled for offline verification.
-
-          Version: $APP_VERSION · Build: $APP_BUILD_NUMBER · Commit: $GITHUB_SHA
-          NOTES
-            gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --draft \
-              --title "Commander $APP_VERSION" --generate-notes \
-              --notes-file "$RUNNER_TEMP/release-notes.md"
-          fi
-          gh release upload "$RELEASE_TAG" "$archive" "$archive.sha256" "$dmg" "$dmg.sha256" --clobber
-          gh release edit "$RELEASE_TAG" --draft=false
-          echo "Released [$RELEASE_TAG](https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG)" >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Generate Sparkle appcast
-        shell: bash
-        run: |
-          dmg="dist/Commander-$APP_VERSION-macOS-universal.dmg"
-          length=$(stat -f%z "$dmg")
-          signature=$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' <<<"$SPARKLE_SIGNATURE")
-          test -n "$signature"
-          published=$(date -R)
-          cat > docs/appcast.xml <<APPCAST
-          <?xml version="1.0" encoding="utf-8"?>
-          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
-            <channel>
-              <title>Commander Updates</title>
-              <link>https://inikolaev.github.io/commander/appcast.xml</link>
-              <description>Commander release updates</description>
-              <language>en</language>
-              <item>
-                <title>Commander $APP_VERSION</title>
-                <pubDate>$published</pubDate>
-                <sparkle:version>$APP_BUILD_NUMBER</sparkle:version>
-                <sparkle:shortVersionString>$APP_VERSION</sparkle:shortVersionString>
-                <enclosure
-                  url="https://github.com/$GITHUB_REPOSITORY/releases/download/v$APP_VERSION/Commander-$APP_VERSION-macOS-universal.dmg"
-                  sparkle:edSignature="$signature"
-                  length="$length"
-                  type="application/octet-stream" />
-              </item>
-            </channel>
-          </rss>
-          APPCAST
-
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-artifact@v4
         with:
-          path: docs
-      - name: Deploy Sparkle feed and site
-        uses: actions/deploy-pages@v4
+          name: commander-${{ matrix.arch }}
+          path: upload/
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Remove signing credentials
         if: always()
@@ -159,3 +98,114 @@ jobs:
           keychain="$RUNNER_TEMP/commander-signing.keychain-db"
           if [[ -f "$keychain" ]]; then security delete-keychain "$keychain"; fi
           rm -f "$RUNNER_TEMP/commander-certificate.p12"
+
+  release:
+    needs: build
+    runs-on: macos-15
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: read
+      pages: write
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Determine version
+        id: version
+        shell: bash
+        run: |
+          created_at=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .created_at)
+          year=${created_at:0:4}
+          month=${created_at:5:2}
+          version="$year.$((10#$month)).$GITHUB_RUN_NUMBER"
+          echo "APP_VERSION=$version" >> "$GITHUB_ENV"
+          echo "APP_BUILD_NUMBER=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
+          echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v5
+        with:
+          pattern: commander-*
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+        shell: bash
+        run: |
+          if gh release view "$RELEASE_TAG" --json isDraft > "$RUNNER_TEMP/release.json"; then
+            if [[ $(jq -r .isDraft "$RUNNER_TEMP/release.json") == false ]]; then
+              echo "Release $RELEASE_TAG is already published; leaving its assets unchanged."
+              exit 0
+            fi
+          else
+            cat > "$RUNNER_TEMP/release-notes.md" <<NOTES
+          Native macOS builds for Apple silicon (arm64) and Intel (x86_64). Requires macOS 13 or later.
+
+          Choose the DMG matching your Mac. The app is Developer ID signed and notarized by Apple, with the notarization ticket stapled for offline verification.
+
+          Version: $APP_VERSION · Build: $APP_BUILD_NUMBER · Commit: $GITHUB_SHA
+          NOTES
+            gh release create "$RELEASE_TAG" --target "$GITHUB_SHA" --draft \
+              --title "Commander $APP_VERSION" --generate-notes \
+              --notes-file "$RUNNER_TEMP/release-notes.md"
+          fi
+          gh release upload "$RELEASE_TAG" \
+            dist/Commander-$APP_VERSION-macOS-arm64.zip \
+            dist/Commander-$APP_VERSION-macOS-arm64.zip.sha256 \
+            dist/Commander-$APP_VERSION-macOS-arm64.dmg \
+            dist/Commander-$APP_VERSION-macOS-arm64.dmg.sha256 \
+            dist/Commander-$APP_VERSION-macOS-x86_64.zip \
+            dist/Commander-$APP_VERSION-macOS-x86_64.zip.sha256 \
+            dist/Commander-$APP_VERSION-macOS-x86_64.dmg \
+            dist/Commander-$APP_VERSION-macOS-x86_64.dmg.sha256 --clobber
+          gh release edit "$RELEASE_TAG" --draft=false
+
+      - name: Generate architecture-specific Sparkle feeds
+        shell: bash
+        run: |
+          published=$(date -R)
+          for arch in arm64 x86_64; do
+            dmg="dist/Commander-$APP_VERSION-macOS-$arch.dmg"
+            length=$(stat -f%z "$dmg")
+            signature=$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' "dist/sparkle-signature-$arch.txt")
+            test -n "$signature"
+            cat > "docs/appcast-$arch.xml" <<APPCAST
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>Commander Updates ($arch)</title>
+              <link>https://inikolaev.github.io/commander/appcast-$arch.xml</link>
+              <description>Commander $arch release updates</description>
+              <language>en</language>
+              <item>
+                <title>Commander $APP_VERSION</title>
+                <pubDate>$published</pubDate>
+                <sparkle:version>$APP_BUILD_NUMBER</sparkle:version>
+                <sparkle:shortVersionString>$APP_VERSION</sparkle:shortVersionString>
+                <enclosure
+                  url="https://github.com/$GITHUB_REPOSITORY/releases/download/v$APP_VERSION/Commander-$APP_VERSION-macOS-$arch.dmg"
+                  sparkle:edSignature="$signature"
+                  length="$length"
+                  type="application/x-apple-diskimage" />
+              </item>
+            </channel>
+          </rss>
+          APPCAST
+          done
+          # Keep the legacy feed alive for the last universal build. Existing
+          # universal installations use it to cross over to the arm64 release.
+          cp docs/appcast-arm64.xml docs/appcast.xml
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - name: Deploy Sparkle feeds and site
+        uses: actions/deploy-pages@v4
