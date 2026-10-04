@@ -3,7 +3,7 @@ import FileManagerCore
 import Sparkle
 
 @MainActor
-public final class ApplicationDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegate {
+public final class ApplicationDelegate: NSObject, NSApplicationDelegate, @preconcurrency SPUStandardUserDriverDelegate {
     private var mainWindow: CommanderWindowController?
     private let exitCoordinator = ExitCoordinator()
     private var updaterController: SPUStandardUpdaterController!
