@@ -1,0 +1,29 @@
+:root {
+  color-scheme: light dark;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  background: Canvas;
+  color: CanvasText;
+}
+* { box-sizing: border-box; }
+body { margin: 0; }
+main, footer { width: min(960px, calc(100% - 40px)); margin: 0 auto; }
+.hero { padding: 14vh 0 10vh; max-width: 760px; }
+.eyebrow { font-size: 14px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; opacity: .6; }
+h1 { font-size: clamp(64px, 12vw, 120px); letter-spacing: -.055em; line-height: .9; margin: 18px 0 28px; }
+.lead { font-size: clamp(22px, 4vw, 32px); line-height: 1.25; letter-spacing: -.02em; opacity: .8; }
+.actions { display: flex; gap: 12px; flex-wrap: wrap; margin: 36px 0 20px; }
+.actions a { padding: 13px 18px; border-radius: 10px; text-decoration: none; font-weight: 600; }
+.primary { background: CanvasText; color: Canvas; }
+.secondary { border: 1px solid color-mix(in srgb, CanvasText 22%, transparent); color: CanvasText; }
+.meta { font-size: 14px; opacity: .55; }
+.features { display: grid; grid-template-columns: repeat(3, 1fr); gap: 28px; padding: 64px 0; border-top: 1px solid color-mix(in srgb, CanvasText 14%, transparent); }
+.features h2, .install h2 { letter-spacing: -.02em; }
+.features p, .install p { line-height: 1.6; opacity: .7; }
+.install { padding: 64px 0 100px; border-top: 1px solid color-mix(in srgb, CanvasText 14%, transparent); }
+footer { display: flex; gap: 20px; flex-wrap: wrap; padding: 28px 0 48px; border-top: 1px solid color-mix(in srgb, CanvasText 14%, transparent); font-size: 14px; opacity: .65; }
+footer span { margin-right: auto; }
+footer a { color: inherit; }
+@media (max-width: 680px) {
+  .features { grid-template-columns: 1fr; }
+  .hero { padding-top: 10vh; }
+}
