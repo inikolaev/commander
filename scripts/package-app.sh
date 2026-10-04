@@ -2,14 +2,19 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-bash scripts/build-app.sh --universal
-APP="dist/universal/Commander.app"
+ARCH="${1:-$(uname -m)}"
+if [[ "$ARCH" != arm64 && "$ARCH" != x86_64 ]]; then
+    printf 'Usage: %s [arm64|x86_64]\n' "$0" >&2
+    exit 2
+fi
+bash scripts/build-app.sh "$ARCH"
+APP="dist/$ARCH/Commander.app"
 if [[ "${NOTARIZE:-0}" == 1 ]]; then
     bash scripts/notarize-app.sh "$APP"
 fi
 VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")
 NAME="Commander-$VERSION"
-ARCHIVE="$PWD/dist/$NAME-macOS-universal.zip"
+ARCHIVE="$PWD/dist/Commander-$VERSION-macOS-$ARCH.zip"
 STAGING=$(mktemp -d "${TMPDIR:-/tmp}/commander-package.XXXXXX")
 trap 'rm -rf "$STAGING"' EXIT
 mkdir "$STAGING/$NAME"
@@ -23,7 +28,7 @@ fi
 cat > "$STAGING/$NAME/Read Me.txt" <<TEXT
 Commander — macOS preview
 
-Requires macOS 13 or later. Supports Apple silicon and Intel Macs.
+Requires macOS 13 or later. This download is for $ARCH Macs.
 No Xcode, Swift installation, or terminal is needed.
 
 Drag Commander.app to Applications and open it.
@@ -47,6 +52,5 @@ macOS may ask permission to access your folders.
 TEXT
 codesign --verify --deep --strict "$STAGING/$NAME/Commander.app"
 ditto -c -k --sequesterRsrc --keepParent "$STAGING/$NAME" "$ARCHIVE"
-# Use a relative filename so recipients can run shasum -a 256 -c beside the ZIP.
-(cd dist && shasum -a 256 "$NAME-macOS-universal.zip" > "$NAME-macOS-universal.zip.sha256")
+(cd dist && shasum -a 256 "$(basename "$ARCHIVE")" > "$(basename "$ARCHIVE").sha256")
 printf 'Packaged %s\n' "$ARCHIVE"
