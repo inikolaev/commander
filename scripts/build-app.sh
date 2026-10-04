@@ -1,27 +1,24 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-# CI supplies a calendar version; local builds retain a development default.
+
 APP_VERSION="${APP_VERSION:-0.1.0}"
 APP_BUILD_NUMBER="${APP_BUILD_NUMBER:-2}"
+ARCH="${1:-$(uname -m)}"
 if [[ ! "$APP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ ! "$APP_BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
     printf 'APP_VERSION must contain three integers; APP_BUILD_NUMBER must be an integer.\n' >&2
     exit 2
 fi
-BUILD_ARGS=(-c release)
-APP="dist/Commander.app"
-if [[ "${1:-}" == "--universal" && $# == 1 ]]; then
-    BUILD_ARGS+=(--arch arm64 --arch x86_64)
-    APP="dist/universal/Commander.app"
-elif [[ $# != 0 ]]; then
-    printf 'Usage: %s [--universal]\n' "$0" >&2
+if [[ "$ARCH" != arm64 && "$ARCH" != x86_64 ]]; then
+    printf 'Usage: %s [arm64|x86_64]\n' "$0" >&2
     exit 2
 fi
+
+BUILD_ARGS=(-c release --arch "$ARCH")
+APP="dist/$ARCH/Commander.app"
 swift build "${BUILD_ARGS[@]}"
 BIN_DIR="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)"
-mkdir -p "$APP/Contents/MacOS"
-mkdir -p "$APP/Contents/Resources"
-mkdir -p "$APP/Contents/Frameworks"
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp Assets/Commander.icns "$APP/Contents/Resources/Commander.icns"
 cp LICENSE "$APP/Contents/Resources/LICENSE"
 cp THIRD-PARTY-NOTICES.txt "$APP/Contents/Resources/THIRD-PARTY-NOTICES.txt"
@@ -46,7 +43,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleVersion</key><string>$APP_BUILD_NUMBER</string>
     <key>LSMinimumSystemVersion</key><string>13.0</string>
     <key>NSHighResolutionCapable</key><true/>
-    <key>SUFeedURL</key><string>https://inikolaev.github.io/commander/appcast.xml</string>
+    <key>SUFeedURL</key><string>https://inikolaev.github.io/commander/appcast-$ARCH.xml</string>
     <key>SUPublicEDKey</key><string>XB/GxXy5jYTCKmNWcaEju+anDChdM3GfowpPI7Xa5FY=</string>
     <key>SUEnableAutomaticChecks</key><true/>
     <key>SUAllowsAutomaticUpdates</key><false/>
@@ -54,8 +51,6 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 PLIST
 SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
 if [[ -n "${SIGNING_IDENTITY:-}" ]]; then
-    # Sparkle's distribution contains nested helper code. Our custom (non-Xcode)
-    # packaging flow must re-sign it from the inside out before signing the app.
     codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$SPARKLE/Versions/B/XPCServices/Installer.xpc"
     codesign --force --options runtime --timestamp --preserve-metadata=entitlements --sign "$SIGNING_IDENTITY" "$SPARKLE/Versions/B/XPCServices/Downloader.xpc"
     codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$SPARKLE/Versions/B/Autoupdate"
@@ -70,4 +65,4 @@ else
     codesign --force --options runtime --sign - "$SPARKLE"
     codesign --force --sign - "$APP"
 fi
-printf 'Built %s/%s\n' "$PWD" "$APP"
+printf 'Built %s for %s\n' "$APP" "$ARCH"
