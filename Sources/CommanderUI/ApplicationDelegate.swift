@@ -98,12 +98,6 @@ public final class ApplicationDelegate: NSObject, NSApplicationDelegate, @precon
             keyEquivalent: ""
         )
         checkForUpdates.target = updaterController
-        let updateTestMarker = appMenu.addItem(
-            withTitle: "Sparkle Update Test ✓",
-            action: nil,
-            keyEquivalent: ""
-        )
-        updateTestMarker.isEnabled = false
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Hide Commander", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(withTitle: "Quit Commander", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
