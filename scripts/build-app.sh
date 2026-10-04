@@ -43,7 +43,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>CFBundleVersion</key><string>$APP_BUILD_NUMBER</string>
     <key>LSMinimumSystemVersion</key><string>13.0</string>
     <key>NSHighResolutionCapable</key><true/>
-    <key>SUFeedURL</key><string>https://inikolaev.github.io/commander/appcast-$ARCH.xml</string>
+    <key>SUFeedURL</key><string>https://inikolaev.github.io/commander/appcast.xml</string>
     <key>SUPublicEDKey</key><string>XB/GxXy5jYTCKmNWcaEju+anDChdM3GfowpPI7Xa5FY=</string>
     <key>SUEnableAutomaticChecks</key><true/>
     <key>SUAllowsAutomaticUpdates</key><false/>
