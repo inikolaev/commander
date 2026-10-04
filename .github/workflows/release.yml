@@ -20,6 +20,8 @@ jobs:
     permissions:
       contents: write
       actions: read
+      pages: write
+      id-token: write
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
       GH_TOKEN: ${{ github.token }}
@@ -72,6 +74,17 @@ jobs:
           bash scripts/package-dmg.sh
           (cd dist && shasum -a 256 -c "Commander-$APP_VERSION-macOS-universal.dmg.sha256")
 
+      - name: Sign Sparkle update
+        env:
+          SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          dmg="dist/Commander-$APP_VERSION-macOS-universal.dmg"
+          tools_dir=$(find .build/artifacts -type d -path '*/Sparkle/bin' -print -quit)
+          test -n "$tools_dir"
+          signature=$(printf '%s' "$SPARKLE_PRIVATE_KEY" | "$tools_dir/sign_update" --ed-key-file - "$dmg")
+          echo "SPARKLE_SIGNATURE=$signature" >> "$GITHUB_ENV"
+
       - name: Publish release
         env:
           RELEASE_TAG: ${{ steps.version.outputs.tag }}
@@ -101,6 +114,44 @@ jobs:
           gh release upload "$RELEASE_TAG" "$archive" "$archive.sha256" "$dmg" "$dmg.sha256" --clobber
           gh release edit "$RELEASE_TAG" --draft=false
           echo "Released [$RELEASE_TAG](https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG)" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Generate Sparkle appcast
+        shell: bash
+        run: |
+          dmg="dist/Commander-$APP_VERSION-macOS-universal.dmg"
+          length=$(stat -f%z "$dmg")
+          signature=$(sed -n 's/.*sparkle:edSignature="\([^"]*\)".*/\1/p' <<<"$SPARKLE_SIGNATURE")
+          test -n "$signature"
+          published=$(date -R)
+          cat > docs/appcast.xml <<APPCAST
+          <?xml version="1.0" encoding="utf-8"?>
+          <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+            <channel>
+              <title>Commander Updates</title>
+              <link>https://inikolaev.github.io/commander/appcast.xml</link>
+              <description>Commander release updates</description>
+              <language>en</language>
+              <item>
+                <title>Commander $APP_VERSION</title>
+                <pubDate>$published</pubDate>
+                <sparkle:version>$APP_BUILD_NUMBER</sparkle:version>
+                <sparkle:shortVersionString>$APP_VERSION</sparkle:shortVersionString>
+                <enclosure
+                  url="https://github.com/$GITHUB_REPOSITORY/releases/download/v$APP_VERSION/Commander-$APP_VERSION-macOS-universal.dmg"
+                  sparkle:edSignature="$signature"
+                  length="$length"
+                  type="application/octet-stream" />
+              </item>
+            </channel>
+          </rss>
+          APPCAST
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+      - name: Deploy Sparkle feed and site
+        uses: actions/deploy-pages@v4
 
       - name: Remove signing credentials
         if: always()
