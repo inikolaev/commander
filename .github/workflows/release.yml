@@ -62,12 +62,20 @@ jobs:
           codesign --verify --deep --strict dist/universal/Commander.app
           (cd dist && shasum -a 256 -c "Commander-$APP_VERSION-macOS-universal.zip.sha256")
 
+      - name: Create notarized DMG
+        env:
+          NOTARIZE: '1'
+        run: |
+          bash scripts/package-dmg.sh
+          (cd dist && shasum -a 256 -c "Commander-$APP_VERSION-macOS-universal.dmg.sha256")
+
       - name: Publish release
         env:
           RELEASE_TAG: ${{ steps.version.outputs.tag }}
         shell: bash
         run: |
           archive="dist/Commander-$APP_VERSION-macOS-universal.zip"
+          dmg="dist/Commander-$APP_VERSION-macOS-universal.dmg"
           # A draft lets a failed upload be retried without publishing an incomplete release.
           if gh release view "$RELEASE_TAG" --json isDraft > "$RUNNER_TEMP/release.json"; then
             if [[ $(jq -r .isDraft "$RUNNER_TEMP/release.json") == false ]]; then
@@ -78,7 +86,7 @@ jobs:
             cat > "$RUNNER_TEMP/release-notes.md" <<NOTES
           Universal macOS app for Apple silicon and Intel. Requires macOS 13 or later.
 
-          Download the ZIP, extract it, and move Commander.app to Applications.
+          Download the DMG and drag Commander.app to Applications. The ZIP is also available for manual installation.
           The app is Developer ID signed and notarized by Apple, with the notarization ticket stapled for offline verification.
 
           Version: $APP_VERSION · Build: $APP_BUILD_NUMBER · Commit: $GITHUB_SHA
@@ -87,7 +95,7 @@ jobs:
               --title "Commander $APP_VERSION" --generate-notes \
               --notes-file "$RUNNER_TEMP/release-notes.md"
           fi
-          gh release upload "$RELEASE_TAG" "$archive" "$archive.sha256" --clobber
+          gh release upload "$RELEASE_TAG" "$archive" "$archive.sha256" "$dmg" "$dmg.sha256" --clobber
           gh release edit "$RELEASE_TAG" --draft=false
           echo "Released [$RELEASE_TAG](https://github.com/$GITHUB_REPOSITORY/releases/tag/$RELEASE_TAG)" >> "$GITHUB_STEP_SUMMARY"
 
