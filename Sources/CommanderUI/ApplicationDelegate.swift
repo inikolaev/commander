@@ -1,12 +1,24 @@
 import AppKit
 import FileManagerCore
+import Sparkle
 
 @MainActor
-public final class ApplicationDelegate: NSObject, NSApplicationDelegate {
+public final class ApplicationDelegate: NSObject, NSApplicationDelegate, SPUStandardUserDriverDelegate {
     private var mainWindow: CommanderWindowController?
     private let exitCoordinator = ExitCoordinator()
+    private var updaterController: SPUStandardUpdaterController!
+    private var updateAccessory: NSTitlebarAccessoryViewController?
 
-    public override init() { super.init() }
+    public override init() {
+        super.init()
+        // Delay starting Sparkle until the main window exists so scheduled updates can
+        // be represented by a quiet title-bar reminder rather than an alert.
+        updaterController = SPUStandardUpdaterController(
+            startingUpdater: false,
+            updaterDelegate: nil,
+            userDriverDelegate: self
+        )
+    }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         // Load the bundled icon directly so a cached development-build icon in
@@ -22,6 +34,7 @@ public final class ApplicationDelegate: NSObject, NSApplicationDelegate {
         controller.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
         controller.start()
+        updaterController.startUpdater()
     }
 
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
@@ -37,11 +50,54 @@ public final class ApplicationDelegate: NSObject, NSApplicationDelegate {
         return .terminateLater
     }
 
+    public var supportsGentleScheduledUpdateReminders: Bool { true }
+
+    public func standardUserDriverShouldHandleShowingScheduledUpdate(
+        _ update: SUAppcastItem,
+        andInImmediateFocus immediateFocus: Bool
+    ) -> Bool {
+        // Scheduled checks should never interrupt the user with a window.
+        false
+    }
+
+    public func standardUserDriverWillHandleShowingUpdate(
+        _ handleShowingUpdate: Bool,
+        forUpdate update: SUAppcastItem,
+        state: SPUUserUpdateState
+    ) {
+        // User-initiated checks are shown by Sparkle normally. For scheduled checks,
+        // expose the available update quietly in the main window title bar.
+        guard !handleShowingUpdate, updateAccessory == nil,
+              let window = mainWindow?.window else { return }
+
+        let button = NSButton(title: "Update \(update.displayVersionString)", target: updaterController,
+                              action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)))
+        button.bezelStyle = .recessed
+        button.controlSize = .small
+
+        let accessory = NSTitlebarAccessoryViewController()
+        accessory.layoutAttribute = .right
+        accessory.view = button
+        window.addTitlebarAccessoryViewController(accessory)
+        updateAccessory = accessory
+    }
+
+    public func standardUserDriverWillFinishUpdateSession() {
+        updateAccessory?.removeFromParent()
+        updateAccessory = nil
+    }
+
     private func installMenu() {
         let menu = NSMenu()
         let appItem = NSMenuItem()
         let appMenu = NSMenu(title: "Commander")
         appMenu.addItem(withTitle: "About Commander", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        let checkForUpdates = appMenu.addItem(
+            withTitle: "Check for Updates…",
+            action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
+            keyEquivalent: ""
+        )
+        checkForUpdates.target = updaterController
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Hide Commander", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(withTitle: "Quit Commander", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
