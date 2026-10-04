@@ -52,11 +52,22 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>SUAllowsAutomaticUpdates</key><false/>
 </dict></plist>
 PLIST
+SPARKLE="$APP/Contents/Frameworks/Sparkle.framework"
 if [[ -n "${SIGNING_IDENTITY:-}" ]]; then
-    codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$APP/Contents/Frameworks/Sparkle.framework"
+    # Sparkle's distribution contains nested helper code. Our custom (non-Xcode)
+    # packaging flow must re-sign it from the inside out before signing the app.
+    codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$SPARKLE/Versions/B/XPCServices/Installer.xpc"
+    codesign --force --options runtime --timestamp --preserve-metadata=entitlements --sign "$SIGNING_IDENTITY" "$SPARKLE/Versions/B/XPCServices/Downloader.xpc"
+    codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$SPARKLE/Versions/B/Autoupdate"
+    codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$SPARKLE/Versions/B/Updater.app"
+    codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$SPARKLE"
     codesign --force --options runtime --timestamp --sign "$SIGNING_IDENTITY" "$APP"
 else
-    codesign --force --sign - "$APP/Contents/Frameworks/Sparkle.framework"
+    codesign --force --options runtime --sign - "$SPARKLE/Versions/B/XPCServices/Installer.xpc"
+    codesign --force --options runtime --preserve-metadata=entitlements --sign - "$SPARKLE/Versions/B/XPCServices/Downloader.xpc"
+    codesign --force --options runtime --sign - "$SPARKLE/Versions/B/Autoupdate"
+    codesign --force --options runtime --sign - "$SPARKLE/Versions/B/Updater.app"
+    codesign --force --options runtime --sign - "$SPARKLE"
     codesign --force --sign - "$APP"
 fi
 printf 'Built %s/%s\n' "$PWD" "$APP"
