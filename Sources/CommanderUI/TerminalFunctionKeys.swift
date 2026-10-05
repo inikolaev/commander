@@ -4,23 +4,30 @@ import AppKit
 @MainActor
 enum TerminalFunctionKeys {
     private static let labelLeadingInset: CGFloat = 4
+    private static let keyCount: CGFloat = 10
     private static let digitCellCount: CGFloat = 11 // 1...9 plus the two digits in 10
+    private static let leadingGapCellCount: CGFloat = 10 // one black cell before every key
 
     static func draw(in rect: NSRect, labels: [Int: String]) {
         NSColor.black.setFill()
         rect.fill()
 
-        let digitCellWidth = TerminalTheme.cellWidth
-        let totalNumberWidth = digitCellCount * digitCellWidth
-        let buttonWidth = max(0, (rect.width - totalNumberWidth) / 10)
+        let cellWidth = TerminalTheme.cellWidth
+        let fixedBlackWidth = (digitCellCount + leadingGapCellCount) * cellWidth
+        let buttonWidth = max(0, (rect.width - fixedBlackWidth) / keyCount)
 
         var x = rect.minX
         for number in 1...10 {
+            // Retro FAR-style spacing: reserve one black character cell before
+            // every key, including F1. The leading F1 gap also absorbs the
+            // rounded bottom-left corner without clipping the "1" digit cell.
+            x += cellWidth
+
             for digit in String(number) {
                 let digitRect = NSRect(
                     x: x,
                     y: rect.minY,
-                    width: digitCellWidth,
+                    width: cellWidth,
                     height: rect.height
                 )
                 TerminalTheme.text(
@@ -29,7 +36,7 @@ enum TerminalFunctionKeys {
                     color: TerminalTheme.white,
                     alignment: .center
                 )
-                x += digitCellWidth
+                x += cellWidth
             }
 
             let button = NSRect(
@@ -55,15 +62,16 @@ enum TerminalFunctionKeys {
     static func number(at point: NSPoint, in rect: NSRect) -> Int? {
         guard rect.width > 0, rect.contains(point) else { return nil }
 
-        let digitCellWidth = TerminalTheme.cellWidth
-        let totalNumberWidth = digitCellCount * digitCellWidth
-        let buttonWidth = max(0, (rect.width - totalNumberWidth) / 10)
+        let cellWidth = TerminalTheme.cellWidth
+        let fixedBlackWidth = (digitCellCount + leadingGapCellCount) * cellWidth
+        let buttonWidth = max(0, (rect.width - fixedBlackWidth) / keyCount)
 
         var x = rect.minX
         for number in 1...10 {
-            let numberWidth = CGFloat(String(number).count) * digitCellWidth
-            let keyWidth = numberWidth + buttonWidth
-            if point.x >= x, point.x < x + keyWidth { return number }
+            let keyStart = x
+            let numberWidth = CGFloat(String(number).count) * cellWidth
+            let keyWidth = cellWidth + numberWidth + buttonWidth
+            if point.x >= keyStart, point.x < keyStart + keyWidth { return number }
             x += keyWidth
         }
         return 10
