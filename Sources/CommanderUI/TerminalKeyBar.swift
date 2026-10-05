@@ -20,7 +20,7 @@ final class TerminalKeyBar: NSView {
         }
     }
 
-    private let cornerRadius: CGFloat = 10
+    private let cornerRadius: CGFloat = 12
 
     var shiftPressed = false { didSet { needsDisplay = true } }
     var optionPressed = false { didSet { needsDisplay = true } }
@@ -64,7 +64,7 @@ final class TerminalKeyBar: NSView {
     }
 
     private func bottomRoundedPath(in rect: NSRect) -> NSBezierPath {
-        let radius = min(cornerRadius, min(rect.width, rect.height) / 2)
+        let radius = min(cornerRadius, rect.height, rect.width / 2)
         let path = NSBezierPath()
         path.move(to: NSPoint(x: rect.minX, y: rect.minY))
         path.line(to: NSPoint(x: rect.maxX, y: rect.minY))
