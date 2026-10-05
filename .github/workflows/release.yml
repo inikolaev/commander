@@ -17,6 +17,37 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      release: ${{ steps.release_changes.outputs.release }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Detect release-affecting changes
+        id: release_changes
+        uses: ./.github/actions/release-changes
+        with:
+          base: ${{ github.event.before }}
+          head: ${{ github.sha }}
+          force: ${{ github.event_name == 'workflow_dispatch' }}
+          paths: |
+            Sources/**
+            Assets/**
+            Package.swift
+            Package.resolved
+            LICENSE
+            THIRD-PARTY-NOTICES.txt
+            scripts/build-app.sh
+            scripts/package-app.sh
+            scripts/package-dmg.sh
+            scripts/prepare-signing.sh
+            scripts/notarize-app.sh
+            scripts/notarize-dmg.sh
+
   test:
     if: github.ref == 'refs/heads/main'
     runs-on: macos-15
@@ -44,7 +75,8 @@ jobs:
           swift test
 
   build:
-    if: github.ref == 'refs/heads/main'
+    needs: [changes, test]
+    if: github.ref == 'refs/heads/main' && needs.changes.outputs.release == 'true'
     strategy:
       fail-fast: false
       matrix:
