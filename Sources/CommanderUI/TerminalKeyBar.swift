@@ -19,8 +19,12 @@ final class TerminalKeyBar: NSView {
             }
         }
     }
+
+    private let cornerRadius: CGFloat = 7
+
     var shiftPressed = false { didSet { needsDisplay = true } }
     var optionPressed = false { didSet { needsDisplay = true } }
+
     static func command(number: Int, shift: Bool, option: Bool = false) -> Command? {
         if option {
             guard !shift else { return nil }
@@ -28,23 +32,57 @@ final class TerminalKeyBar: NSView {
         }
         return shift ? (number == 6 ? .rename : nil) : Command(rawValue: number)
     }
+
     var labels: [Int: String] {
         Dictionary(uniqueKeysWithValues: (1...10).compactMap { number in
             Self.command(number: number, shift: shiftPressed, option: optionPressed).map { (number, $0.label) }
         })
     }
+
     var onCommand: ((Command) -> Void)?
     override var isFlipped: Bool { true }
-    override var isOpaque: Bool { true }
+    override var isOpaque: Bool { false }
 
     override func draw(_ dirtyRect: NSRect) {
+        NSGraphicsContext.saveGraphicsState()
+        bottomRoundedPath(in: bounds).addClip()
         TerminalFunctionKeys.draw(in: bounds, labels: labels)
+        NSGraphicsContext.restoreGraphicsState()
     }
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        if let number = TerminalFunctionKeys.number(at: point, in: bounds), let command = Self.command(number: number, shift: event.modifierFlags.contains(.shift), option: event.modifierFlags.contains(.option)) {
+        guard bottomRoundedPath(in: bounds).contains(point) else { return }
+        if let number = TerminalFunctionKeys.number(at: point, in: bounds),
+           let command = Self.command(
+               number: number,
+               shift: event.modifierFlags.contains(.shift),
+               option: event.modifierFlags.contains(.option)
+           ) {
             onCommand?(command)
         }
+    }
+
+    private func bottomRoundedPath(in rect: NSRect) -> NSBezierPath {
+        let radius = min(cornerRadius, min(rect.width, rect.height) / 2)
+        let path = NSBezierPath()
+        path.move(to: NSPoint(x: rect.minX, y: rect.minY))
+        path.line(to: NSPoint(x: rect.maxX, y: rect.minY))
+        path.line(to: NSPoint(x: rect.maxX, y: rect.maxY - radius))
+        path.appendArc(
+            withCenter: NSPoint(x: rect.maxX - radius, y: rect.maxY - radius),
+            radius: radius,
+            startAngle: 0,
+            endAngle: 90
+        )
+        path.line(to: NSPoint(x: rect.minX + radius, y: rect.maxY))
+        path.appendArc(
+            withCenter: NSPoint(x: rect.minX + radius, y: rect.maxY - radius),
+            radius: radius,
+            startAngle: 90,
+            endAngle: 180
+        )
+        path.close()
+        return path
     }
 }
