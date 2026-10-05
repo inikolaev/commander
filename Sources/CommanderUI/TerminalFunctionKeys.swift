@@ -7,27 +7,31 @@ enum TerminalFunctionKeys {
     private static let digitHorizontalPadding: CGFloat = 2
 
     static func draw(in rect: NSRect, labels: [Int: String]) {
-        NSColor.black.setFill()
-        rect.fill()
-
-        let slotWidth = rect.width / 10
         let digitWidth = ceil(("0" as NSString).size(
             withAttributes: [.font: TerminalTheme.font]
         ).width)
-        let digitCellWidth = digitWidth + digitHorizontalPadding * 2
+        let digitCellWidth = ceil(digitWidth + digitHorizontalPadding * 2)
 
         for number in 1...10 {
-            let x = rect.minX + CGFloat(number - 1) * slotWidth
+            // Snap every slot boundary to whole points. This keeps the visible
+            // number-cell widths identical instead of letting fractional tenth
+            // widths rasterize differently from one slot to the next.
+            let slotMinX = round(rect.minX + CGFloat(number - 1) * rect.width / 10)
+            let slotMaxX = round(rect.minX + CGFloat(number) * rect.width / 10)
+            let slotWidth = max(0, slotMaxX - slotMinX)
+
             let digits = Array(String(number))
             let numberWidth = CGFloat(digits.count) * digitCellWidth
 
             for (index, digit) in digits.enumerated() {
                 let digitRect = NSRect(
-                    x: x + CGFloat(index) * digitCellWidth,
+                    x: slotMinX + CGFloat(index) * digitCellWidth,
                     y: rect.minY,
                     width: digitCellWidth,
                     height: rect.height
                 )
+                NSColor.black.setFill()
+                digitRect.fill()
                 TerminalTheme.text(
                     String(digit),
                     in: digitRect,
@@ -36,17 +40,15 @@ enum TerminalFunctionKeys {
                 )
             }
 
-            // Keep the 3 pt black separator between keys, but do not leave a
-            // trailing black block after the final F10 label.
-            let trailingGap: CGFloat = number == 10 ? 0 : 3
             let button = NSRect(
-                x: x + numberWidth,
+                x: slotMinX + numberWidth,
                 y: rect.minY,
-                width: max(0, slotWidth - numberWidth - trailingGap),
+                width: max(0, slotWidth - numberWidth),
                 height: rect.height
             )
             TerminalTheme.selection.setFill()
             button.fill()
+
             let labelRect = NSRect(
                 x: button.minX + labelLeadingInset,
                 y: button.minY,
