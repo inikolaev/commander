@@ -1,0 +1,27 @@
+name: Detect release changes
+description: Decide whether changed files affect the distributable application.
+
+inputs:
+  base:
+    description: Base commit SHA for the diff.
+    required: false
+  head:
+    description: Head commit SHA for the diff.
+    required: true
+  force:
+    description: Force a release regardless of changed files.
+    required: false
+    default: 'false'
+  paths:
+    description: Newline-separated exact paths or /** directory patterns that affect a release.
+    required: true
+
+outputs:
+  release:
+    description: Whether the changed files require a release.
+  changed-files:
+    description: Newline-separated files changed between base and head.
+
+runs:
+  using: node20
+  main: index.js
