@@ -24,15 +24,15 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Cache SwiftPM dependencies
+      - name: Cache Swift test build
         uses: actions/cache@v4
         with:
           path: |
             ~/.swiftpm
-            .build/repositories
-            .build/checkouts
-            .build/artifacts
-          key: swift-deps-${{ runner.os }}-xcode26.2-${{ hashFiles('Package.resolved') }}
+            .build
+          key: swift-test-${{ runner.os }}-xcode26.2-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            swift-test-${{ runner.os }}-xcode26.2-${{ hashFiles('Package.resolved') }}-
 
       - name: Test
         run: |
@@ -64,20 +64,12 @@ jobs:
           echo "APP_VERSION=$year.$((10#$month)).$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
           echo "APP_BUILD_NUMBER=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
 
-      - name: Cache SwiftPM dependencies
+      - name: Cache Swift release build
         uses: actions/cache@v4
         with:
           path: |
             ~/.swiftpm
-            .build/repositories
-            .build/checkouts
-            .build/artifacts
-          key: swift-deps-${{ runner.os }}-xcode26.2-${{ hashFiles('Package.resolved') }}
-
-      - name: Cache Swift release build
-        uses: actions/cache@v4
-        with:
-          path: .build/${{ matrix.arch }}-apple-macosx/release
+            .build
           key: swift-release-${{ runner.os }}-${{ matrix.arch }}-xcode26.2-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
           restore-keys: |
             swift-release-${{ runner.os }}-${{ matrix.arch }}-xcode26.2-${{ hashFiles('Package.resolved') }}-
