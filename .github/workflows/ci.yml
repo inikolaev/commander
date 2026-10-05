@@ -1,0 +1,40 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: macos-15
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Cache Swift test build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.swiftpm
+            .build
+          key: swift-test-${{ runner.os }}-xcode26.2-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            swift-test-${{ runner.os }}-xcode26.2-${{ hashFiles('Package.resolved') }}-
+
+      - name: Test
+        run: |
+          swift --version
+          swift test
