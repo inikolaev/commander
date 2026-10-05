@@ -13,7 +13,11 @@ enum TerminalFunctionKeys {
             let x = rect.minX + CGFloat(number - 1) * width
             let numberWidth = ceil(("\(number)" as NSString).size(withAttributes: [.font: TerminalTheme.font]).width)
             TerminalTheme.text("\(number)", in: NSRect(x: x, y: rect.minY, width: numberWidth, height: rect.height), color: TerminalTheme.white)
-            let button = NSRect(x: x + numberWidth, y: rect.minY, width: max(0, width - numberWidth - 3), height: rect.height)
+            // Keep the 3 pt black separator between keys, but do not leave a
+            // trailing black block after the final F10 label.
+            let trailingGap: CGFloat = number == 10 ? 0 : 3
+            let button = NSRect(x: x + numberWidth, y: rect.minY,
+                width: max(0, width - numberWidth - trailingGap), height: rect.height)
             TerminalTheme.selection.setFill()
             button.fill()
             let labelRect = NSRect(x: button.minX + labelLeadingInset, y: button.minY,
