@@ -12,6 +12,10 @@ permissions:
   contents: read
   actions: read
 
+concurrency:
+  group: commander-release
+  cancel-in-progress: true
+
 jobs:
   test:
     if: github.ref == 'refs/heads/main'
@@ -158,6 +162,17 @@ jobs:
           echo "APP_VERSION=$version" >> "$GITHUB_ENV"
           echo "APP_BUILD_NUMBER=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
           echo "tag=v$version" >> "$GITHUB_OUTPUT"
+
+      - name: Remove stale draft releases
+        shell: bash
+        run: |
+          gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
+            --jq '.[] | select(.draft == true) | .tag_name' |
+          while IFS= read -r tag; do
+            [[ -n "$tag" ]] || continue
+            echo "Deleting stale draft release $tag"
+            gh release delete "$tag" --yes
+          done
 
       - uses: actions/download-artifact@v5
         with:
