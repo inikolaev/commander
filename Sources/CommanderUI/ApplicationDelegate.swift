@@ -200,11 +200,14 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
             child.translatesAutoresizingMaskIntoConstraints = false
             root.view.addSubview(child)
         }
+        // The panes draw their outer cyan border 2.5 pt inside views that are
+        // themselves inset by 2 pt. Align the function-key bar to that border.
+        let chromeInset: CGFloat = 4.5
         NSLayoutConstraint.activate([
             shortcuts.heightAnchor.constraint(equalToConstant: TerminalTheme.lineHeight),
-            shortcuts.leadingAnchor.constraint(equalTo: root.view.leadingAnchor, constant: 2),
-            shortcuts.trailingAnchor.constraint(equalTo: root.view.trailingAnchor, constant: -2),
-            shortcuts.bottomAnchor.constraint(equalTo: root.view.bottomAnchor, constant: -2),
+            shortcuts.leadingAnchor.constraint(equalTo: root.view.leadingAnchor, constant: chromeInset),
+            shortcuts.trailingAnchor.constraint(equalTo: root.view.trailingAnchor, constant: -chromeInset),
+            shortcuts.bottomAnchor.constraint(equalTo: root.view.bottomAnchor, constant: -chromeInset),
             left.leadingAnchor.constraint(equalTo: root.view.leadingAnchor, constant: 2),
             left.topAnchor.constraint(equalTo: root.view.topAnchor, constant: 2),
             left.bottomAnchor.constraint(equalTo: shortcuts.topAnchor, constant: -2),
