@@ -20,7 +20,7 @@ final class TerminalKeyBar: NSView {
         }
     }
 
-    private let cornerRadius: CGFloat = 7
+    private let cornerRadius: CGFloat = 10
 
     var shiftPressed = false { didSet { needsDisplay = true } }
     var optionPressed = false { didSet { needsDisplay = true } }
