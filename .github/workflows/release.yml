@@ -13,6 +13,27 @@ permissions:
   actions: read
 
 jobs:
+  test:
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Cache SwiftPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.swiftpm
+            .build/repositories
+            .build/checkouts
+            .build/artifacts
+          key: swift-deps-${{ runner.os }}-xcode26.2-${{ hashFiles('Package.resolved') }}
+
   build:
     if: github.ref == 'refs/heads/main'
     strategy:
@@ -42,6 +63,24 @@ jobs:
         run: |
           swift --version
           swift test
+
+      - name: Cache SwiftPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.swiftpm
+            .build/repositories
+            .build/checkouts
+            .build/artifacts
+          key: swift-deps-${{ runner.os }}-xcode26.2-${{ hashFiles('Package.resolved') }}
+
+      - name: Cache Swift release build
+        uses: actions/cache@v4
+        with:
+          path: .build/${{ matrix.arch }}-apple-macosx/release
+          key: swift-release-${{ runner.os }}-${{ matrix.arch }}-xcode26.2-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            swift-release-${{ runner.os }}-${{ matrix.arch }}-xcode26.2-${{ hashFiles('Package.resolved') }}-
 
       - name: Import signing and notarization credentials
         env:
@@ -100,7 +139,7 @@ jobs:
           rm -f "$RUNNER_TEMP/commander-certificate.p12"
 
   release:
-    needs: build
+    needs: [test, build]
     runs-on: macos-15
     timeout-minutes: 20
     permissions:
