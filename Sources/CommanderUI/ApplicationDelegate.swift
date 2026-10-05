@@ -70,30 +70,12 @@ public final class ApplicationDelegate: NSObject, NSApplicationDelegate, @precon
         guard !handleShowingUpdate, updateAccessory == nil,
               let window = mainWindow?.window else { return }
 
-        let button = NSButton(title: "Update Available", target: updaterController,
-                              action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)))
-        button.bezelStyle = .recessed
-        button.controlSize = .small
-        button.sizeToFit()
-
-        // Keep the update action visually separate from the rounded window corner.
-        let padding: CGFloat = 10
-        let height = max(button.frame.height, 24)
-        let container = NSView(frame: NSRect(
-            x: 0,
-            y: 0,
-            width: button.frame.width + padding,
-            height: height
-        ))
-        button.frame.origin = NSPoint(
-            x: 0,
-            y: floor((height - button.frame.height) / 2)
-        )
-        container.addSubview(button)
-
         let accessory = NSTitlebarAccessoryViewController()
         accessory.layoutAttribute = .right
-        accessory.view = container
+        accessory.view = UpdateAvailableButton(
+            target: updaterController,
+            action: #selector(SPUStandardUpdaterController.checkForUpdates(_:))
+        )
         window.addTitlebarAccessoryViewController(accessory)
         updateAccessory = accessory
     }
