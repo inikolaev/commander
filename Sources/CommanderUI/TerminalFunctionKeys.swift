@@ -36,13 +36,13 @@ enum TerminalFunctionKeys {
                 )
             }
 
-            // Keep the 3 pt black separator between keys, but do not leave a
-            // trailing black block after the final F10 label.
-            let trailingGap: CGFloat = number == 10 ? 0 : 3
+            // The next slot's black number cells are the separator between
+            // function keys. Do not add another trailing black gap here: it would
+            // visually merge with the next number block and make that block wider.
             let button = NSRect(
                 x: x + numberWidth,
                 y: rect.minY,
-                width: max(0, slotWidth - numberWidth - trailingGap),
+                width: max(0, slotWidth - numberWidth),
                 height: rect.height
             )
             TerminalTheme.selection.setFill()
