@@ -4,26 +4,21 @@ import AppKit
 @MainActor
 enum TerminalFunctionKeys {
     private static let labelLeadingInset: CGFloat = 4
-    private static let digitHorizontalPadding: CGFloat = 2
+    private static let digitCellCount: CGFloat = 11 // 1...9 plus the two digits in 10
 
     static func draw(in rect: NSRect, labels: [Int: String]) {
         NSColor.black.setFill()
         rect.fill()
 
-        let slotWidth = rect.width / 10
-        let digitWidth = ceil(("0" as NSString).size(
-            withAttributes: [.font: TerminalTheme.font]
-        ).width)
-        let digitCellWidth = digitWidth + digitHorizontalPadding * 2
+        let digitCellWidth = TerminalTheme.cellWidth
+        let totalNumberWidth = digitCellCount * digitCellWidth
+        let buttonWidth = max(0, (rect.width - totalNumberWidth) / 10)
 
+        var x = rect.minX
         for number in 1...10 {
-            let x = rect.minX + CGFloat(number - 1) * slotWidth
-            let digits = Array(String(number))
-            let numberWidth = CGFloat(digits.count) * digitCellWidth
-
-            for (index, digit) in digits.enumerated() {
+            for digit in String(number) {
                 let digitRect = NSRect(
-                    x: x + CGFloat(index) * digitCellWidth,
+                    x: x,
                     y: rect.minY,
                     width: digitCellWidth,
                     height: rect.height
@@ -34,19 +29,18 @@ enum TerminalFunctionKeys {
                     color: TerminalTheme.white,
                     alignment: .center
                 )
+                x += digitCellWidth
             }
 
-            // Keep the 3 pt black separator between keys, but do not leave a
-            // trailing black block after the final F10 label.
-            let trailingGap: CGFloat = number == 10 ? 0 : 3
             let button = NSRect(
-                x: x + numberWidth,
+                x: x,
                 y: rect.minY,
-                width: max(0, slotWidth - numberWidth - trailingGap),
+                width: buttonWidth,
                 height: rect.height
             )
             TerminalTheme.selection.setFill()
             button.fill()
+
             let labelRect = NSRect(
                 x: button.minX + labelLeadingInset,
                 y: button.minY,
@@ -54,11 +48,24 @@ enum TerminalFunctionKeys {
                 height: button.height
             )
             TerminalTheme.text(labels[number] ?? "", in: labelRect, color: .black)
+            x += buttonWidth
         }
     }
 
     static func number(at point: NSPoint, in rect: NSRect) -> Int? {
         guard rect.width > 0, rect.contains(point) else { return nil }
-        return min(10, Int((point.x - rect.minX) / (rect.width / 10)) + 1)
+
+        let digitCellWidth = TerminalTheme.cellWidth
+        let totalNumberWidth = digitCellCount * digitCellWidth
+        let buttonWidth = max(0, (rect.width - totalNumberWidth) / 10)
+
+        var x = rect.minX
+        for number in 1...10 {
+            let numberWidth = CGFloat(String(number).count) * digitCellWidth
+            let keyWidth = numberWidth + buttonWidth
+            if point.x >= x, point.x < x + keyWidth { return number }
+            x += keyWidth
+        }
+        return 10
     }
 }
