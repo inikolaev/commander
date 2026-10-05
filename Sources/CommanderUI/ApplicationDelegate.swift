@@ -166,6 +166,7 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
         window.minSize = NSSize(width: 700, height: 380)
         window.appearance = NSAppearance(named: .darkAqua)
         window.backgroundColor = TerminalTheme.background
+        window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
         super.init(window: window)
         window.delegate = self
