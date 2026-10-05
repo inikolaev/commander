@@ -9,6 +9,7 @@ enum TerminalTheme {
     static let white = NSColor(srgbRed: 0.84, green: 0.86, blue: 0.89, alpha: 1)
     static let yellow = NSColor(srgbRed: 0.95, green: 0.89, blue: 0.20, alpha: 1)
     static let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .medium)
+    static let cellWidth: CGFloat = ceil(("0" as NSString).size(withAttributes: [.font: font]).width)
     static let lineHeight: CGFloat = 18
 
     static func text(_ string: String, in rect: NSRect, color: NSColor = cyan,
