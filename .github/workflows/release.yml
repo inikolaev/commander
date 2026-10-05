@@ -34,6 +34,11 @@ jobs:
             .build/artifacts
           key: swift-deps-${{ runner.os }}-xcode26.2-${{ hashFiles('Package.resolved') }}
 
+      - name: Test
+        run: |
+          swift --version
+          swift test
+
   build:
     if: github.ref == 'refs/heads/main'
     strategy:
@@ -58,11 +63,6 @@ jobs:
           month=${created_at:5:2}
           echo "APP_VERSION=$year.$((10#$month)).$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
           echo "APP_BUILD_NUMBER=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
-
-      - name: Test
-        run: |
-          swift --version
-          swift test
 
       - name: Cache SwiftPM dependencies
         uses: actions/cache@v4
