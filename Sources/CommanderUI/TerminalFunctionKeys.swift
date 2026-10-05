@@ -4,24 +4,55 @@ import AppKit
 @MainActor
 enum TerminalFunctionKeys {
     private static let labelLeadingInset: CGFloat = 4
+    private static let digitHorizontalPadding: CGFloat = 2
 
     static func draw(in rect: NSRect, labels: [Int: String]) {
         NSColor.black.setFill()
         rect.fill()
-        let width = rect.width / 10
+
+        let slotWidth = rect.width / 10
+        let digitWidth = ceil(("0" as NSString).size(
+            withAttributes: [.font: TerminalTheme.font]
+        ).width)
+        let digitCellWidth = digitWidth + digitHorizontalPadding * 2
+
         for number in 1...10 {
-            let x = rect.minX + CGFloat(number - 1) * width
-            let numberWidth = ceil(("\(number)" as NSString).size(withAttributes: [.font: TerminalTheme.font]).width)
-            TerminalTheme.text("\(number)", in: NSRect(x: x, y: rect.minY, width: numberWidth, height: rect.height), color: TerminalTheme.white)
+            let x = rect.minX + CGFloat(number - 1) * slotWidth
+            let digits = Array(String(number))
+            let numberWidth = CGFloat(digits.count) * digitCellWidth
+
+            for (index, digit) in digits.enumerated() {
+                let digitRect = NSRect(
+                    x: x + CGFloat(index) * digitCellWidth,
+                    y: rect.minY,
+                    width: digitCellWidth,
+                    height: rect.height
+                )
+                TerminalTheme.text(
+                    String(digit),
+                    in: digitRect,
+                    color: TerminalTheme.white,
+                    alignment: .center
+                )
+            }
+
             // Keep the 3 pt black separator between keys, but do not leave a
             // trailing black block after the final F10 label.
             let trailingGap: CGFloat = number == 10 ? 0 : 3
-            let button = NSRect(x: x + numberWidth, y: rect.minY,
-                width: max(0, width - numberWidth - trailingGap), height: rect.height)
+            let button = NSRect(
+                x: x + numberWidth,
+                y: rect.minY,
+                width: max(0, slotWidth - numberWidth - trailingGap),
+                height: rect.height
+            )
             TerminalTheme.selection.setFill()
             button.fill()
-            let labelRect = NSRect(x: button.minX + labelLeadingInset, y: button.minY,
-                width: max(0, button.width - labelLeadingInset), height: button.height)
+            let labelRect = NSRect(
+                x: button.minX + labelLeadingInset,
+                y: button.minY,
+                width: max(0, button.width - labelLeadingInset),
+                height: button.height
+            )
             TerminalTheme.text(labels[number] ?? "", in: labelRect, color: .black)
         }
     }
