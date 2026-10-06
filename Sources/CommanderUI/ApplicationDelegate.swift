@@ -178,6 +178,18 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
         root.view = glass
         window.contentViewController = root
 
+        let tint = GlassTintView()
+        tint.translatesAutoresizingMaskIntoConstraints = false
+        tint.wantsLayer = true
+        tint.layer?.backgroundColor = TerminalTheme.glassBackground.cgColor
+        glass.addSubview(tint)
+        NSLayoutConstraint.activate([
+            tint.leadingAnchor.constraint(equalTo: glass.leadingAnchor),
+            tint.trailingAnchor.constraint(equalTo: glass.trailingAnchor),
+            tint.topAnchor.constraint(equalTo: glass.topAnchor),
+            tint.bottomAnchor.constraint(equalTo: glass.bottomAnchor),
+        ])
+
         for pane in panes { root.addChild(pane) }
 
         window.onModifiersChanged = { [weak self] flags in
@@ -496,6 +508,11 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
             pane.focus()
         }
     }
+}
+
+@MainActor
+private final class GlassTintView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 /// Observes modifiers before dispatch, including while a dialog owns keyboard focus.
