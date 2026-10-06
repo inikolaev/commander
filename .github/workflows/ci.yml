@@ -38,3 +38,49 @@ jobs:
         run: |
           swift --version
           swift test
+
+
+  preview:
+    if: github.event_name == 'pull_request'
+    needs: [test]
+    strategy:
+      fail-fast: false
+      matrix:
+        arch: [arm64, x86_64]
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+      APP_VERSION: 0.0.${{ github.run_number }}
+      APP_BUILD_NUMBER: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Cache Swift preview build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.swiftpm
+            .build
+          key: swift-preview-${{ runner.os }}-${{ matrix.arch }}-xcode26.2-${{ hashFiles('Package.resolved') }}-${{ github.sha }}
+          restore-keys: |
+            swift-preview-${{ runner.os }}-${{ matrix.arch }}-xcode26.2-${{ hashFiles('Package.resolved') }}-
+
+      - name: Build preview
+        run: |
+          bash scripts/package-app.sh "${{ matrix.arch }}"
+          file "dist/${{ matrix.arch }}/Commander.app/Contents/MacOS/Commander"
+          lipo "dist/${{ matrix.arch }}/Commander.app/Contents/MacOS/Commander" -verify_arch "${{ matrix.arch }}"
+          codesign --verify --deep --strict "dist/${{ matrix.arch }}/Commander.app"
+
+      - name: Upload preview
+        uses: actions/upload-artifact@v4
+        with:
+          name: Commander-PR-${{ github.event.pull_request.number }}-${{ matrix.arch }}
+          path: |
+            dist/Commander-$APP_VERSION-macOS-${{ matrix.arch }}.zip
+            dist/Commander-$APP_VERSION-macOS-${{ matrix.arch }}.zip.sha256
+          if-no-files-found: error
+          retention-days: 7
