@@ -1,0 +1,23 @@
+name: Upsert PR comment
+description: Create or update a pull request comment identified by a hidden marker.
+
+inputs:
+  github-token:
+    description: GitHub token with permission to write issue comments.
+    required: true
+  repository:
+    description: Repository in owner/name form.
+    required: true
+  issue-number:
+    description: Pull request or issue number.
+    required: true
+  marker:
+    description: Unique marker used to identify the reusable comment.
+    required: true
+  body-file:
+    description: Path to a UTF-8 Markdown file containing the comment body.
+    required: true
+
+runs:
+  using: node20
+  main: index.js
