@@ -340,15 +340,22 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
         else { completion(true) }
     }
 
+    private func setBrowserVisible(_ visible: Bool) {
+        for pane in panes { pane.view.isHidden = !visible }
+        shortcuts.isHidden = !visible
+    }
+
     private func editSelected() {
         guard let window, !operationInProgress, !activePane.isLoading,
               case .entry(let entry) = activePane.state.selectedRow, !entry.isDirectory else { return }
         let coordinator = FileEditorCoordinator()
         coordinator.onClose = { [weak self] in
             self?.editor = nil
+            self?.setBrowserVisible(true)
             self?.panes.forEach { $0.refresh() }
         }
         editor = coordinator
+        coordinator.onPresented = { [weak self] in self?.setBrowserVisible(false) }
         coordinator.present(url: entry.url, window: window)
     }
 
@@ -358,10 +365,12 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
         let coordinator = FileViewerCoordinator()
         coordinator.onClose = { [weak self] in
             self?.viewer = nil
+            self?.setBrowserVisible(true)
             // Opening may have downloaded an iCloud file; refresh the snapshot.
             self?.panes.forEach { $0.refresh() }
         }
         viewer = coordinator
+        coordinator.onPresented = { [weak self] in self?.setBrowserVisible(false) }
         coordinator.present(url: entry.url, window: window)
     }
 
