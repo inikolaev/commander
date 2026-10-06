@@ -130,7 +130,7 @@ jobs:
           COMMENT
 
       - name: Update preview download comment
-        uses: ./.github/actions/upsert-pr-comment
+        uses: ./.github/actions/sticky-comment
         with:
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
