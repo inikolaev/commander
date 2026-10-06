@@ -164,31 +164,42 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
         window.titleVisibility = .hidden
         window.minSize = NSSize(width: 700, height: 380)
         window.appearance = NSAppearance(named: .darkAqua)
-        window.isOpaque = false
-        window.backgroundColor = .clear
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
         super.init(window: window)
         window.delegate = self
         let root = NSViewController()
-        let glass = NSVisualEffectView()
-        glass.material = .underWindowBackground
-        glass.blendingMode = .behindWindow
-        glass.state = .active
-        root.view = glass
-        window.contentViewController = root
 
-        let tint = GlassTintView()
-        tint.translatesAutoresizingMaskIntoConstraints = false
-        tint.wantsLayer = true
-        tint.layer?.backgroundColor = TerminalTheme.glassBackground.cgColor
-        glass.addSubview(tint)
-        NSLayoutConstraint.activate([
-            tint.leadingAnchor.constraint(equalTo: glass.leadingAnchor),
-            tint.trailingAnchor.constraint(equalTo: glass.trailingAnchor),
-            tint.topAnchor.constraint(equalTo: glass.topAnchor),
-            tint.bottomAnchor.constraint(equalTo: glass.bottomAnchor),
-        ])
+        if TerminalTheme.glass.enabled {
+            window.isOpaque = false
+            window.backgroundColor = .clear
+
+            let glass = NSVisualEffectView()
+            glass.material = TerminalTheme.glass.material
+            glass.blendingMode = TerminalTheme.glass.blendingMode
+            glass.state = .active
+            root.view = glass
+
+            let tint = GlassTintView()
+            tint.translatesAutoresizingMaskIntoConstraints = false
+            tint.wantsLayer = true
+            tint.layer?.backgroundColor = TerminalTheme.glass.tint.cgColor
+            glass.addSubview(tint)
+            NSLayoutConstraint.activate([
+                tint.leadingAnchor.constraint(equalTo: glass.leadingAnchor),
+                tint.trailingAnchor.constraint(equalTo: glass.trailingAnchor),
+                tint.topAnchor.constraint(equalTo: glass.topAnchor),
+                tint.bottomAnchor.constraint(equalTo: glass.bottomAnchor),
+            ])
+        } else {
+            window.isOpaque = true
+            window.backgroundColor = TerminalTheme.background
+            root.view = NSView()
+            root.view.wantsLayer = true
+            root.view.layer?.backgroundColor = TerminalTheme.background.cgColor
+        }
+
+        window.contentViewController = root
 
         for pane in panes { root.addChild(pane) }
 
