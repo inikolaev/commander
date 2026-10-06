@@ -113,8 +113,10 @@ final class TerminalPaneView: NSView {
         let titlePadding: CGFloat = 8
         let pathWidth = min(bounds.width - 40, ceil(textWidth) + titlePadding * 2)
         let pathRect = NSRect(x: (bounds.width - pathWidth) / 2, y: 0, width: pathWidth, height: line)
-        (isActive ? TerminalTheme.selection : TerminalTheme.background).setFill()
-        pathRect.fill()
+        if isActive {
+            TerminalTheme.selection.setFill()
+            pathRect.fill()
+        }
         TerminalTheme.text(path, in: pathRect.insetBy(dx: titlePadding, dy: 0), color: isActive ? .black : TerminalTheme.cyan, alignment: .center)
 
         for column in 0..<2 {
@@ -145,8 +147,6 @@ final class TerminalPaneView: NSView {
             width: bounds.width - 16, height: max(0, footerBottom - g.separatorY)))
         let summaryWidth = min(bounds.width - 28, (status as NSString).size(withAttributes: [.font: TerminalTheme.font]).width + 16)
         let summary = NSRect(x: (bounds.width - summaryWidth) / 2, y: bounds.height - line, width: summaryWidth, height: line)
-        TerminalTheme.background.setFill()
-        summary.fill()
         TerminalTheme.text(status, in: summary, color: isError ? TerminalTheme.yellow : TerminalTheme.cyan, alignment: .center)
     }
 
