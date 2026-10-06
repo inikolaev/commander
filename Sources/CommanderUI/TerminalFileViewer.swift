@@ -2,7 +2,7 @@ import AppKit
 import FileManagerCore
 
 @MainActor
-final class TerminalFileViewer: NSView {
+final class TerminalFileViewer: TerminalSurfaceView {
     enum Input { case navigate(ViewerCommand), close, toggleMode }
     var onInput: ((Input) -> Void)?
     let path: String
@@ -44,7 +44,6 @@ final class TerminalFileViewer: NSView {
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override var isFlipped: Bool { true }
-    override var isOpaque: Bool { true }
     override var acceptsFirstResponder: Bool { true }
 
     func update(_ page: ViewerPage) {
@@ -68,8 +67,6 @@ final class TerminalFileViewer: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        TerminalTheme.background.setFill()
-        bounds.fill()
         let line = TerminalTheme.lineHeight
         let header = NSRect(x: 0, y: 0, width: bounds.width, height: line)
         let footer = NSRect(x: 0, y: bounds.height - line, width: bounds.width, height: line)
