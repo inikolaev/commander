@@ -4,7 +4,7 @@ import AppKit
 @MainActor
 enum TerminalTheme {
     static let background = NSColor(srgbRed: 0, green: 0, blue: 0.48, alpha: 1)
-    static let glassBackground = NSColor(srgbRed: 0, green: 0, blue: 0.48, alpha: 0.62)
+    static let glassBackground = NSColor(srgbRed: 0, green: 0, blue: 0.48, alpha: 0.38)
     static let cyan = NSColor(srgbRed: 0, green: 0.76, blue: 0.79, alpha: 1)
     static let selection = NSColor(srgbRed: 0, green: 0.60, blue: 0.63, alpha: 1)
     static let white = NSColor(srgbRed: 0.84, green: 0.86, blue: 0.89, alpha: 1)
