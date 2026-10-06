@@ -158,19 +158,49 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
         ]
         let window = CommanderWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1080, height: 700),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false
         )
         window.title = "Commander"
+        window.titleVisibility = .hidden
         window.minSize = NSSize(width: 700, height: 380)
         window.appearance = NSAppearance(named: .darkAqua)
-        window.backgroundColor = TerminalTheme.background
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
         super.init(window: window)
         window.delegate = self
         let root = NSViewController()
-        root.view = NSView()
+
+        if TerminalTheme.glass.enabled {
+            window.isOpaque = false
+            window.backgroundColor = .clear
+
+            let glass = NSVisualEffectView()
+            glass.material = TerminalTheme.glass.material
+            glass.blendingMode = TerminalTheme.glass.blendingMode
+            glass.state = .active
+            root.view = glass
+
+            let tint = GlassTintView()
+            tint.translatesAutoresizingMaskIntoConstraints = false
+            tint.wantsLayer = true
+            tint.layer?.backgroundColor = TerminalTheme.glass.tint.cgColor
+            glass.addSubview(tint)
+            NSLayoutConstraint.activate([
+                tint.leadingAnchor.constraint(equalTo: glass.leadingAnchor),
+                tint.trailingAnchor.constraint(equalTo: glass.trailingAnchor),
+                tint.topAnchor.constraint(equalTo: glass.topAnchor),
+                tint.bottomAnchor.constraint(equalTo: glass.bottomAnchor),
+            ])
+        } else {
+            window.isOpaque = true
+            window.backgroundColor = TerminalTheme.background
+            root.view = NSView()
+            root.view.wantsLayer = true
+            root.view.layer?.backgroundColor = TerminalTheme.background.cgColor
+        }
+
         window.contentViewController = root
+
         for pane in panes { root.addChild(pane) }
 
         window.onModifiersChanged = { [weak self] flags in
@@ -209,7 +239,7 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
             shortcuts.trailingAnchor.constraint(equalTo: root.view.trailingAnchor, constant: -chromeInset),
             shortcuts.bottomAnchor.constraint(equalTo: root.view.bottomAnchor, constant: -chromeInset),
             left.leadingAnchor.constraint(equalTo: root.view.leadingAnchor, constant: 2),
-            left.topAnchor.constraint(equalTo: root.view.topAnchor, constant: 2),
+            left.topAnchor.constraint(equalTo: root.view.safeAreaLayoutGuide.topAnchor, constant: 2),
             left.bottomAnchor.constraint(equalTo: shortcuts.topAnchor, constant: -2),
             right.leadingAnchor.constraint(equalTo: left.trailingAnchor, constant: 2),
             right.trailingAnchor.constraint(equalTo: root.view.trailingAnchor, constant: -2),
@@ -310,15 +340,22 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
         else { completion(true) }
     }
 
+    private func setBrowserVisible(_ visible: Bool) {
+        for pane in panes { pane.view.isHidden = !visible }
+        shortcuts.isHidden = !visible
+    }
+
     private func editSelected() {
         guard let window, !operationInProgress, !activePane.isLoading,
               case .entry(let entry) = activePane.state.selectedRow, !entry.isDirectory else { return }
         let coordinator = FileEditorCoordinator()
         coordinator.onClose = { [weak self] in
             self?.editor = nil
+            self?.setBrowserVisible(true)
             self?.panes.forEach { $0.refresh() }
         }
         editor = coordinator
+        coordinator.onPresented = { [weak self] in self?.setBrowserVisible(false) }
         coordinator.present(url: entry.url, window: window)
     }
 
@@ -328,10 +365,12 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
         let coordinator = FileViewerCoordinator()
         coordinator.onClose = { [weak self] in
             self?.viewer = nil
+            self?.setBrowserVisible(true)
             // Opening may have downloaded an iCloud file; refresh the snapshot.
             self?.panes.forEach { $0.refresh() }
         }
         viewer = coordinator
+        coordinator.onPresented = { [weak self] in self?.setBrowserVisible(false) }
         coordinator.present(url: entry.url, window: window)
     }
 
@@ -489,6 +528,11 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
             pane.focus()
         }
     }
+}
+
+@MainActor
+private final class GlassTintView: NSView {
+    override func hitTest(_ point: NSPoint) -> NSView? { nil }
 }
 
 /// Observes modifiers before dispatch, including while a dialog owns keyboard focus.

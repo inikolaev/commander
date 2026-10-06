@@ -81,8 +81,8 @@ jobs:
         with:
           name: Commander-PR-${{ github.event.pull_request.number }}-${{ matrix.arch }}
           path: |
-            dist/Commander-$APP_VERSION-macOS-${{ matrix.arch }}.zip
-            dist/Commander-$APP_VERSION-macOS-${{ matrix.arch }}.zip.sha256
+            dist/Commander-${{ env.APP_VERSION }}-macOS-${{ matrix.arch }}.zip
+            dist/Commander-${{ env.APP_VERSION }}-macOS-${{ matrix.arch }}.zip.sha256
           if-no-files-found: error
           retention-days: 7
 
@@ -95,10 +95,15 @@ jobs:
       actions: read
       contents: read
       issues: write
+      pull-requests: write
     env:
       GH_TOKEN: ${{ github.token }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
     steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
       - name: Prepare preview download comment
         shell: bash
         run: |
@@ -115,7 +120,8 @@ jobs:
 
           arm64_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts/$arm64_id"
           x86_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts/$x86_id"
-          short_sha="${GITHUB_SHA:0:7}"
+          short_sha="${{ github.event.pull_request.head.sha }}"
+          short_sha="${short_sha:0:7}"
 
           cat > "$RUNNER_TEMP/preview-comment.md" <<COMMENT
           <!-- commander-preview-build -->

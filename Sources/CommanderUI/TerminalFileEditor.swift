@@ -3,7 +3,7 @@ import EditorCore
 
 /// Custom terminal rendering; AppKit is used only for keyboard/IME interpretation.
 @MainActor
-final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
+final class TerminalFileEditor: TerminalSurfaceView, @preconcurrency NSTextInputClient {
     let document: any EditorDocument
     let selection: EditorSelection
     let path: String
@@ -31,7 +31,6 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override var isFlipped: Bool { true }
-    override var isOpaque: Bool { true }
     override var acceptsFirstResponder: Bool { true }
 
     private struct Glyph {
@@ -89,8 +88,6 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         changed()
     }
     override func draw(_ dirtyRect: NSRect) {
-        TerminalTheme.background.setFill()
-        bounds.fill()
         let height = TerminalTheme.lineHeight
         TerminalTheme.selection.setFill()
         NSRect(x: 0, y: 0, width: bounds.width, height: height).fill()

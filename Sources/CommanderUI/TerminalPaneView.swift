@@ -36,7 +36,7 @@ enum PaneInput {
 /// A single drawing surface, with no NSTableView, NSScrollView, or native row widgets.
 /// The controller owns selection; this view owns only viewport and input presentation.
 @MainActor
-final class TerminalPaneView: NSView {
+final class TerminalPaneView: TerminalSurfaceView {
     var onInput: ((PaneInput) -> Void)?
     private(set) var state = PaneState(directory: URL(fileURLWithPath: "/"))
     private(set) var viewport = ColumnViewport()
@@ -58,7 +58,6 @@ final class TerminalPaneView: NSView {
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override var isFlipped: Bool { true }
-    override var isOpaque: Bool { true }
     override var acceptsFirstResponder: Bool { true }
     var geometry: PaneGeometry { PaneGeometry(bounds: bounds, lineHeight: TerminalTheme.lineHeight) }
 
@@ -89,10 +88,27 @@ final class TerminalPaneView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        TerminalTheme.background.setFill()
-        bounds.fill()
         let g = geometry
         let line = TerminalTheme.lineHeight
+        let path = state.directory.path
+        let textWidth = (path as NSString).size(withAttributes: [.font: TerminalTheme.font]).width
+        // Text layout can discard trailing spaces; use geometric padding instead.
+        let titlePadding: CGFloat = 8
+        let pathWidth = min(bounds.width - 40, ceil(textWidth) + titlePadding * 2)
+        let pathRect = NSRect(x: (bounds.width - pathWidth) / 2, y: 0, width: pathWidth, height: line)
+        let summaryWidth = min(bounds.width - 28, (status as NSString).size(withAttributes: [.font: TerminalTheme.font]).width + 16)
+        let summary = NSRect(x: (bounds.width - summaryWidth) / 2, y: bounds.height - line, width: summaryWidth, height: line)
+
+        // Keep the glass continuous behind labels. The outer/inner pane borders
+        // run through the vertical center of the first and last terminal rows,
+        // so exclude both label rectangles instead of masking them with opaque fill.
+        NSGraphicsContext.saveGraphicsState()
+        let chromeClip = NSBezierPath(rect: bounds)
+        chromeClip.appendRect(pathRect.insetBy(dx: -2, dy: 0))
+        chromeClip.appendRect(summary.insetBy(dx: -2, dy: 0))
+        chromeClip.windingRule = .evenOdd
+        chromeClip.addClip()
+
         TerminalTheme.cyan.setStroke()
         let border = NSBezierPath(rect: bounds.insetBy(dx: 2.5, dy: line / 2))
         border.lineWidth = 1
@@ -103,18 +119,23 @@ final class TerminalPaneView: NSView {
         let separators = NSBezierPath()
         separators.move(to: NSPoint(x: bounds.midX, y: line))
         separators.line(to: NSPoint(x: bounds.midX, y: g.separatorY))
-        separators.move(to: NSPoint(x: 5, y: g.separatorY))
-        separators.line(to: NSPoint(x: bounds.width - 5, y: g.separatorY))
         separators.stroke()
+        NSGraphicsContext.restoreGraphicsState()
 
-        let path = state.directory.path
-        let textWidth = (path as NSString).size(withAttributes: [.font: TerminalTheme.font]).width
-        // Text layout can discard trailing spaces; use geometric padding instead.
-        let titlePadding: CGFloat = 8
-        let pathWidth = min(bounds.width - 40, ceil(textWidth) + titlePadding * 2)
-        let pathRect = NSRect(x: (bounds.width - pathWidth) / 2, y: 0, width: pathWidth, height: line)
-        (isActive ? TerminalTheme.selection : TerminalTheme.background).setFill()
-        pathRect.fill()
+        NSGraphicsContext.saveGraphicsState()
+        let footerClip = NSBezierPath(rect: bounds)
+        footerClip.appendRect(summary.insetBy(dx: -2, dy: 0))
+        footerClip.windingRule = .evenOdd
+        footerClip.addClip()
+        let footerSeparator = NSBezierPath()
+        footerSeparator.move(to: NSPoint(x: 5, y: g.separatorY))
+        footerSeparator.line(to: NSPoint(x: bounds.width - 5, y: g.separatorY))
+        footerSeparator.stroke()
+        NSGraphicsContext.restoreGraphicsState()
+        if isActive {
+            TerminalTheme.selection.setFill()
+            pathRect.fill()
+        }
         TerminalTheme.text(path, in: pathRect.insetBy(dx: titlePadding, dy: 0), color: isActive ? .black : TerminalTheme.cyan, alignment: .center)
 
         for column in 0..<2 {
@@ -143,10 +164,6 @@ final class TerminalPaneView: NSView {
         let footerBottom = bounds.height - line / 2 - 2
         PaneFooter.draw(state: state, in: NSRect(x: 8, y: g.separatorY,
             width: bounds.width - 16, height: max(0, footerBottom - g.separatorY)))
-        let summaryWidth = min(bounds.width - 28, (status as NSString).size(withAttributes: [.font: TerminalTheme.font]).width + 16)
-        let summary = NSRect(x: (bounds.width - summaryWidth) / 2, y: bounds.height - line, width: summaryWidth, height: line)
-        TerminalTheme.background.setFill()
-        summary.fill()
         TerminalTheme.text(status, in: summary, color: isError ? TerminalTheme.yellow : TerminalTheme.cyan, alignment: .center)
     }
 

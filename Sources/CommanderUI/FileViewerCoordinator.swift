@@ -17,6 +17,7 @@ final class FileViewerCoordinator {
     private var showingError = false
     private let errors = OperationDialogPresenter()
     var onClose: (() -> Void)?
+    var onPresented: (() -> Void)?
 
     func present(url: URL, window: NSWindow) {
         guard let content = window.contentView else { return }
@@ -51,10 +52,11 @@ final class FileViewerCoordinator {
         NSLayoutConstraint.activate([
             viewer.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             viewer.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            viewer.topAnchor.constraint(equalTo: content.topAnchor),
+            viewer.topAnchor.constraint(equalTo: content.safeAreaLayoutGuide.topAnchor),
             viewer.bottomAnchor.constraint(equalTo: content.bottomAnchor),
         ])
         content.layoutSubtreeIfNeeded()
+        onPresented?()
         viewer.onInput = { [weak self] input in
             switch input {
             case .close: self?.close()
