@@ -5,6 +5,7 @@ import EditorCore
 @MainActor
 final class FileEditorCoordinator {
     var onClose: (() -> Void)?
+    var onPresented: (() -> Void)?
     private(set) var isBusy = false
     private weak var window: NSWindow?
     private weak var previousResponder: NSResponder?
@@ -41,10 +42,11 @@ final class FileEditorCoordinator {
         NSLayoutConstraint.activate([
             editor.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             editor.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            editor.topAnchor.constraint(equalTo: content.topAnchor),
+            editor.topAnchor.constraint(equalTo: content.safeAreaLayoutGuide.topAnchor),
             editor.bottomAnchor.constraint(equalTo: content.bottomAnchor),
         ])
         content.layoutSubtreeIfNeeded()
+        onPresented?()
         window.makeFirstResponder(editor)
     }
     func save(completion: ((Bool) -> Void)? = nil) {
