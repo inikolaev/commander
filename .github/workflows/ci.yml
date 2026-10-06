@@ -81,8 +81,8 @@ jobs:
         with:
           name: Commander-PR-${{ github.event.pull_request.number }}-${{ matrix.arch }}
           path: |
-            dist/Commander-$APP_VERSION-macOS-${{ matrix.arch }}.zip
-            dist/Commander-$APP_VERSION-macOS-${{ matrix.arch }}.zip.sha256
+            dist/Commander-${{ env.APP_VERSION }}-macOS-${{ matrix.arch }}.zip
+            dist/Commander-${{ env.APP_VERSION }}-macOS-${{ matrix.arch }}.zip.sha256
           if-no-files-found: error
           retention-days: 7
 
