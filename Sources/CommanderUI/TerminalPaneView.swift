@@ -96,12 +96,16 @@ final class TerminalPaneView: TerminalSurfaceView {
         let titlePadding: CGFloat = 8
         let pathWidth = min(bounds.width - 40, ceil(textWidth) + titlePadding * 2)
         let pathRect = NSRect(x: (bounds.width - pathWidth) / 2, y: 0, width: pathWidth, height: line)
+        let summaryWidth = min(bounds.width - 28, (status as NSString).size(withAttributes: [.font: TerminalTheme.font]).width + 16)
+        let summary = NSRect(x: (bounds.width - summaryWidth) / 2, y: bounds.height - line, width: summaryWidth, height: line)
 
-        // Keep the glass continuous behind the path label. Clip the pane chrome
-        // around it instead of masking the border with an opaque blue rectangle.
+        // Keep the glass continuous behind labels. The outer/inner pane borders
+        // run through the vertical center of the first and last terminal rows,
+        // so exclude both label rectangles instead of masking them with opaque fill.
         NSGraphicsContext.saveGraphicsState()
         let chromeClip = NSBezierPath(rect: bounds)
         chromeClip.appendRect(pathRect.insetBy(dx: -2, dy: 0))
+        chromeClip.appendRect(summary.insetBy(dx: -2, dy: 0))
         chromeClip.windingRule = .evenOdd
         chromeClip.addClip()
 
@@ -117,9 +121,6 @@ final class TerminalPaneView: TerminalSurfaceView {
         separators.line(to: NSPoint(x: bounds.midX, y: g.separatorY))
         separators.stroke()
         NSGraphicsContext.restoreGraphicsState()
-
-        let summaryWidth = min(bounds.width - 28, (status as NSString).size(withAttributes: [.font: TerminalTheme.font]).width + 16)
-        let summary = NSRect(x: (bounds.width - summaryWidth) / 2, y: bounds.height - line, width: summaryWidth, height: line)
 
         NSGraphicsContext.saveGraphicsState()
         let footerClip = NSBezierPath(rect: bounds)
