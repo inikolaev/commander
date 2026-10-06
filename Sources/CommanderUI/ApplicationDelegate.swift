@@ -161,6 +161,7 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
             styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false
         )
         window.title = "Commander"
+        window.titleVisibility = .hidden
         window.minSize = NSSize(width: 700, height: 380)
         window.appearance = NSAppearance(named: .darkAqua)
         window.isOpaque = false
@@ -215,7 +216,7 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
             shortcuts.trailingAnchor.constraint(equalTo: root.view.trailingAnchor, constant: -chromeInset),
             shortcuts.bottomAnchor.constraint(equalTo: root.view.bottomAnchor, constant: -chromeInset),
             left.leadingAnchor.constraint(equalTo: root.view.leadingAnchor, constant: 2),
-            left.topAnchor.constraint(equalTo: root.view.topAnchor, constant: 2),
+            left.topAnchor.constraint(equalTo: root.view.safeAreaLayoutGuide.topAnchor, constant: 2),
             left.bottomAnchor.constraint(equalTo: shortcuts.topAnchor, constant: -2),
             right.leadingAnchor.constraint(equalTo: left.trailingAnchor, constant: 2),
             right.trailingAnchor.constraint(equalTo: root.view.trailingAnchor, constant: -2),
