@@ -2,9 +2,22 @@ import AppKit
 
 /// All terminal styling is centralized; the renderer has no dependence on system table styles.
 @MainActor
+struct GlassStyle {
+    let enabled: Bool
+    let material: NSVisualEffectView.Material
+    let blendingMode: NSVisualEffectView.BlendingMode
+    let tint: NSColor
+}
+
+@MainActor
 enum TerminalTheme {
     static let background = NSColor(srgbRed: 0, green: 0, blue: 0.48, alpha: 1)
-    static let glassBackground = NSColor(srgbRed: 0, green: 0, blue: 0.48, alpha: 0.38)
+    static let glass = GlassStyle(
+        enabled: true,
+        material: .underWindowBackground,
+        blendingMode: .behindWindow,
+        tint: NSColor(srgbRed: 0, green: 0, blue: 0.48, alpha: 0.38)
+    )
     static let cyan = NSColor(srgbRed: 0, green: 0.76, blue: 0.79, alpha: 1)
     static let selection = NSColor(srgbRed: 0, green: 0.60, blue: 0.63, alpha: 1)
     static let white = NSColor(srgbRed: 0.84, green: 0.86, blue: 0.89, alpha: 1)
