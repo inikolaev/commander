@@ -163,7 +163,8 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
         window.title = "Commander"
         window.minSize = NSSize(width: 700, height: 380)
         window.appearance = NSAppearance(named: .darkAqua)
-        window.backgroundColor = TerminalTheme.background
+        window.isOpaque = false
+        window.backgroundColor = .clear
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
         super.init(window: window)
@@ -171,6 +172,20 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
         let root = NSViewController()
         root.view = NSView()
         window.contentViewController = root
+
+        let glass = NSVisualEffectView()
+        glass.translatesAutoresizingMaskIntoConstraints = false
+        glass.material = .hudWindow
+        glass.blendingMode = .behindWindow
+        glass.state = .active
+        root.view.addSubview(glass)
+        NSLayoutConstraint.activate([
+            glass.leadingAnchor.constraint(equalTo: root.view.leadingAnchor),
+            glass.trailingAnchor.constraint(equalTo: root.view.trailingAnchor),
+            glass.topAnchor.constraint(equalTo: root.view.topAnchor),
+            glass.bottomAnchor.constraint(equalTo: root.view.bottomAnchor),
+        ])
+
         for pane in panes { root.addChild(pane) }
 
         window.onModifiersChanged = { [weak self] flags in
