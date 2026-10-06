@@ -118,9 +118,21 @@ final class TerminalPaneView: NSView {
         let separators = NSBezierPath()
         separators.move(to: NSPoint(x: bounds.midX, y: line))
         separators.line(to: NSPoint(x: bounds.midX, y: g.separatorY))
-        separators.move(to: NSPoint(x: 5, y: g.separatorY))
-        separators.line(to: NSPoint(x: bounds.width - 5, y: g.separatorY))
         separators.stroke()
+        NSGraphicsContext.restoreGraphicsState()
+
+        let summaryWidth = min(bounds.width - 28, (status as NSString).size(withAttributes: [.font: TerminalTheme.font]).width + 16)
+        let summary = NSRect(x: (bounds.width - summaryWidth) / 2, y: bounds.height - line, width: summaryWidth, height: line)
+
+        NSGraphicsContext.saveGraphicsState()
+        let footerClip = NSBezierPath(rect: bounds)
+        footerClip.appendRect(summary.insetBy(dx: -2, dy: 0))
+        footerClip.windingRule = .evenOdd
+        footerClip.addClip()
+        let footerSeparator = NSBezierPath()
+        footerSeparator.move(to: NSPoint(x: 5, y: g.separatorY))
+        footerSeparator.line(to: NSPoint(x: bounds.width - 5, y: g.separatorY))
+        footerSeparator.stroke()
         NSGraphicsContext.restoreGraphicsState()
         if isActive {
             TerminalTheme.selection.setFill()
@@ -154,8 +166,6 @@ final class TerminalPaneView: NSView {
         let footerBottom = bounds.height - line / 2 - 2
         PaneFooter.draw(state: state, in: NSRect(x: 8, y: g.separatorY,
             width: bounds.width - 16, height: max(0, footerBottom - g.separatorY)))
-        let summaryWidth = min(bounds.width - 28, (status as NSString).size(withAttributes: [.font: TerminalTheme.font]).width + 16)
-        let summary = NSRect(x: (bounds.width - summaryWidth) / 2, y: bounds.height - line, width: summaryWidth, height: line)
         TerminalTheme.text(status, in: summary, color: isError ? TerminalTheme.yellow : TerminalTheme.cyan, alignment: .center)
     }
 
