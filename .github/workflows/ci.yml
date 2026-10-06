@@ -85,3 +85,58 @@ jobs:
             dist/Commander-$APP_VERSION-macOS-${{ matrix.arch }}.zip.sha256
           if-no-files-found: error
           retention-days: 7
+
+
+  preview-comment:
+    if: github.event_name == 'pull_request' && contains(github.event.pull_request.labels.*.name, 'build') && github.event.pull_request.head.repo.full_name == github.repository
+    needs: [preview]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - name: Update preview download comment
+        shell: bash
+        run: |
+          arm64_name="Commander-PR-$PR_NUMBER-arm64"
+          x86_name="Commander-PR-$PR_NUMBER-x86_64"
+
+          arm64_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" \
+            --jq ".artifacts[] | select(.name == \"$arm64_name\") | .id" | head -1)
+          x86_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts?per_page=100" \
+            --jq ".artifacts[] | select(.name == \"$x86_name\") | .id" | head -1)
+
+          test -n "$arm64_id"
+          test -n "$x86_id"
+
+          arm64_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts/$arm64_id"
+          x86_url="https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/artifacts/$x86_id"
+          short_sha="${GITHUB_SHA:0:7}"
+
+          cat > "$RUNNER_TEMP/preview-comment.md" <<COMMENT
+          <!-- commander-preview-build -->
+          ### Commander preview build
+
+          - [Download Apple Silicon (arm64)]($arm64_url)
+          - [Download Intel (x86_64)]($x86_url)
+
+          Built from \`$short_sha\` · [CI run #$GITHUB_RUN_NUMBER](https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)
+
+          Artifacts are retained for 7 days.
+          COMMENT
+
+          comment_id=$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments?per_page=100" \
+            --jq '.[] | select(.body | contains("<!-- commander-preview-build -->")) | .id' | head -1)
+
+          body=$(cat "$RUNNER_TEMP/preview-comment.md")
+          if [[ -n "$comment_id" ]]; then
+            echo "Updating existing preview comment $comment_id"
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$comment_id" -f body="$body" >/dev/null
+          else
+            echo "Creating preview comment"
+            gh api --method POST "repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/comments" -f body="$body" >/dev/null
+          fi
