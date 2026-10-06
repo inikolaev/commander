@@ -158,7 +158,7 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
         ]
         let window = CommanderWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1080, height: 700),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false
         )
         window.title = "Commander"
         window.minSize = NSSize(width: 700, height: 380)
@@ -170,21 +170,12 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
         super.init(window: window)
         window.delegate = self
         let root = NSViewController()
-        root.view = NSView()
-        window.contentViewController = root
-
         let glass = NSVisualEffectView()
-        glass.translatesAutoresizingMaskIntoConstraints = false
-        glass.material = .hudWindow
+        glass.material = .underWindowBackground
         glass.blendingMode = .behindWindow
         glass.state = .active
-        root.view.addSubview(glass)
-        NSLayoutConstraint.activate([
-            glass.leadingAnchor.constraint(equalTo: root.view.leadingAnchor),
-            glass.trailingAnchor.constraint(equalTo: root.view.trailingAnchor),
-            glass.topAnchor.constraint(equalTo: root.view.topAnchor),
-            glass.bottomAnchor.constraint(equalTo: root.view.bottomAnchor),
-        ])
+        root.view = glass
+        window.contentViewController = root
 
         for pane in panes { root.addChild(pane) }
 
