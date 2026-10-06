@@ -89,7 +89,7 @@ final class TerminalPaneView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        TerminalTheme.glassBackground.setFill()
+        NSColor.clear.setFill()
         bounds.fill()
         let g = geometry
         let line = TerminalTheme.lineHeight
