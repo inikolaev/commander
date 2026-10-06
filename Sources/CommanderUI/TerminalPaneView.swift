@@ -36,7 +36,7 @@ enum PaneInput {
 /// A single drawing surface, with no NSTableView, NSScrollView, or native row widgets.
 /// The controller owns selection; this view owns only viewport and input presentation.
 @MainActor
-final class TerminalPaneView: NSView {
+final class TerminalPaneView: TerminalSurfaceView {
     var onInput: ((PaneInput) -> Void)?
     private(set) var state = PaneState(directory: URL(fileURLWithPath: "/"))
     private(set) var viewport = ColumnViewport()
@@ -58,7 +58,6 @@ final class TerminalPaneView: NSView {
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override var isFlipped: Bool { true }
-    override var isOpaque: Bool { false }
     override var acceptsFirstResponder: Bool { true }
     var geometry: PaneGeometry { PaneGeometry(bounds: bounds, lineHeight: TerminalTheme.lineHeight) }
 
@@ -89,8 +88,6 @@ final class TerminalPaneView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSColor.clear.setFill()
-        bounds.fill()
         let g = geometry
         let line = TerminalTheme.lineHeight
         let path = state.directory.path
