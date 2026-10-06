@@ -58,7 +58,7 @@ final class TerminalPaneView: NSView {
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override var isFlipped: Bool { true }
-    override var isOpaque: Bool { true }
+    override var isOpaque: Bool { false }
     override var acceptsFirstResponder: Bool { true }
     var geometry: PaneGeometry { PaneGeometry(bounds: bounds, lineHeight: TerminalTheme.lineHeight) }
 
@@ -89,7 +89,7 @@ final class TerminalPaneView: NSView {
     }
 
     override func draw(_ dirtyRect: NSRect) {
-        TerminalTheme.background.setFill()
+        TerminalTheme.glassBackground.setFill()
         bounds.fill()
         let g = geometry
         let line = TerminalTheme.lineHeight
