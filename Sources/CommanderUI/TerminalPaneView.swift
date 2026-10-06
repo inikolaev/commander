@@ -93,6 +93,21 @@ final class TerminalPaneView: NSView {
         bounds.fill()
         let g = geometry
         let line = TerminalTheme.lineHeight
+        let path = state.directory.path
+        let textWidth = (path as NSString).size(withAttributes: [.font: TerminalTheme.font]).width
+        // Text layout can discard trailing spaces; use geometric padding instead.
+        let titlePadding: CGFloat = 8
+        let pathWidth = min(bounds.width - 40, ceil(textWidth) + titlePadding * 2)
+        let pathRect = NSRect(x: (bounds.width - pathWidth) / 2, y: 0, width: pathWidth, height: line)
+
+        // Keep the glass continuous behind the path label. Clip the pane chrome
+        // around it instead of masking the border with an opaque blue rectangle.
+        NSGraphicsContext.saveGraphicsState()
+        let chromeClip = NSBezierPath(rect: bounds)
+        chromeClip.appendRect(pathRect.insetBy(dx: -2, dy: 0))
+        chromeClip.windingRule = .evenOdd
+        chromeClip.addClip()
+
         TerminalTheme.cyan.setStroke()
         let border = NSBezierPath(rect: bounds.insetBy(dx: 2.5, dy: line / 2))
         border.lineWidth = 1
@@ -106,13 +121,7 @@ final class TerminalPaneView: NSView {
         separators.move(to: NSPoint(x: 5, y: g.separatorY))
         separators.line(to: NSPoint(x: bounds.width - 5, y: g.separatorY))
         separators.stroke()
-
-        let path = state.directory.path
-        let textWidth = (path as NSString).size(withAttributes: [.font: TerminalTheme.font]).width
-        // Text layout can discard trailing spaces; use geometric padding instead.
-        let titlePadding: CGFloat = 8
-        let pathWidth = min(bounds.width - 40, ceil(textWidth) + titlePadding * 2)
-        let pathRect = NSRect(x: (bounds.width - pathWidth) / 2, y: 0, width: pathWidth, height: line)
+        NSGraphicsContext.restoreGraphicsState()
         if isActive {
             TerminalTheme.selection.setFill()
             pathRect.fill()
