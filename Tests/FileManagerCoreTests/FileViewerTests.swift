@@ -19,6 +19,24 @@ private func viewerFixture(_ data: Data) throws -> URL {
     #expect(try await document.page(.home, rows: 1).offset == 0)
 }
 
+@Test func viewerWrapsLongLinesAtVisibleWidthAndScrollsByWrappedRows() async throws {
+    let url = try viewerFixture(Data("abcdefghij\nnext".utf8))
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try FileViewerDocument(url: url)
+
+    let first = try await document.page(rows: 3, wrapColumns: 4)
+    #expect(first.lines.map(\.text) == ["abcd", "efgh", "ij"])
+
+    let down = try await document.page(.scroll(1), rows: 3, wrapColumns: 4)
+    #expect(down.lines.map(\.text) == ["efgh", "ij", "next"])
+
+    let back = try await document.page(.scroll(-1), rows: 3, wrapColumns: 4)
+    #expect(back.lines.map(\.text) == first.lines.map(\.text))
+
+    let end = try await document.page(.end, rows: 2, wrapColumns: 4)
+    #expect(end.lines.map(\.text) == ["ij", "next"])
+}
+
 @Test func viewerDoesNotSplitUTF8OrCRLFAcrossArtificialRows() async throws {
     for suffix in ["😀Z\nlast", "\r\nlast"] {
         let content = String(repeating: "a", count: 4095) + suffix
