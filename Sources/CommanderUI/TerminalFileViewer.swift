@@ -3,7 +3,7 @@ import FileManagerCore
 
 @MainActor
 final class TerminalFileViewer: NSView {
-    enum Input { case navigate(ViewerCommand), close, toggleMode }
+    enum Input { case navigate(ViewerCommand), close, toggleMode, toggleWrap }
     var onInput: ((Input) -> Void)?
     let path: String
     private(set) var page: ViewerPage?
@@ -30,10 +30,17 @@ final class TerminalFileViewer: NSView {
             return String(text.dropFirst(start).prefix(end - start))
         }.joined(separator: "\n")
     }
-    private var horizontalOffset = 0
+    private(set) var horizontalOffset = 0
+    var wrapsText = true {
+        didSet {
+            if wrapsText { horizontalOffset = 0 }
+            needsDisplay = true
+        }
+    }
     private var scrollRemainder: CGFloat = 0
     var onResize: (() -> Void)?
     var visibleRows: Int { min(200, TerminalTextGeometry(bounds: bounds).visibleRows) }
+    var visibleColumns: Int { max(1, Int((bounds.width - 2) / TerminalTheme.cellWidth)) }
 
     init(path: String) {
         self.path = path
@@ -48,7 +55,7 @@ final class TerminalFileViewer: NSView {
     override var acceptsFirstResponder: Bool { true }
 
     func update(_ page: ViewerPage) {
-        if self.page?.mode != page.mode { horizontalOffset = 0 }
+        if self.page?.mode != page.mode || wrapsText { horizontalOffset = 0 }
         if self.page?.mode != page.mode || self.page?.offset != page.offset
             || self.page?.lines.map(\.text) != page.lines.map(\.text) {
             anchor = nil
@@ -62,9 +69,10 @@ final class TerminalFileViewer: NSView {
 
     override func setFrameSize(_ newSize: NSSize) {
         let oldRows = visibleRows
+        let oldColumns = visibleColumns
         super.setFrameSize(newSize)
         needsDisplay = true
-        if oldRows != visibleRows { onResize?() }
+        if oldRows != visibleRows || oldColumns != visibleColumns { onResize?() }
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -120,7 +128,12 @@ final class TerminalFileViewer: NSView {
     }
 
     private func drawFunctionKeys(in footer: NSRect) {
-        TerminalFunctionKeys.draw(in: footer, labels: [3: "Close", 4: page?.mode == .hex ? "Text" : "Hex", 10: "Quit"])
+        TerminalFunctionKeys.draw(in: footer, labels: [
+            2: wrapsText ? "Unwrap" : "Wrap",
+            3: "Close",
+            4: page?.mode == .hex ? "Text" : "Hex",
+            10: "Quit",
+        ])
     }
 
     override func keyDown(with event: NSEvent) {
@@ -131,6 +144,7 @@ final class TerminalFileViewer: NSView {
             return
         }
         switch event.keyCode {
+        case 120: onInput?(.toggleWrap) // F2
         case 118: onInput?(.toggleMode) // F4
         case 53, 99, 109: onInput?(.close) // Escape / F3 / F10
         case 125: onInput?(.navigate(.scroll(1)))
@@ -139,8 +153,18 @@ final class TerminalFileViewer: NSView {
         case 116: onInput?(.navigate(.scroll(-visibleRows)))
         case 115: onInput?(.navigate(.home))
         case 119: onInput?(.navigate(.end))
-        case 123: horizontalOffset = max(0, horizontalOffset - 8); needsDisplay = true
-        case 124: horizontalOffset = min(32768, horizontalOffset + 8); needsDisplay = true
+        case 123:
+            if page?.mode == .text && !wrapsText {
+                let step = event.modifierFlags.contains(.control) ? 20 : 1
+                horizontalOffset = max(0, horizontalOffset - step)
+                needsDisplay = true
+            }
+        case 124:
+            if page?.mode == .text && !wrapsText {
+                let step = event.modifierFlags.contains(.control) ? 20 : 1
+                horizontalOffset = min(32768, horizontalOffset + step)
+                needsDisplay = true
+            }
         default: break
         }
     }
@@ -150,7 +174,8 @@ final class TerminalFileViewer: NSView {
         let point = convert(event.locationInWindow, from: nil)
         let footer = NSRect(x: 0, y: bounds.height - TerminalTheme.lineHeight, width: bounds.width, height: TerminalTheme.lineHeight)
         if let slot = TerminalFunctionKeys.number(at: point, in: footer) {
-            if slot == 3 || slot == 10 { onInput?(.close) }
+            if slot == 2 { onInput?(.toggleWrap) }
+            else if slot == 3 || slot == 10 { onInput?(.close) }
             else if slot == 4 { onInput?(.toggleMode) }
             return
         }
