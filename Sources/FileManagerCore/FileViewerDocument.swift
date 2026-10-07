@@ -141,7 +141,7 @@ public actor FileViewerDocument {
         return start
     }
 
-    private func readRow(at offset: Int64) throws -> (text: String, next: Int64) {
+    private func readRow(at offset: Int64, columns: Int? = nil) throws -> (text: String, next: Int64) {
         let limit = try nextBoundary(after: offset)
         var cursor = offset
         var bytes: [UInt8] = []
@@ -152,22 +152,51 @@ public actor FileViewerDocument {
             bytes.append(value)
         }
         if bytes.last == 13 { bytes.removeLast() }
+
+        let source = String(decoding: bytes, as: UTF8.self)
+        let maximum = columns.map { max(1, $0) }
         var display = ""
         var column = 0
-        for scalar in String(decoding: bytes, as: UTF8.self).unicodeScalars {
+        var consumedBytes = 0
+        for scalar in source.unicodeScalars {
+            let rendered: String
+            let width: Int
             if scalar == "\t" {
-                let width = 4 - column % 4
-                display += String(repeating: " ", count: width)
-                column += width
+                width = 4 - column % 4
+                rendered = String(repeating: " ", count: width)
             } else {
-                display += CharacterSet.controlCharacters.contains(scalar) ? "·" : String(scalar)
-                column += 1
+                width = 1
+                rendered = CharacterSet.controlCharacters.contains(scalar) ? "·" : String(scalar)
             }
+            if let maximum, column + width > maximum, consumedBytes > 0 { break }
+            display += rendered
+            column += width
+            consumedBytes += String(scalar).utf8.count
         }
-        return (display, cursor)
+
+        // If wrapping stopped before the artificial/logical row boundary, keep
+        // the unread bytes for the next visible row instead of advancing to cursor.
+        let next = consumedBytes < bytes.count ? offset + Int64(consumedBytes) : cursor
+        return (display, next)
     }
 
-    public func page(_ command: ViewerCommand = .stay, rows requestedRows: Int, mode requestedMode: ViewerMode = .text) throws -> ViewerPage {
+    private func previousDisplayStart(before offset: Int64, columns: Int?) throws -> Int64 {
+        guard let columns else { return try previousStart(before: offset) }
+        let base = try previousStart(before: offset)
+        var cursor = base
+        var previous = base
+        while cursor < offset {
+            let next = try readRow(at: cursor, columns: columns).next
+            guard next > cursor else { break }
+            if next >= offset { return cursor }
+            previous = cursor
+            cursor = next
+        }
+        return previous
+    }
+
+    public func page(_ command: ViewerCommand = .stay, rows requestedRows: Int,
+                     mode requestedMode: ViewerMode = .text, wrapColumns: Int? = nil) throws -> ViewerPage {
         try Task.checkCancellation()
         try refreshSize()
         let count = min(200, max(1, requestedRows))
@@ -183,17 +212,18 @@ public actor FileViewerDocument {
             mode = requestedMode
         }
         if mode == .hex { return try hexPage(command, rows: count) }
+        let columns = wrapColumns.map { max(1, $0) }
         switch command {
         case .home: top = 0
         case .end:
             top = size
-            for _ in 0..<count { top = try previousStart(before: top) }
+            for _ in 0..<count { top = try previousDisplayStart(before: top, columns: columns) }
         case .scroll(let delta):
             for _ in 0..<abs(max(-200, min(200, delta))) {
                 try Task.checkCancellation()
-                if delta < 0 { top = try previousStart(before: top) }
+                if delta < 0 { top = try previousDisplayStart(before: top, columns: columns) }
                 else {
-                    let next = try readRow(at: top).next
+                    let next = try readRow(at: top, columns: columns).next
                     if next > top && next < size { top = next } else { break }
                 }
             }
@@ -204,7 +234,7 @@ public actor FileViewerDocument {
         for _ in 0..<count {
             try Task.checkCancellation()
             guard cursor < size else { break }
-            let row = try readRow(at: cursor)
+            let row = try readRow(at: cursor, columns: columns)
             guard row.next > cursor else { break }
             lines.append(ViewerLine(offset: cursor, text: row.text))
             cursor = row.next
