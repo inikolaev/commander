@@ -13,6 +13,7 @@ final class FileViewerCoordinator {
     private var pendingJump: ViewerCommand?
     private var reload = false
     private var mode: ViewerMode = .text
+    private var wrapsText = true
     private var closed = false
     private var showingError = false
     private let errors = OperationDialogPresenter()
@@ -29,7 +30,9 @@ final class FileViewerCoordinator {
                 // Prepare the first page offscreen: failed opens/reads leave the panes visible.
                 let viewer = TerminalFileViewer(path: url.path)
                 viewer.frame = content.bounds
-                let page = try await document.page(rows: viewer.visibleRows)
+                viewer.wrapsText = self.wrapsText
+                let page = try await document.page(rows: viewer.visibleRows,
+                    wrapColumns: self.wrapsText ? viewer.visibleColumns : nil)
                 guard !self.closed, !Task.isCancelled else { return }
                 self.document = document
                 viewer.update(page)
@@ -59,6 +62,7 @@ final class FileViewerCoordinator {
             switch input {
             case .close: self?.close()
             case .toggleMode: self?.toggleMode()
+            case .toggleWrap: self?.toggleWrap()
             case .navigate(let command): self?.request(command)
             }
         }
@@ -69,6 +73,15 @@ final class FileViewerCoordinator {
     func toggleMode() {
         guard !closed, !showingError else { return }
         mode = mode == .text ? .hex : .text
+        pendingScroll = 0
+        pendingJump = nil
+        request(.stay)
+    }
+
+    func toggleWrap() {
+        guard !closed, !showingError, mode == .text else { return }
+        wrapsText.toggle()
+        view?.wrapsText = wrapsText
         pendingScroll = 0
         pendingJump = nil
         request(.stay)
@@ -93,9 +106,12 @@ final class FileViewerCoordinator {
                     else { command = .stay }
                     self.reload = false
                     let requestedMode = self.mode
-                    let page = try await document.page(command, rows: self.view?.visibleRows ?? 1, mode: requestedMode)
+                    let requestedWrap = self.wrapsText
+                    let wrapColumns = requestedMode == .text && requestedWrap ? self.view?.visibleColumns : nil
+                    let page = try await document.page(command, rows: self.view?.visibleRows ?? 1,
+                        mode: requestedMode, wrapColumns: wrapColumns)
                     guard !self.closed, !Task.isCancelled else { return }
-                    if requestedMode == self.mode { self.view?.update(page) }
+                    if requestedMode == self.mode && requestedWrap == self.wrapsText { self.view?.update(page) }
                 }
             } catch is CancellationError {
                 // Closing the viewer cancels pending page work.
