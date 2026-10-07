@@ -150,12 +150,19 @@ import FileManagerCore
     viewer.keyDown(with: copy)
     #expect(NSPasteboard.general.string(forType: .string) == "cdefghijklm\nsecond")
 
+    viewer.wrapsText = false
     let right = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 1,
         windowNumber: window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 124))
     viewer.keyDown(with: right)
+    #expect(viewer.horizontalOffset == 1)
     viewer.mouseDown(with: try mouse(.leftMouseDown, row: 0, column: 0))
     viewer.mouseUp(with: try mouse(.leftMouseUp, row: 0, column: 3))
-    #expect(viewer.selectedText == "ijk")
+    #expect(viewer.selectedText == "bcd")
+
+    let controlRight = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .control, timestamp: 1,
+        windowNumber: window.windowNumber, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 124))
+    viewer.keyDown(with: controlRight)
+    #expect(viewer.horizontalOffset == 21)
     viewer.update(try await document.page(.scroll(1), rows: 10))
     #expect(viewer.selectedText.isEmpty)
 }
