@@ -9,6 +9,7 @@ final class FileViewerCoordinator {
     private weak var window: NSWindow?
     private weak var previousResponder: NSResponder?
     private var document: FileViewerDocument?
+    private var syntaxHighlighter: any SyntaxHighlighter = PlainTextSyntaxHighlighter.shared
     private var task: Task<Void, Never>?
     private var pendingScroll = 0
     private var pendingJump: ViewerCommand?
@@ -43,8 +44,13 @@ final class FileViewerCoordinator {
                     includeSourceText: syntaxHighlighter.isActive
                 )
                 guard !self.closed, !Task.isCancelled else { return }
+                let syntaxProjection = await Task.detached(priority: .userInitiated) {
+                    ViewerSyntaxProjection.make(page: page, highlighter: syntaxHighlighter)
+                }.value
+                guard !self.closed, !Task.isCancelled else { return }
                 self.document = document
-                viewer.update(page)
+                self.syntaxHighlighter = syntaxHighlighter
+                viewer.update(page, syntaxProjection: syntaxProjection)
                 self.install(viewer, in: content, window: window)
                 self.task = nil
                 self.request(.stay)
@@ -117,15 +123,21 @@ final class FileViewerCoordinator {
                     let requestedMode = self.mode
                     let requestedWrap = self.wrapsText
                     let wrapColumns = requestedMode == .text && requestedWrap ? self.view?.visibleColumns : nil
+                    let highlighter = self.syntaxHighlighter
                     let page = try await document.page(
                         command,
                         rows: self.view?.visibleRows ?? 1,
                         mode: requestedMode,
                         wrapColumns: wrapColumns,
-                        includeSourceText: self.view?.syntaxHighlightingEnabled == true
+                        includeSourceText: highlighter.isActive
                     )
+                    let syntaxProjection = await Task.detached(priority: .userInitiated) {
+                        ViewerSyntaxProjection.make(page: page, highlighter: highlighter)
+                    }.value
                     guard !self.closed, !Task.isCancelled else { return }
-                    if requestedMode == self.mode && requestedWrap == self.wrapsText { self.view?.update(page) }
+                    if requestedMode == self.mode && requestedWrap == self.wrapsText {
+                        self.view?.update(page, syntaxProjection: syntaxProjection)
+                    }
                 }
             } catch is CancellationError {
                 // Closing the viewer cancels pending page work.
@@ -152,6 +164,7 @@ final class FileViewerCoordinator {
         task?.cancel()
         task = nil
         document = nil
+        syntaxHighlighter = PlainTextSyntaxHighlighter.shared
         view?.removeFromSuperview()
         view = nil
         window?.makeFirstResponder(previousResponder)

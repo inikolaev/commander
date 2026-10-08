@@ -13,45 +13,6 @@ public struct ViewerLine: Sendable {
     public let text: String
     public let sourceText: String?
 
-    /// Converts an absolute UTF-8 source-byte range into the displayed character
-    /// range for this row. This accounts for the viewer's tab expansion and
-    /// control-character substitution.
-    public func displayRange(forSourceByteRange range: Range<Int>) -> Range<Int>? {
-        let rowStart = Int(offset)
-        let rowEnd = Int(endOffset)
-        let lower = max(rowStart, range.lowerBound)
-        let upper = min(rowEnd, range.upperBound)
-        guard lower < upper,
-              let start = displayColumn(atLocalByteOffset: lower - rowStart),
-              let end = displayColumn(atLocalByteOffset: upper - rowStart) else {
-            return nil
-        }
-        return start..<end
-    }
-
-    private func displayColumn(atLocalByteOffset byteOffset: Int) -> Int? {
-        guard let sourceText else { return nil }
-        let utf8 = sourceText.utf8
-        guard byteOffset >= 0, byteOffset <= utf8.count,
-              let utf8Index = utf8.index(utf8.startIndex, offsetBy: byteOffset, limitedBy: utf8.endIndex),
-              let stringIndex = String.Index(utf8Index, within: sourceText) else {
-            return nil
-        }
-
-        var display = ""
-        var column = 0
-        for scalar in sourceText[..<stringIndex].unicodeScalars {
-            if scalar == "\t" {
-                let width = 4 - column % 4
-                display += String(repeating: " ", count: width)
-                column += width
-            } else {
-                display += CharacterSet.controlCharacters.contains(scalar) ? "·" : String(scalar)
-                column += 1
-            }
-        }
-        return display.count
-    }
 }
 
 public struct ViewerPage: Sendable {
@@ -183,8 +144,8 @@ public actor FileViewerDocument {
         return start
     }
 
-    private func readRow(at offset: Int64, columns: Int? = nil) throws
-        -> (text: String, sourceText: String, contentEnd: Int64, next: Int64) {
+    private func readRow(at offset: Int64, columns: Int? = nil, includeSourceText: Bool = false) throws
+        -> (text: String, sourceText: String?, contentEnd: Int64, next: Int64) {
         // Wrapped rows never need to read beyond the next bounded chunk because
         // the visible terminal width is far smaller than blockSize. Unwrapped
         // rows, however, must continue until the real newline/EOF.
@@ -202,7 +163,9 @@ public actor FileViewerDocument {
         let source = String(decoding: bytes, as: UTF8.self)
         let maximum = columns.map { max(1, $0) }
         var display = ""
-        var sourceText = ""
+        display.reserveCapacity(bytes.count)
+        var sourceText: String? = includeSourceText ? "" : nil
+        if includeSourceText { sourceText?.reserveCapacity(bytes.count) }
         var column = 0
         var consumedBytes = 0
         for scalar in source.unicodeScalars {
@@ -216,8 +179,8 @@ public actor FileViewerDocument {
                 rendered = CharacterSet.controlCharacters.contains(scalar) ? "·" : String(scalar)
             }
             if let maximum, column + width > maximum, consumedBytes > 0 { break }
-            display += rendered
-            sourceText += String(scalar)
+            display.append(contentsOf: rendered)
+            if includeSourceText { sourceText?.append(contentsOf: String(scalar)) }
             column += width
             consumedBytes += String(scalar).utf8.count
         }
@@ -295,13 +258,13 @@ public actor FileViewerDocument {
         for _ in 0..<count {
             try Task.checkCancellation()
             guard cursor < size else { break }
-            let row = try readRow(at: cursor, columns: columns)
+            let row = try readRow(at: cursor, columns: columns, includeSourceText: includeSourceText)
             guard row.next > cursor else { break }
             lines.append(ViewerLine(
                 offset: cursor,
                 endOffset: row.contentEnd,
                 text: row.text,
-                sourceText: includeSourceText ? row.sourceText : nil
+                sourceText: row.sourceText
             ))
             cursor = row.next
         }
