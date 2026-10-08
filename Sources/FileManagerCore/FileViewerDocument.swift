@@ -11,7 +11,7 @@ public struct ViewerLine: Sendable {
     public let offset: Int64
     public let endOffset: Int64
     public let text: String
-    public let sourceText: String
+    public let sourceText: String?
 
     /// Converts an absolute UTF-8 source-byte range into the displayed character
     /// range for this row. This accounts for the viewer's tab expansion and
@@ -30,6 +30,7 @@ public struct ViewerLine: Sendable {
     }
 
     private func displayColumn(atLocalByteOffset byteOffset: Int) -> Int? {
+        guard let sourceText else { return nil }
         let utf8 = sourceText.utf8
         guard byteOffset >= 0, byteOffset <= utf8.count,
               let utf8Index = utf8.index(utf8.startIndex, offsetBy: byteOffset, limitedBy: utf8.endIndex),
@@ -255,7 +256,8 @@ public actor FileViewerDocument {
     }
 
     public func page(_ command: ViewerCommand = .stay, rows requestedRows: Int,
-                     mode requestedMode: ViewerMode = .text, wrapColumns: Int? = nil) throws -> ViewerPage {
+                     mode requestedMode: ViewerMode = .text, wrapColumns: Int? = nil,
+                     includeSourceText: Bool = false) throws -> ViewerPage {
         try Task.checkCancellation()
         try refreshSize()
         let count = min(200, max(1, requestedRows))
@@ -299,7 +301,7 @@ public actor FileViewerDocument {
                 offset: cursor,
                 endOffset: row.contentEnd,
                 text: row.text,
-                sourceText: row.sourceText
+                sourceText: includeSourceText ? row.sourceText : nil
             ))
             cursor = row.next
         }
@@ -333,7 +335,7 @@ public actor FileViewerDocument {
                 offset: start,
                 endOffset: cursor,
                 text: HexRowFormatter.format(offset: start, bytes: bytes),
-                sourceText: ""
+                sourceText: nil
             ))
         }
         return ViewerPage(lines: lines, offset: top, endOffset: cursor, fileSize: size, mode: .hex)
