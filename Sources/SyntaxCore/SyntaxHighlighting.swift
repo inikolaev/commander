@@ -3,7 +3,7 @@ import SwiftTreeSitter
 import TreeSitter
 import TreeSitterJSON
 
-public enum SyntaxKind: Sendable, Equatable {
+public enum SyntaxKind: Sendable, Equatable, Hashable {
     case property
     case string
     case number
