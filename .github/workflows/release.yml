@@ -30,6 +30,9 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       release: ${{ steps.release_changes.outputs.release }}
+      app_version: ${{ steps.version.outputs.app_version }}
+      build_number: ${{ steps.version.outputs.build_number }}
+      tag: ${{ steps.version.outputs.tag }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -57,6 +60,28 @@ jobs:
             scripts/prepare-signing.sh
             scripts/notarize-app.sh
             scripts/notarize-dmg.sh
+            .github/workflows/release.yml
+
+      - name: Determine next release version
+        id: version
+        if: steps.release_changes.outputs.release == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          created_at=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .created_at)
+          year=${created_at:0:4}
+          month=${created_at:5:2}
+          latest_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          if [[ ! "$latest_tag" =~ ^v[0-9]{4}\.[0-9]{1,2}\.([0-9]+)$ ]]; then
+            echo "Latest release tag has unexpected format: $latest_tag" >&2
+            exit 1
+          fi
+          build_number=$((${BASH_REMATCH[1]} + 1))
+          app_version="$year.$((10#$month)).$build_number"
+          echo "app_version=$app_version" >> "$GITHUB_OUTPUT"
+          echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
+          echo "tag=v$app_version" >> "$GITHUB_OUTPUT"
 
   build:
     needs: [changes]
@@ -70,20 +95,13 @@ jobs:
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
       GH_TOKEN: ${{ github.token }}
+      APP_VERSION: ${{ needs.changes.outputs.app_version }}
+      APP_BUILD_NUMBER: ${{ needs.changes.outputs.build_number }}
     steps:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
-
-      - name: Determine version
-        shell: bash
-        run: |
-          created_at=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .created_at)
-          year=${created_at:0:4}
-          month=${created_at:5:2}
-          echo "APP_VERSION=$year.$((10#$month)).$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
-          echo "APP_BUILD_NUMBER=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
 
       - name: Cache Swift release build
         uses: actions/cache@v6
@@ -152,7 +170,7 @@ jobs:
           rm -f "$RUNNER_TEMP/commander-certificate.p12"
 
   release:
-    needs: [build]
+    needs: [changes, build]
     runs-on: macos-15
     timeout-minutes: 20
     permissions:
@@ -163,24 +181,15 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
+      APP_VERSION: ${{ needs.changes.outputs.app_version }}
+      APP_BUILD_NUMBER: ${{ needs.changes.outputs.build_number }}
+      RELEASE_TAG: ${{ needs.changes.outputs.tag }}
+      RELEASE_SHA: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v5
         with:
           persist-credentials: false
           ref: ${{ github.sha }}
-
-      - name: Determine version
-        id: version
-        shell: bash
-        run: |
-          created_at=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .created_at)
-          year=${created_at:0:4}
-          month=${created_at:5:2}
-          version="$year.$((10#$month)).$GITHUB_RUN_NUMBER"
-          echo "APP_VERSION=$version" >> "$GITHUB_ENV"
-          echo "APP_BUILD_NUMBER=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
-          echo "RELEASE_SHA=$GITHUB_SHA" >> "$GITHUB_ENV"
-          echo "tag=v$version" >> "$GITHUB_OUTPUT"
 
       - name: Remove stale draft releases
         shell: bash
@@ -200,14 +209,12 @@ jobs:
           merge-multiple: true
 
       - name: Publish release
-        env:
-          RELEASE_TAG: ${{ steps.version.outputs.tag }}
         shell: bash
         run: |
           if gh release view "$RELEASE_TAG" --json isDraft > "$RUNNER_TEMP/release.json"; then
             if [[ $(jq -r .isDraft "$RUNNER_TEMP/release.json") == false ]]; then
-              echo "Release $RELEASE_TAG is already published; leaving its assets unchanged."
-              exit 0
+              echo "Release $RELEASE_TAG already exists and is published; refusing to overwrite or republish it." >&2
+              exit 1
             fi
           else
             cat > "$RUNNER_TEMP/release-notes.md" <<NOTES
