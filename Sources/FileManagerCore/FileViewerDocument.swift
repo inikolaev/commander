@@ -13,45 +13,6 @@ public struct ViewerLine: Sendable {
     public let text: String
     public let sourceText: String?
 
-    /// Converts an absolute UTF-8 source-byte range into the displayed character
-    /// range for this row. This accounts for the viewer's tab expansion and
-    /// control-character substitution.
-    public func displayRange(forSourceByteRange range: Range<Int>) -> Range<Int>? {
-        let rowStart = Int(offset)
-        let rowEnd = Int(endOffset)
-        let lower = max(rowStart, range.lowerBound)
-        let upper = min(rowEnd, range.upperBound)
-        guard lower < upper,
-              let start = displayColumn(atLocalByteOffset: lower - rowStart),
-              let end = displayColumn(atLocalByteOffset: upper - rowStart) else {
-            return nil
-        }
-        return start..<end
-    }
-
-    private func displayColumn(atLocalByteOffset byteOffset: Int) -> Int? {
-        guard let sourceText else { return nil }
-        let utf8 = sourceText.utf8
-        guard byteOffset >= 0, byteOffset <= utf8.count,
-              let utf8Index = utf8.index(utf8.startIndex, offsetBy: byteOffset, limitedBy: utf8.endIndex),
-              let stringIndex = String.Index(utf8Index, within: sourceText) else {
-            return nil
-        }
-
-        var display = ""
-        var column = 0
-        for scalar in sourceText[..<stringIndex].unicodeScalars {
-            if scalar == "\t" {
-                let width = 4 - column % 4
-                display += String(repeating: " ", count: width)
-                column += width
-            } else {
-                display += CharacterSet.controlCharacters.contains(scalar) ? "·" : String(scalar)
-                column += 1
-            }
-        }
-        return display.count
-    }
 }
 
 public struct ViewerPage: Sendable {
@@ -203,7 +164,7 @@ public actor FileViewerDocument {
         let maximum = columns.map { max(1, $0) }
         var display = ""
         display.reserveCapacity(bytes.count)
-        var sourceText = includeSourceText ? "" : nil
+        var sourceText: String? = includeSourceText ? "" : nil
         if includeSourceText { sourceText?.reserveCapacity(bytes.count) }
         var column = 0
         var consumedBytes = 0
