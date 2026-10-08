@@ -40,7 +40,7 @@ final class TerminalFileViewer: NSView {
     private var scrollRemainder: CGFloat = 0
     var onResize: (() -> Void)?
     var visibleRows: Int { min(200, TerminalTextGeometry(bounds: bounds).visibleRows) }
-    var visibleColumns: Int { max(1, Int((bounds.width - 2) / TerminalTheme.cellWidth)) }
+    var visibleColumns: Int { max(1, Int(floor((bounds.width - 2) / TerminalTheme.cellAdvance))) }
 
     init(path: String) {
         self.path = path
