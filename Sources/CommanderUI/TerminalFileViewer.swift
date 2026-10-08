@@ -8,6 +8,7 @@ final class TerminalFileViewer: NSView {
     var onInput: ((Input) -> Void)?
     let path: String
     private let syntaxHighlighter: any SyntaxHighlighter
+    var syntaxHighlightingEnabled: Bool { syntaxHighlighter.isActive }
     private(set) var page: ViewerPage?
     private struct Position: Comparable {
         let row: Int
