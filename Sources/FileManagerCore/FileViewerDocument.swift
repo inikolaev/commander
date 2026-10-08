@@ -183,8 +183,8 @@ public actor FileViewerDocument {
         return start
     }
 
-    private func readRow(at offset: Int64, columns: Int? = nil) throws
-        -> (text: String, sourceText: String, contentEnd: Int64, next: Int64) {
+    private func readRow(at offset: Int64, columns: Int? = nil, includeSourceText: Bool = false) throws
+        -> (text: String, sourceText: String?, contentEnd: Int64, next: Int64) {
         // Wrapped rows never need to read beyond the next bounded chunk because
         // the visible terminal width is far smaller than blockSize. Unwrapped
         // rows, however, must continue until the real newline/EOF.
@@ -202,7 +202,9 @@ public actor FileViewerDocument {
         let source = String(decoding: bytes, as: UTF8.self)
         let maximum = columns.map { max(1, $0) }
         var display = ""
-        var sourceText = ""
+        display.reserveCapacity(bytes.count)
+        var sourceText = includeSourceText ? "" : nil
+        if includeSourceText { sourceText?.reserveCapacity(bytes.count) }
         var column = 0
         var consumedBytes = 0
         for scalar in source.unicodeScalars {
@@ -216,8 +218,8 @@ public actor FileViewerDocument {
                 rendered = CharacterSet.controlCharacters.contains(scalar) ? "·" : String(scalar)
             }
             if let maximum, column + width > maximum, consumedBytes > 0 { break }
-            display += rendered
-            sourceText += String(scalar)
+            display.append(contentsOf: rendered)
+            if includeSourceText { sourceText?.append(contentsOf: String(scalar)) }
             column += width
             consumedBytes += String(scalar).utf8.count
         }
@@ -295,13 +297,13 @@ public actor FileViewerDocument {
         for _ in 0..<count {
             try Task.checkCancellation()
             guard cursor < size else { break }
-            let row = try readRow(at: cursor, columns: columns)
+            let row = try readRow(at: cursor, columns: columns, includeSourceText: includeSourceText)
             guard row.next > cursor else { break }
             lines.append(ViewerLine(
                 offset: cursor,
                 endOffset: row.contentEnd,
                 text: row.text,
-                sourceText: includeSourceText ? row.sourceText : nil
+                sourceText: row.sourceText
             ))
             cursor = row.next
         }
