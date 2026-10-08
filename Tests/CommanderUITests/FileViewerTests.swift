@@ -197,3 +197,73 @@ import FileManagerCore
     viewer.update(try await document.page(rows: 10, mode: .hex))
     #expect(viewer.selectedText.isEmpty)
 }
+
+
+private struct TestSyntaxHighlighter: SyntaxHighlighter {
+    let isActive = true
+    let spans: [SyntaxHighlightSpan]
+
+    func highlights(in byteRange: Range<Int>) -> [SyntaxHighlightSpan] {
+        spans.filter {
+            $0.byteRange.lowerBound < byteRange.upperBound
+                && $0.byteRange.upperBound > byteRange.lowerBound
+        }
+    }
+}
+
+@Test func viewerSyntaxProjectionMergesSourceAndSpansSequentially() async throws {
+    let source = "\t\"é\": true\n"
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try Data(source.utf8).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    let document = try FileViewerDocument(url: url)
+    let page = try await document.page(rows: 1, includeSourceText: true)
+    let bytes = Array(source.utf8)
+    let quoteStart = try #require(bytes.firstIndex(of: Character("\"").asciiValue!))
+    let colon = try #require(bytes.firstIndex(of: Character(":").asciiValue!))
+    let trueStart = colon + 2
+    let highlighter = TestSyntaxHighlighter(spans: [
+        SyntaxHighlightSpan(byteRange: quoteStart..<colon, kind: .property),
+        SyntaxHighlightSpan(byteRange: trueStart..<(trueStart + 4), kind: .constant),
+    ])
+
+    let projection = ViewerSyntaxProjection.make(page: page, highlighter: highlighter)
+    let line = try #require(projection.lines.first)
+    #expect(line == [
+        ViewerDisplayHighlight(range: 4..<7, kind: .property),
+        ViewerDisplayHighlight(range: 9..<13, kind: .constant),
+    ])
+}
+
+@Test func viewerSyntaxProjectionHandlesManySpansOnOneLogicalLine() async throws {
+    let fields = (0..<5_000).map { "\"k\($0)\":\($0)" }
+    let source = "{" + fields.joined(separator: ",") + "}\n"
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try Data(source.utf8).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    let document = try FileViewerDocument(url: url)
+    let page = try await document.page(rows: 1, includeSourceText: true)
+    var spans: [SyntaxHighlightSpan] = []
+    var cursor = 1
+    for index in 0..<5_000 {
+        let key = "\"k\(index)\""
+        let keyEnd = cursor + key.utf8.count
+        spans.append(SyntaxHighlightSpan(byteRange: cursor..<keyEnd, kind: .property))
+        cursor = keyEnd + 1
+        let value = String(index)
+        let valueEnd = cursor + value.utf8.count
+        spans.append(SyntaxHighlightSpan(byteRange: cursor..<valueEnd, kind: .number))
+        cursor = valueEnd + (index == 4_999 ? 0 : 1)
+    }
+
+    let projection = ViewerSyntaxProjection.make(
+        page: page,
+        highlighter: TestSyntaxHighlighter(spans: spans)
+    )
+    #expect(projection.lines.count == 1)
+    #expect(projection.lines[0].count == 10_000)
+    #expect(projection.lines[0].first?.range == 1..<5)
+    #expect(projection.lines[0].last?.kind == .number)
+}
