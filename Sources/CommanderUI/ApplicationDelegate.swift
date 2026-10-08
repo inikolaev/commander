@@ -200,19 +200,20 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
             child.translatesAutoresizingMaskIntoConstraints = false
             root.view.addSubview(child)
         }
-        // The panes draw their outer cyan border 2.5 pt inside views that are
-        // themselves inset by 2 pt. Align the function-key bar to that border.
-        let chromeInset: CGFloat = 4.5
+        let paneInset: CGFloat = 2
+        let paneSpacing: CGFloat = 2
+        let keyBarInset: CGFloat = 0
+        let keyBarGap: CGFloat = 0
         NSLayoutConstraint.activate([
             shortcuts.heightAnchor.constraint(equalToConstant: TerminalTheme.lineHeight),
-            shortcuts.leadingAnchor.constraint(equalTo: root.view.leadingAnchor, constant: chromeInset),
-            shortcuts.trailingAnchor.constraint(equalTo: root.view.trailingAnchor, constant: -chromeInset),
-            shortcuts.bottomAnchor.constraint(equalTo: root.view.bottomAnchor, constant: -chromeInset),
-            left.leadingAnchor.constraint(equalTo: root.view.leadingAnchor, constant: 2),
-            left.topAnchor.constraint(equalTo: root.view.topAnchor, constant: 2),
-            left.bottomAnchor.constraint(equalTo: shortcuts.topAnchor, constant: -2),
-            right.leadingAnchor.constraint(equalTo: left.trailingAnchor, constant: 2),
-            right.trailingAnchor.constraint(equalTo: root.view.trailingAnchor, constant: -2),
+            shortcuts.leadingAnchor.constraint(equalTo: root.view.leadingAnchor, constant: keyBarInset),
+            shortcuts.trailingAnchor.constraint(equalTo: root.view.trailingAnchor, constant: -keyBarInset),
+            shortcuts.bottomAnchor.constraint(equalTo: root.view.bottomAnchor, constant: -keyBarInset),
+            left.leadingAnchor.constraint(equalTo: root.view.leadingAnchor, constant: paneInset),
+            left.topAnchor.constraint(equalTo: root.view.topAnchor, constant: paneInset),
+            left.bottomAnchor.constraint(equalTo: shortcuts.topAnchor, constant: -keyBarGap),
+            right.leadingAnchor.constraint(equalTo: left.trailingAnchor, constant: paneSpacing),
+            right.trailingAnchor.constraint(equalTo: root.view.trailingAnchor, constant: -paneInset),
             right.topAnchor.constraint(equalTo: left.topAnchor),
             right.bottomAnchor.constraint(equalTo: left.bottomAnchor),
             left.widthAnchor.constraint(equalTo: right.widthAnchor),
