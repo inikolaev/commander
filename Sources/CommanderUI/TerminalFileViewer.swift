@@ -1,11 +1,14 @@
 import AppKit
 import FileManagerCore
+import SyntaxCore
 
 @MainActor
 final class TerminalFileViewer: NSView {
     enum Input { case navigate(ViewerCommand), close, toggleMode, toggleWrap }
     var onInput: ((Input) -> Void)?
     let path: String
+    private let syntaxHighlighter: any SyntaxHighlighter
+    var syntaxHighlightingEnabled: Bool { syntaxHighlighter.isActive }
     private(set) var page: ViewerPage?
     private struct Position: Comparable {
         let row: Int
@@ -42,8 +45,12 @@ final class TerminalFileViewer: NSView {
     var visibleRows: Int { min(200, TerminalTextGeometry(bounds: bounds).visibleRows) }
     var visibleColumns: Int { max(1, Int(floor((bounds.width - 2) / TerminalTheme.cellAdvance))) }
 
-    init(path: String) {
+    init(
+        path: String,
+        syntaxHighlighter: any SyntaxHighlighter = PlainTextSyntaxHighlighter.shared
+    ) {
         self.path = path
+        self.syntaxHighlighter = syntaxHighlighter
         super.init(frame: .zero)
         setAccessibilityElement(true)
         setAccessibilityRole(.textArea)
@@ -100,6 +107,9 @@ final class TerminalFileViewer: NSView {
                 if rect.intersects(dirtyRect) {
                     let displayed = String(row.text.dropFirst(horizontalOffset))
                     TerminalTheme.text(displayed, in: rect, color: TerminalTheme.cyan, truncate: .byClipping)
+                    if page.mode == .text {
+                        drawSyntaxHighlights(for: row, in: rect)
+                    }
                     if let selection, index >= selection.start.row, index <= selection.end.row {
                         let start = index == selection.start.row ? selection.start.column : 0
                         let end = index == selection.end.row ? selection.end.column : row.text.count
@@ -125,6 +135,32 @@ final class TerminalFileViewer: NSView {
             TerminalTheme.text("Opening file…", in: NSRect(x: 8, y: line, width: bounds.width - 16, height: line))
         }
         NSGraphicsContext.restoreGraphicsState()
+    }
+
+    private func drawSyntaxHighlights(for row: ViewerLine, in rect: NSRect) {
+        let sourceRange = Int(row.offset)..<Int(row.endOffset)
+        for span in syntaxHighlighter.highlights(in: sourceRange) {
+            guard let displayRange = row.displayRange(forSourceByteRange: span.byteRange) else { continue }
+            let visibleStart = max(displayRange.lowerBound, horizontalOffset)
+            let visibleEnd = max(visibleStart, displayRange.upperBound)
+            guard visibleStart < visibleEnd else { continue }
+
+            let displayed = String(row.text.dropFirst(horizontalOffset))
+            let prefixCount = visibleStart - horizontalOffset
+            let tokenCount = visibleEnd - visibleStart
+            let prefix = String(displayed.prefix(prefixCount))
+            let token = String(row.text.dropFirst(visibleStart).prefix(tokenCount))
+            guard !token.isEmpty else { continue }
+
+            let x = rect.minX + textWidth(prefix)
+            guard x < rect.maxX else { continue }
+            TerminalTheme.text(
+                token,
+                in: NSRect(x: x, y: rect.minY, width: rect.maxX - x, height: rect.height),
+                color: TerminalTheme.syntaxColor(for: span.kind),
+                truncate: .byClipping
+            )
+        }
     }
 
     private func drawFunctionKeys(in footer: NSRect) {

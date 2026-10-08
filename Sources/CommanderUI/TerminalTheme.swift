@@ -1,4 +1,5 @@
 import AppKit
+import SyntaxCore
 
 /// All terminal styling is centralized; the renderer has no dependence on system table styles.
 @MainActor
@@ -8,10 +9,23 @@ enum TerminalTheme {
     static let selection = NSColor(srgbRed: 0, green: 0.60, blue: 0.63, alpha: 1)
     static let white = NSColor(srgbRed: 0.84, green: 0.86, blue: 0.89, alpha: 1)
     static let yellow = NSColor(srgbRed: 0.95, green: 0.89, blue: 0.20, alpha: 1)
+    static let syntaxString = NSColor(srgbRed: 0.67, green: 0.88, blue: 0.68, alpha: 1)
+    static let syntaxNumber = NSColor(srgbRed: 0.58, green: 0.82, blue: 1.00, alpha: 1)
+    static let syntaxComment = NSColor(srgbRed: 0.58, green: 0.66, blue: 0.68, alpha: 1)
     static let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .medium)
     static let cellAdvance: CGFloat = ("0" as NSString).size(withAttributes: [.font: font]).width
     static let cellWidth: CGFloat = ceil(cellAdvance)
     static let lineHeight: CGFloat = 18
+
+    static func syntaxColor(for kind: SyntaxKind) -> NSColor {
+        switch kind {
+        case .property: white
+        case .string: syntaxString
+        case .number: syntaxNumber
+        case .constant: yellow
+        case .comment: syntaxComment
+        }
+    }
 
     static func text(_ string: String, in rect: NSRect, color: NSColor = cyan,
                      alignment: NSTextAlignment = .left, truncate: NSLineBreakMode = .byTruncatingMiddle) {
