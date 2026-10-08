@@ -26,7 +26,7 @@ jobs:
           persist-credentials: false
 
       - name: Cache Swift test build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.swiftpm
@@ -60,7 +60,7 @@ jobs:
           persist-credentials: false
 
       - name: Cache Swift preview build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.swiftpm
@@ -77,7 +77,7 @@ jobs:
           codesign --verify --deep --strict "dist/${{ matrix.arch }}/Commander.app"
 
       - name: Upload preview
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: Commander-PR-${{ github.event.pull_request.number }}-${{ matrix.arch }}
           path: |
