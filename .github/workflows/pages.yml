@@ -33,10 +33,10 @@ jobs:
           curl --fail --silent --show-error --location \
             https://inikolaev.github.io/commander/appcast.xml \
             --output docs/appcast.xml || true
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: docs
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

@@ -4,6 +4,7 @@ on:
   workflow_run:
     workflows: [CI]
     types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -16,7 +17,7 @@ concurrency:
 
 jobs:
   changes:
-    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' && github.event.workflow_run.conclusion == 'success')
+    if: github.event_name == 'workflow_dispatch' || (github.event.workflow_run.event == 'push' && github.event.workflow_run.conclusion == 'success')
     runs-on: ubuntu-latest
     outputs:
       release: ${{ steps.release_changes.outputs.release }}
@@ -76,7 +77,7 @@ jobs:
           echo "APP_BUILD_NUMBER=$GITHUB_RUN_NUMBER" >> "$GITHUB_ENV"
 
       - name: Cache Swift release build
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.swiftpm
@@ -127,7 +128,7 @@ jobs:
           cp "dist/Commander-$APP_VERSION-macOS-${{ matrix.arch }}.dmg.sha256" upload/
           cp "dist/sparkle-signature-${{ matrix.arch }}.txt" upload/
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: commander-${{ matrix.arch }}
           path: upload/
@@ -188,7 +189,7 @@ jobs:
             gh release delete "$tag" --yes
           done
 
-      - uses: actions/download-artifact@v5
+      - uses: actions/download-artifact@v8
         with:
           pattern: commander-*
           path: dist
@@ -274,9 +275,9 @@ jobs:
           </rss>
           APPCAST
 
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: docs
       - name: Deploy Sparkle feeds and site
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
