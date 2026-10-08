@@ -22,11 +22,13 @@ public struct SyntaxHighlightSpan: Sendable, Equatable {
 }
 
 public protocol SyntaxHighlighter: Sendable {
+    var isActive: Bool { get }
     func highlights(in byteRange: Range<Int>) -> [SyntaxHighlightSpan]
 }
 
 public struct PlainTextSyntaxHighlighter: SyntaxHighlighter {
     public static let shared = PlainTextSyntaxHighlighter()
+    public let isActive = false
     public init() {}
     public func highlights(in byteRange: Range<Int>) -> [SyntaxHighlightSpan] { [] }
 }
@@ -67,9 +69,8 @@ public struct SyntaxRegistry: Sendable {
         }
 
         do {
-            let values = try url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey])
-            guard values.isRegularFile == true,
-                  let fileSize = values.fileSize,
+            let values = try url.resourceValues(forKeys: [.fileSizeKey])
+            guard let fileSize = values.fileSize,
                   fileSize <= maximumFileSize else {
                 return PlainTextSyntaxHighlighter.shared
             }
@@ -95,6 +96,7 @@ private extension SyntaxLanguageDefinition {
 }
 
 private struct TreeSitterJSONHighlighter: SyntaxHighlighter {
+    let isActive = true
     private let spans: [SyntaxHighlightSpan]
 
     init(source: Data) throws {
