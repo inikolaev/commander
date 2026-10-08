@@ -105,7 +105,8 @@ private struct TreeSitterJSONHighlighter: SyntaxHighlighter {
         try parser.setLanguage(language)
 
         let chunkSize = 64 * 1024
-        guard let tree = parser.parse(tree: nil, encoding: TSInputEncodingUTF8, readBlock: { offset, _ in
+        let oldTree: Tree? = nil
+        guard let tree = parser.parse(tree: oldTree, encoding: TSInputEncodingUTF8, readBlock: { offset, _ in
             guard offset < source.count else { return nil }
             let end = min(source.count, offset + chunkSize)
             return source.subdata(in: offset..<end)
