@@ -7,8 +7,8 @@ let package = Package(
     products: [.executable(name: "Commander", targets: ["Commander"])],
     dependencies: [
         .package(url: "https://github.com/CleanCocoa/TextBuffer.git", revision: "3dfbfc13fe4e7f898a3b7c3d13d3eb1451eb8386"),
-        .package(url: "https://github.com/ChimeHQ/SwiftTreeSitter", from: "0.10.0"),
-        .package(url: "https://github.com/tree-sitter/tree-sitter", from: "0.23.0"),
+        .package(url: "https://github.com/ChimeHQ/SwiftTreeSitter", exact: "0.25.0"),
+        .package(url: "https://github.com/tree-sitter/tree-sitter", exact: "0.25.10"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-json", revision: "254c42a6476413b776221e03982ac8ae159eeb72"),
         .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0"),
     ],
