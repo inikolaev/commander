@@ -9,6 +9,7 @@ final class TerminalFileViewer: NSView {
     let path: String
     private let syntaxHighlighter: any SyntaxHighlighter
     var syntaxHighlightingEnabled: Bool { syntaxHighlighter.isActive }
+    private var syntaxProjection = ViewerSyntaxProjection.empty
     private(set) var page: ViewerPage?
     private struct Position: Comparable {
         let row: Int
@@ -61,7 +62,7 @@ final class TerminalFileViewer: NSView {
     override var isOpaque: Bool { true }
     override var acceptsFirstResponder: Bool { true }
 
-    func update(_ page: ViewerPage) {
+    func update(_ page: ViewerPage, syntaxProjection: ViewerSyntaxProjection = .empty) {
         if self.page?.mode != page.mode || wrapsText { horizontalOffset = 0 }
         if self.page?.mode != page.mode || self.page?.offset != page.offset
             || self.page?.lines.map(\.text) != page.lines.map(\.text) {
@@ -70,6 +71,7 @@ final class TerminalFileViewer: NSView {
             isSelecting = false
         }
         self.page = page
+        self.syntaxProjection = syntaxProjection
         setAccessibilityValue(page.lines.map(\.text).joined(separator: "\n"))
         needsDisplay = true
     }
@@ -105,10 +107,10 @@ final class TerminalFileViewer: NSView {
             for (index, row) in page.lines.prefix(visibleRows).enumerated() {
                 let rect = NSRect(x: 1, y: CGFloat(index + 1) * line, width: bounds.width - 2, height: line)
                 if rect.intersects(dirtyRect) {
-                    let displayed = String(row.text.dropFirst(horizontalOffset))
+                    let displayed = String(row.text.dropFirst(horizontalOffset).prefix(visibleColumns))
                     TerminalTheme.text(displayed, in: rect, color: TerminalTheme.cyan, truncate: .byClipping)
                     if page.mode == .text {
-                        drawSyntaxHighlights(for: row, in: rect)
+                        drawSyntaxHighlights(forRow: index, displayed: displayed, in: rect)
                     }
                     if let selection, index >= selection.start.row, index <= selection.end.row {
                         let start = index == selection.start.row ? selection.start.column : 0
@@ -137,19 +139,20 @@ final class TerminalFileViewer: NSView {
         NSGraphicsContext.restoreGraphicsState()
     }
 
-    private func drawSyntaxHighlights(for row: ViewerLine, in rect: NSRect) {
-        let sourceRange = Int(row.offset)..<Int(row.endOffset)
-        for span in syntaxHighlighter.highlights(in: sourceRange) {
-            guard let displayRange = row.displayRange(forSourceByteRange: span.byteRange) else { continue }
-            let visibleStart = max(displayRange.lowerBound, horizontalOffset)
-            let visibleEnd = max(visibleStart, displayRange.upperBound)
-            guard visibleStart < visibleEnd else { continue }
+    private func drawSyntaxHighlights(forRow row: Int, displayed: String, in rect: NSRect) {
+        guard syntaxProjection.lines.indices.contains(row) else { return }
+        let visibleEnd = horizontalOffset + visibleColumns
+        for highlight in syntaxProjection.lines[row] {
+            if highlight.range.upperBound <= horizontalOffset { continue }
+            if highlight.range.lowerBound >= visibleEnd { break }
 
-            let displayed = String(row.text.dropFirst(horizontalOffset))
-            let prefixCount = visibleStart - horizontalOffset
-            let tokenCount = visibleEnd - visibleStart
-            let prefix = String(displayed.prefix(prefixCount))
-            let token = String(row.text.dropFirst(visibleStart).prefix(tokenCount))
+            let start = max(highlight.range.lowerBound, horizontalOffset)
+            let end = min(highlight.range.upperBound, visibleEnd)
+            guard start < end else { continue }
+
+            let relativeStart = start - horizontalOffset
+            let prefix = String(displayed.prefix(relativeStart))
+            let token = String(displayed.dropFirst(relativeStart).prefix(end - start))
             guard !token.isEmpty else { continue }
 
             let x = rect.minX + textWidth(prefix)
@@ -157,7 +160,7 @@ final class TerminalFileViewer: NSView {
             TerminalTheme.text(
                 token,
                 in: NSRect(x: x, y: rect.minY, width: rect.maxX - x, height: rect.height),
-                color: TerminalTheme.syntaxColor(for: span.kind),
+                color: TerminalTheme.syntaxColor(for: highlight.kind),
                 truncate: .byClipping
             )
         }
