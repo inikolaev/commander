@@ -37,8 +37,11 @@ final class FileViewerCoordinator {
                 let viewer = TerminalFileViewer(path: url.path, syntaxHighlighter: syntaxHighlighter)
                 viewer.frame = content.bounds
                 viewer.wrapsText = self.wrapsText
-                let page = try await document.page(rows: viewer.visibleRows,
-                    wrapColumns: self.wrapsText ? viewer.visibleColumns : nil)
+                let page = try await document.page(
+                    rows: viewer.visibleRows,
+                    wrapColumns: self.wrapsText ? viewer.visibleColumns : nil,
+                    includeSourceText: syntaxHighlighter.isActive
+                )
                 guard !self.closed, !Task.isCancelled else { return }
                 self.document = document
                 viewer.update(page)
@@ -114,8 +117,13 @@ final class FileViewerCoordinator {
                     let requestedMode = self.mode
                     let requestedWrap = self.wrapsText
                     let wrapColumns = requestedMode == .text && requestedWrap ? self.view?.visibleColumns : nil
-                    let page = try await document.page(command, rows: self.view?.visibleRows ?? 1,
-                        mode: requestedMode, wrapColumns: wrapColumns)
+                    let page = try await document.page(
+                        command,
+                        rows: self.view?.visibleRows ?? 1,
+                        mode: requestedMode,
+                        wrapColumns: wrapColumns,
+                        includeSourceText: self.view?.syntaxHighlightingEnabled == true
+                    )
                     guard !self.closed, !Task.isCancelled else { return }
                     if requestedMode == self.mode && requestedWrap == self.wrapsText { self.view?.update(page) }
                 }
