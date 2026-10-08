@@ -72,13 +72,12 @@ jobs:
           created_at=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .created_at)
           year=${created_at:0:4}
           month=${created_at:5:2}
-          latest_build=$(
-            gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100"               --jq '.[] | select(.draft == false) | .tag_name' |
-            sed -nE 's/^v[0-9]{4}\.[0-9]{1,2}\.([0-9]+)$/\1/p' |
-            sort -n |
-            tail -1
-          )
-          build_number=$((${latest_build:-0} + 1))
+          latest_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          if [[ ! "$latest_tag" =~ ^v[0-9]{4}\.[0-9]{1,2}\.([0-9]+)$ ]]; then
+            echo "Latest release tag has unexpected format: $latest_tag" >&2
+            exit 1
+          fi
+          build_number=$((${BASH_REMATCH[1]} + 1))
           app_version="$year.$((10#$month)).$build_number"
           echo "app_version=$app_version" >> "$GITHUB_OUTPUT"
           echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
