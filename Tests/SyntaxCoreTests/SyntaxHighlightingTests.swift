@@ -22,11 +22,11 @@ private func syntaxFixture(_ name: String, contents: String) throws -> URL {
         (span.kind, String(decoding: data[span.byteRange], as: UTF8.self))
     }
 
-    #expect(tokens.contains { $0 == (.property, #""name""#) })
-    #expect(tokens.contains { $0 == (.string, #""Commander""#) })
-    #expect(tokens.contains { $0 == (.number, "42") })
-    #expect(tokens.contains { $0 == (.constant, "true") })
-    #expect(tokens.contains { $0 == (.constant, "null") })
+    #expect(tokens.contains { $0.0 == .property && $0.1 == #""name""# })
+    #expect(tokens.contains { $0.0 == .string && $0.1 == #""Commander""# })
+    #expect(tokens.contains { $0.0 == .number && $0.1 == "42" })
+    #expect(tokens.contains { $0.0 == .constant && $0.1 == "true" })
+    #expect(tokens.contains { $0.0 == .constant && $0.1 == "null" })
 }
 
 @Test func unsupportedAndOversizedFilesUsePlainTextHighlighter() throws {
