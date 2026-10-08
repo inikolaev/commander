@@ -60,7 +60,6 @@ jobs:
             scripts/prepare-signing.sh
             scripts/notarize-app.sh
             scripts/notarize-dmg.sh
-            .github/workflows/release.yml
 
       - name: Determine next release version
         id: version
