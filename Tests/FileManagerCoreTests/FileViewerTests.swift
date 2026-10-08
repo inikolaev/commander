@@ -57,7 +57,8 @@ private func viewerFixture(_ data: Data) throws -> URL {
     let url = try viewerFixture(Data("\t\"é\": 1\n".utf8))
     defer { try? FileManager.default.removeItem(at: url) }
     let document = try FileViewerDocument(url: url)
-    let line = try #require(try await document.page(rows: 1).lines.first)
+    let page = try await document.page(rows: 1, includeSourceText: true)
+    let line = try #require(page.lines.first)
 
     #expect(line.sourceText == "\t\"é\": 1")
     // Source bytes 1..<5 are "\"é\""; the leading tab renders as four spaces.
