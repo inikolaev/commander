@@ -53,6 +53,17 @@ private func viewerFixture(_ data: Data) throws -> URL {
     #expect(end.lines[1].text == "next")
 }
 
+@Test func viewerMapsSourceByteRangesToDisplayedColumns() async throws {
+    let url = try viewerFixture(Data("\t\"é\": 1\n".utf8))
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try FileViewerDocument(url: url)
+    let line = try #require(try await document.page(rows: 1).lines.first)
+
+    #expect(line.sourceText == "\t\"é\": 1")
+    // Source bytes 1..<5 are "\"é\""; the leading tab renders as four spaces.
+    #expect(line.displayRange(forSourceByteRange: 1..<5) == 4..<7)
+}
+
 @Test func viewerDoesNotSplitUTF8OrCRLFAcrossArtificialRows() async throws {
     for suffix in ["😀Z\nlast", "\r\nlast"] {
         let content = String(repeating: "a", count: 4095) + suffix
