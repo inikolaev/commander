@@ -20,6 +20,8 @@ final class TerminalKeyBar: NSView {
         }
     }
 
+    private let cornerRadius: CGFloat = 0
+
     var shiftPressed = false { didSet { needsDisplay = true } }
     var optionPressed = false { didSet { needsDisplay = true } }
 
@@ -42,11 +44,19 @@ final class TerminalKeyBar: NSView {
     override var isOpaque: Bool { false }
 
     override func draw(_ dirtyRect: NSRect) {
-        TerminalFunctionKeys.draw(in: bounds, labels: labels)
+        if cornerRadius > 0 {
+            NSGraphicsContext.saveGraphicsState()
+            roundedPath(in: bounds).addClip()
+            TerminalFunctionKeys.draw(in: bounds, labels: labels)
+            NSGraphicsContext.restoreGraphicsState()
+        } else {
+            TerminalFunctionKeys.draw(in: bounds, labels: labels)
+        }
     }
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
+        guard cornerRadius == 0 || roundedPath(in: bounds).contains(point) else { return }
         if let number = TerminalFunctionKeys.number(at: point, in: bounds),
            let command = Self.command(
                number: number,
@@ -55,5 +65,10 @@ final class TerminalKeyBar: NSView {
            ) {
             onCommand?(command)
         }
+    }
+
+    private func roundedPath(in rect: NSRect) -> NSBezierPath {
+        let radius = min(cornerRadius, rect.height / 2, rect.width / 2)
+        return NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
     }
 }
