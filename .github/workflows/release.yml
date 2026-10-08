@@ -41,7 +41,7 @@ jobs:
         id: release_changes
         uses: ./.github/actions/release-changes
         with:
-          base: ${{ github.event_name == 'workflow_dispatch' && '' || format('{0}^', github.event.workflow_run.head_sha) }}
+          base: ${{ github.event_name == 'workflow_dispatch' && '' || format('{0}^', github.sha) }}
           head: ${{ github.sha }}
           force: ${{ github.event_name == 'workflow_dispatch' }}
           paths: |
