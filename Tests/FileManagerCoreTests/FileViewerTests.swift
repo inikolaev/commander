@@ -37,6 +37,22 @@ private func viewerFixture(_ data: Data) throws -> URL {
     #expect(end.lines.map(\.text) == ["ij", "next"])
 }
 
+@Test func unwrappedViewerPreservesLongLogicalLines() async throws {
+    let long = String(repeating: "x", count: 12_000)
+    let url = try viewerFixture(Data((long + "\nnext").utf8))
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try FileViewerDocument(url: url)
+
+    let page = try await document.page(rows: 2)
+    #expect(page.lines.count == 2)
+    #expect(page.lines[0].text == long)
+    #expect(page.lines[1].text == "next")
+
+    let end = try await document.page(.end, rows: 2)
+    #expect(end.lines[0].text == long)
+    #expect(end.lines[1].text == "next")
+}
+
 @Test func viewerDoesNotSplitUTF8OrCRLFAcrossArtificialRows() async throws {
     for suffix in ["😀Z\nlast", "\r\nlast"] {
         let content = String(repeating: "a", count: 4095) + suffix
@@ -66,7 +82,7 @@ private func viewerFixture(_ data: Data) throws -> URL {
     let document = try FileViewerDocument(url: url)
     let first = try await document.page(rows: 1)
     #expect(first.lines[0].text == "header")
-    let end = try await document.page(.end, rows: 4)
+    let end = try await document.page(.end, rows: 4, wrapColumns: 80)
     #expect(end.fileSize == Int64(size))
     #expect(end.lines.last?.text == "last-line")
     #expect(await document.bytesRead < 1_048_576)

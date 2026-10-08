@@ -32,9 +32,9 @@ public enum FileViewerError: LocalizedError {
     }
 }
 
-/// A bounded-memory UTF-8 text reader. No whole-file data or line index is retained.
-/// Huge logical lines are divided at stable 4 KiB boundaries (adjusted for UTF-8
-/// and CRLF). This makes backward navigation and End bounded too, even without LF.
+/// A UTF-8 text reader with a bounded read cache and no whole-file line index.
+/// Wrapped mode advances in bounded chunks, while unwrapped mode preserves actual
+/// newline-delimited logical lines so disabling wrap never invents visible rows.
 public actor FileViewerDocument {
     private let descriptor: Int32
     private static let blockSize: Int64 = 4096
@@ -142,7 +142,10 @@ public actor FileViewerDocument {
     }
 
     private func readRow(at offset: Int64, columns: Int? = nil) throws -> (text: String, next: Int64) {
-        let limit = try nextBoundary(after: offset)
+        // Wrapped rows never need to read beyond the next bounded chunk because
+        // the visible terminal width is far smaller than blockSize. Unwrapped
+        // rows, however, must continue until the real newline/EOF.
+        let limit = columns == nil ? size : try nextBoundary(after: offset)
         var cursor = offset
         var bytes: [UInt8] = []
         bytes.reserveCapacity(Int(Self.blockSize) + 4)
@@ -180,8 +183,19 @@ public actor FileViewerDocument {
         return (display, next)
     }
 
+    private func previousLogicalStart(before offset: Int64) throws -> Int64 {
+        guard offset > 0 else { return 0 }
+        var cursor = min(offset, size) - 1
+        if cursor >= 0, try byte(at: cursor) == 10 { cursor -= 1 }
+        while cursor >= 0 {
+            if try byte(at: cursor) == 10 { return cursor + 1 }
+            cursor -= 1
+        }
+        return 0
+    }
+
     private func previousDisplayStart(before offset: Int64, columns: Int?) throws -> Int64 {
-        guard let columns else { return try previousStart(before: offset) }
+        guard let columns else { return try previousLogicalStart(before: offset) }
         let base = try previousStart(before: offset)
         var cursor = base
         var previous = base
