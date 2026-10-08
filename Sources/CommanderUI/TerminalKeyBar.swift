@@ -20,8 +20,6 @@ final class TerminalKeyBar: NSView {
         }
     }
 
-    private let cornerRadius: CGFloat = 12
-
     var shiftPressed = false { didSet { needsDisplay = true } }
     var optionPressed = false { didSet { needsDisplay = true } }
 
@@ -44,15 +42,11 @@ final class TerminalKeyBar: NSView {
     override var isOpaque: Bool { false }
 
     override func draw(_ dirtyRect: NSRect) {
-        NSGraphicsContext.saveGraphicsState()
-        bottomRoundedPath(in: bounds).addClip()
         TerminalFunctionKeys.draw(in: bounds, labels: labels)
-        NSGraphicsContext.restoreGraphicsState()
     }
 
     override func mouseDown(with event: NSEvent) {
         let point = convert(event.locationInWindow, from: nil)
-        guard bottomRoundedPath(in: bounds).contains(point) else { return }
         if let number = TerminalFunctionKeys.number(at: point, in: bounds),
            let command = Self.command(
                number: number,
@@ -61,28 +55,5 @@ final class TerminalKeyBar: NSView {
            ) {
             onCommand?(command)
         }
-    }
-
-    private func bottomRoundedPath(in rect: NSRect) -> NSBezierPath {
-        let radius = min(cornerRadius, rect.height, rect.width / 2)
-        let path = NSBezierPath()
-        path.move(to: NSPoint(x: rect.minX, y: rect.minY))
-        path.line(to: NSPoint(x: rect.maxX, y: rect.minY))
-        path.line(to: NSPoint(x: rect.maxX, y: rect.maxY - radius))
-        path.appendArc(
-            withCenter: NSPoint(x: rect.maxX - radius, y: rect.maxY - radius),
-            radius: radius,
-            startAngle: 0,
-            endAngle: 90
-        )
-        path.line(to: NSPoint(x: rect.minX + radius, y: rect.maxY))
-        path.appendArc(
-            withCenter: NSPoint(x: rect.minX + radius, y: rect.maxY - radius),
-            radius: radius,
-            startAngle: 90,
-            endAngle: 180
-        )
-        path.close()
-        return path
     }
 }
