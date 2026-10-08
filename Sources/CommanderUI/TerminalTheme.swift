@@ -4,7 +4,7 @@ import SyntaxCore
 /// All terminal styling is centralized; the renderer has no dependence on system table styles.
 @MainActor
 enum TerminalTheme {
-    static let background = NSColor(srgbRed: 0, green: 0, blue: 0.48, alpha: 1)
+    static let background = NSColor(srgbRed: 0.00, green: 0.08, blue: 0.31, alpha: 1)
     static let cyan = NSColor(srgbRed: 0, green: 0.76, blue: 0.79, alpha: 1)
     static let selection = NSColor(srgbRed: 0, green: 0.60, blue: 0.63, alpha: 1)
     static let white = NSColor(srgbRed: 0.84, green: 0.86, blue: 0.89, alpha: 1)
