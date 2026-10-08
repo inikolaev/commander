@@ -200,16 +200,20 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
             child.translatesAutoresizingMaskIntoConstraints = false
             root.view.addSubview(child)
         }
+        let paneInset: CGFloat = 2
+        let paneSpacing: CGFloat = 2
+        let keyBarInset: CGFloat = 0
+        let keyBarGap: CGFloat = 0
         NSLayoutConstraint.activate([
             shortcuts.heightAnchor.constraint(equalToConstant: TerminalTheme.lineHeight),
-            shortcuts.leadingAnchor.constraint(equalTo: root.view.leadingAnchor),
-            shortcuts.trailingAnchor.constraint(equalTo: root.view.trailingAnchor),
-            shortcuts.bottomAnchor.constraint(equalTo: root.view.bottomAnchor),
-            left.leadingAnchor.constraint(equalTo: root.view.leadingAnchor, constant: 2),
-            left.topAnchor.constraint(equalTo: root.view.topAnchor, constant: 2),
-            left.bottomAnchor.constraint(equalTo: shortcuts.topAnchor),
-            right.leadingAnchor.constraint(equalTo: left.trailingAnchor, constant: 2),
-            right.trailingAnchor.constraint(equalTo: root.view.trailingAnchor, constant: -2),
+            shortcuts.leadingAnchor.constraint(equalTo: root.view.leadingAnchor, constant: keyBarInset),
+            shortcuts.trailingAnchor.constraint(equalTo: root.view.trailingAnchor, constant: -keyBarInset),
+            shortcuts.bottomAnchor.constraint(equalTo: root.view.bottomAnchor, constant: -keyBarInset),
+            left.leadingAnchor.constraint(equalTo: root.view.leadingAnchor, constant: paneInset),
+            left.topAnchor.constraint(equalTo: root.view.topAnchor, constant: paneInset),
+            left.bottomAnchor.constraint(equalTo: shortcuts.topAnchor, constant: -keyBarGap),
+            right.leadingAnchor.constraint(equalTo: left.trailingAnchor, constant: paneSpacing),
+            right.trailingAnchor.constraint(equalTo: root.view.trailingAnchor, constant: -paneInset),
             right.topAnchor.constraint(equalTo: left.topAnchor),
             right.bottomAnchor.constraint(equalTo: left.bottomAnchor),
             left.widthAnchor.constraint(equalTo: right.widthAnchor),
