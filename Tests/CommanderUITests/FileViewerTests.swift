@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import Testing
 import FileManagerCore
+import SyntaxCore
 @testable import CommanderUI
 
 @Test @MainActor func viewerDisplaysFilePagesAndRestoresFocusOnEscape() async throws {
@@ -220,8 +221,8 @@ private struct TestSyntaxHighlighter: SyntaxHighlighter {
     let document = try FileViewerDocument(url: url)
     let page = try await document.page(rows: 1, includeSourceText: true)
     let bytes = Array(source.utf8)
-    let quoteStart = try #require(bytes.firstIndex(of: Character("\"").asciiValue!))
-    let colon = try #require(bytes.firstIndex(of: Character(":").asciiValue!))
+    let quoteStart = try #require(bytes.firstIndex(of: 34))
+    let colon = try #require(bytes.firstIndex(of: 58))
     let trueStart = colon + 2
     let highlighter = TestSyntaxHighlighter(spans: [
         SyntaxHighlightSpan(byteRange: quoteStart..<colon, kind: .property),
