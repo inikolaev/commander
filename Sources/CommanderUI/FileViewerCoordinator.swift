@@ -1,5 +1,6 @@
 import AppKit
 import FileManagerCore
+import SyntaxCore
 
 /// Coalesces navigation input while disk reads run on the document actor.
 @MainActor
@@ -25,10 +26,15 @@ final class FileViewerCoordinator {
         previousResponder = window.firstResponder
         task = Task { [weak self] in
             do {
-                let document = try await Task.detached(priority: .userInitiated) { try FileViewerDocument(url: url) }.value
+                let prepared = try await Task.detached(priority: .userInitiated) {
+                    let document = try FileViewerDocument(url: url)
+                    let syntaxHighlighter = SyntaxRegistry.viewer.highlighter(for: url)
+                    return (document, syntaxHighlighter)
+                }.value
                 guard let self, !self.closed, !Task.isCancelled else { return }
+                let (document, syntaxHighlighter) = prepared
                 // Prepare the first page offscreen: failed opens/reads leave the panes visible.
-                let viewer = TerminalFileViewer(path: url.path)
+                let viewer = TerminalFileViewer(path: url.path, syntaxHighlighter: syntaxHighlighter)
                 viewer.frame = content.bounds
                 viewer.wrapsText = self.wrapsText
                 let page = try await document.page(rows: viewer.visibleRows,
