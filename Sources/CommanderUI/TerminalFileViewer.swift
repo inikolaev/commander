@@ -108,7 +108,7 @@ final class TerminalFileViewer: NSView {
                 let rect = NSRect(x: 1, y: CGFloat(index + 1) * line, width: bounds.width - 2, height: line)
                 if rect.intersects(dirtyRect) {
                     let displayed = String(row.text.dropFirst(horizontalOffset).prefix(visibleColumns))
-                    TerminalTheme.text(displayed, in: rect, color: TerminalTheme.cyan, truncate: .byClipping)
+                    TerminalTheme.text(displayed, in: rect, color: TerminalTheme.accent, truncate: .byClipping)
                     if page.mode == .text {
                         drawSyntaxHighlights(forRow: index, displayed: displayed, in: rect)
                     }
