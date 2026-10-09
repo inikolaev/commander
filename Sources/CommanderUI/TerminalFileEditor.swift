@@ -96,9 +96,9 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         NSRect(x: 0, y: 0, width: bounds.width, height: height).fill()
         let status = "\(document.isModified ? "*" : "") UTF-8  Ln \(selection.line + 1)/\(document.lineCount) Col \(selection.column + 1)"
         let statusWidth = min(bounds.width * 0.7, CGFloat(status.count + 2) * cell)
-        TerminalTheme.text(path, in: NSRect(x: 2, y: 0, width: bounds.width - statusWidth - 6, height: height), color: .black)
+        TerminalTheme.text(path, in: NSRect(x: 2, y: 0, width: bounds.width - statusWidth - 6, height: height), color: TerminalTheme.contrastText)
         TerminalTheme.text(status, in: NSRect(x: bounds.width - statusWidth, y: 0, width: statusWidth - 2, height: height),
-            color: .black, alignment: .right)
+            color: TerminalTheme.contrastText, alignment: .right)
         NSGraphicsContext.saveGraphicsState()
         textGeometry.contentRect.clip()
         for row in 0..<rows {
