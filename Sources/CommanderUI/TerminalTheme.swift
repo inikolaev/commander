@@ -1,21 +1,35 @@
 import AppKit
 import SyntaxCore
 
+extension NSColor {
+    convenience init(hex: UInt32, alpha: CGFloat = 1) {
+        precondition(hex <= 0xFFFFFF, "NSColor hex value must be RRGGBB")
+        self.init(
+            srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
+            green: CGFloat((hex >> 8) & 0xFF) / 255,
+            blue: CGFloat(hex & 0xFF) / 255,
+            alpha: alpha
+        )
+    }
+}
+
 /// All terminal styling is centralized; the renderer has no dependence on system table styles.
 @MainActor
 enum TerminalTheme {
-    static let background = NSColor(srgbRed: 0.00, green: 0.08, blue: 0.31, alpha: 1)
-    static let cyan = NSColor(srgbRed: 0, green: 0.76, blue: 0.79, alpha: 1)
-    static let selection = NSColor(srgbRed: 0, green: 0.60, blue: 0.63, alpha: 1)
-    static let white = NSColor(srgbRed: 0.84, green: 0.86, blue: 0.89, alpha: 1)
-    static let yellow = NSColor(srgbRed: 0.95, green: 0.89, blue: 0.20, alpha: 1)
+    static let background = NSColor(hex: 0x001450)
+    static let cyan = NSColor(hex: 0x00C2C9)
+    static let selection = NSColor(hex: 0x0099A1)
+    static let white = NSColor(hex: 0xD6DBE3)
+    static let yellow = NSColor(hex: 0xF2E333)
+
     // Syntax colors intentionally vary in both hue and luminance so token
-    // classes remain distinct against the saturated terminal-blue background.
-    static let syntaxProperty = NSColor(srgbRed: 0.78, green: 0.64, blue: 0.27, alpha: 1)
-    static let syntaxString = NSColor(srgbRed: 0.43, green: 0.72, blue: 0.47, alpha: 1)
-    static let syntaxNumber = NSColor(srgbRed: 0.66, green: 0.49, blue: 0.27, alpha: 1)
-    static let syntaxConstant = NSColor(srgbRed: 0.56, green: 0.46, blue: 0.80, alpha: 1)
-    static let syntaxComment = NSColor(srgbRed: 0.35, green: 0.43, blue: 0.50, alpha: 1)
+    // classes remain distinct against the dark terminal-blue background.
+    static let syntaxProperty = NSColor(hex: 0xC7A345)
+    static let syntaxString = NSColor(hex: 0x6EB878)
+    static let syntaxNumber = NSColor(hex: 0xA87D45)
+    static let syntaxConstant = NSColor(hex: 0x8F75CC)
+    static let syntaxComment = NSColor(hex: 0x596E80)
+
     static let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .medium)
     static let cellAdvance: CGFloat = ("0" as NSString).size(withAttributes: [.font: font]).width
     static let cellWidth: CGFloat = ceil(cellAdvance)
