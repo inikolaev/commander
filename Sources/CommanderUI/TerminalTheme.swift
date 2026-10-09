@@ -5,9 +5,9 @@ import SyntaxCore
 @MainActor
 enum TerminalTheme {
     static let background = NSColor(hex: 0x001450)
-    static let cyan = NSColor(hex: 0x51E8F7)
+    static let cyan = NSColor(hex: 0x39C7D8)
     static let selection = NSColor(hex: 0x0099A1)
-    static let white = NSColor(hex: 0xD6DBE3)
+    static let white = NSColor(hex: 0xBCC8D8)
     static let yellow = NSColor(hex: 0xF2E333)
 
     // Syntax colors intentionally vary in both hue and luminance so token
