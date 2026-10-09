@@ -9,7 +9,7 @@ enum TerminalFunctionKeys {
     private static let leadingGapCellCount: CGFloat = 10 // one black cell before every key
 
     static func draw(in rect: NSRect, labels: [Int: String]) {
-        NSColor.black.setFill()
+        TerminalTheme.keyBarBackground.setFill()
         rect.fill()
 
         let cellWidth = TerminalTheme.cellWidth
@@ -33,7 +33,7 @@ enum TerminalFunctionKeys {
                 TerminalTheme.text(
                     String(digit),
                     in: digitRect,
-                    color: TerminalTheme.white,
+                    color: TerminalTheme.keyBarText,
                     alignment: .center
                 )
                 x += cellWidth
@@ -45,7 +45,7 @@ enum TerminalFunctionKeys {
                 width: buttonWidth,
                 height: rect.height
             )
-            TerminalTheme.selection.setFill()
+            TerminalTheme.keyBarButton.setFill()
             button.fill()
 
             let labelRect = NSRect(
@@ -54,7 +54,7 @@ enum TerminalFunctionKeys {
                 width: max(0, button.width - labelLeadingInset),
                 height: button.height
             )
-            TerminalTheme.text(labels[number] ?? "", in: labelRect, color: .black)
+            TerminalTheme.text(labels[number] ?? "", in: labelRect, color: TerminalTheme.keyBarButtonText)
             x += buttonWidth
         }
     }
