@@ -108,7 +108,7 @@ import FileManagerCore
     #expect(state.markedURLs == [file.url])
     #expect(state.selectedIndex == 1)
     for active in [true, false] {
-        #expect(FileColorScheme.color(for: .entry(file), isSelected: active, isMarked: true) == TerminalTheme.yellow)
+        #expect(FileColorScheme.color(for: .entry(file), isSelected: active, isMarked: true) == TerminalTheme.markedFile)
     }
     if let output = ProcessInfo.processInfo.environment["COMMANDER_SELECTION_RENDER_PATH"] {
         let bitmap = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
