@@ -44,7 +44,7 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
     private var hasTextInput: Bool {
         switch mode { case .confirmation, .textInput: true; default: false }
     }
-    private var foreground: NSColor { usesRed ? TerminalTheme.white : .black }
+    private var foreground: NSColor { usesRed ? TerminalTheme.dangerText : .black }
     private var background: NSColor { usesRed ? red : gray }
     var panelRect: NSRect {
         let width = min(660, max(1, bounds.width - 40))
@@ -237,7 +237,7 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
                 let width = min(rect.width, ceil(titleSize.width) + 4)
                 let highlight = NSRect(x: rect.midX - width / 2, y: backgroundRect.minY,
                     width: width, height: backgroundRect.height)
-                (usesRed ? TerminalTheme.white : TerminalTheme.selection).setFill()
+                (usesRed ? TerminalTheme.dangerText : TerminalTheme.selection).setFill()
                 highlight.fill()
             }
             drawButtonTitle(title, in: backgroundRect,
