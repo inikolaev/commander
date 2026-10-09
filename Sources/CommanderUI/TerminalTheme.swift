@@ -4,18 +4,20 @@ import SyntaxCore
 /// All terminal styling is centralized; the renderer has no dependence on system table styles.
 @MainActor
 enum TerminalTheme {
-    static let background = NSColor(srgbRed: 0.00, green: 0.08, blue: 0.31, alpha: 1)
-    static let cyan = NSColor(srgbRed: 0, green: 0.76, blue: 0.79, alpha: 1)
-    static let selection = NSColor(srgbRed: 0, green: 0.60, blue: 0.63, alpha: 1)
-    static let white = NSColor(srgbRed: 0.84, green: 0.86, blue: 0.89, alpha: 1)
-    static let yellow = NSColor(srgbRed: 0.95, green: 0.89, blue: 0.20, alpha: 1)
+    static let background = NSColor(hex: 0x001450)
+    static let cyan = NSColor(hex: 0x00C2C9)
+    static let selection = NSColor(hex: 0x0099A1)
+    static let white = NSColor(hex: 0xD6DBE3)
+    static let yellow = NSColor(hex: 0xF2E333)
+
     // Syntax colors intentionally vary in both hue and luminance so token
-    // classes remain distinct against the saturated terminal-blue background.
-    static let syntaxProperty = NSColor(srgbRed: 0.96, green: 0.78, blue: 0.42, alpha: 1)
-    static let syntaxString = NSColor(srgbRed: 0.60, green: 0.78, blue: 0.61, alpha: 1)
-    static let syntaxNumber = NSColor(srgbRed: 0.94, green: 0.58, blue: 0.38, alpha: 1)
-    static let syntaxConstant = NSColor(srgbRed: 0.79, green: 0.62, blue: 0.88, alpha: 1)
-    static let syntaxComment = NSColor(srgbRed: 0.46, green: 0.55, blue: 0.60, alpha: 1)
+    // classes remain distinct against the dark terminal-blue background.
+    static let syntaxProperty = NSColor(hex: 0xC7A345)
+    static let syntaxString = NSColor(hex: 0x6EB878)
+    static let syntaxNumber = NSColor(hex: 0xA87D45)
+    static let syntaxConstant = NSColor(hex: 0x8F75CC)
+    static let syntaxComment = NSColor(hex: 0x596E80)
+
     static let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .medium)
     static let cellAdvance: CGFloat = ("0" as NSString).size(withAttributes: [.font: font]).width
     static let cellWidth: CGFloat = ceil(cellAdvance)
