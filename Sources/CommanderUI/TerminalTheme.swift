@@ -5,17 +5,17 @@ import SyntaxCore
 @MainActor
 enum TerminalTheme {
     static let background = NSColor(hex: 0x001450)
-    static let cyan = NSColor(hex: 0x00C2C9)
+    static let cyan = NSColor(hex: 0x51E8F7)
     static let selection = NSColor(hex: 0x0099A1)
     static let white = NSColor(hex: 0xD6DBE3)
     static let yellow = NSColor(hex: 0xF2E333)
 
     // Syntax colors intentionally vary in both hue and luminance so token
     // classes remain distinct against the dark terminal-blue background.
-    static let syntaxProperty = NSColor(hex: 0xC7A345)
-    static let syntaxString = NSColor(hex: 0x6EB878)
-    static let syntaxNumber = NSColor(hex: 0xA87D45)
-    static let syntaxConstant = NSColor(hex: 0x8F75CC)
+    static let syntaxProperty = NSColor(hex: 0xFABA3D)
+    static let syntaxString = NSColor(hex: 0x7DD787)
+    static let syntaxNumber = NSColor(hex: 0xF56F3F)
+    static let syntaxConstant = NSColor(hex: 0xB788EE)
     static let syntaxComment = NSColor(hex: 0x596E80)
 
     static let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .medium)
