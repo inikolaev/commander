@@ -44,7 +44,7 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
     private var hasTextInput: Bool {
         switch mode { case .confirmation, .textInput: true; default: false }
     }
-    private var foreground: NSColor { usesRed ? TerminalTheme.white : .black }
+    private var foreground: NSColor { usesRed ? TerminalTheme.dangerText : .black }
     private var background: NSColor { usesRed ? red : gray }
     var panelRect: NSRect {
         let width = min(660, max(1, bounds.width - 40))
@@ -85,7 +85,7 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
             pathField.isBordered = false
             pathField.drawsBackground = false
             pathField.backgroundColor = TerminalTheme.selection
-            pathField.textColor = .black
+            pathField.textColor = TerminalTheme.contrastText
             pathField.font = TerminalTheme.font
             pathField.focusRingType = .none
             pathField.delegate = self
@@ -97,6 +97,15 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        pathField.textColor = TerminalTheme.contrastText
+        if let editor = pathField.currentEditor() as? NSTextView {
+            editor.insertionPointColor = TerminalTheme.contrastText
+        }
+        needsDisplay = true
+    }
 
     override func layout() {
         super.layout()
@@ -115,7 +124,7 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
             window?.makeFirstResponder(pathField)
             pathField.selectText(nil)
             if let editor = pathField.currentEditor() as? NSTextView {
-                editor.insertionPointColor = .black
+                editor.insertionPointColor = TerminalTheme.contrastText
                 editor.selectedTextAttributes = [.backgroundColor: NSColor.black, .foregroundColor: gray]
             }
         } else { window?.makeFirstResponder(self) }
@@ -237,7 +246,7 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
                 let width = min(rect.width, ceil(titleSize.width) + 4)
                 let highlight = NSRect(x: rect.midX - width / 2, y: backgroundRect.minY,
                     width: width, height: backgroundRect.height)
-                (usesRed ? TerminalTheme.white : TerminalTheme.selection).setFill()
+                (usesRed ? TerminalTheme.dangerText : TerminalTheme.selection).setFill()
                 highlight.fill()
             }
             drawButtonTitle(title, in: backgroundRect,

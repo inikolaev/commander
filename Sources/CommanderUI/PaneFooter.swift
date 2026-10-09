@@ -45,7 +45,7 @@ enum PaneFooter {
             // A compact icon before the fixed metadata columns leaves room for the name.
             let cloudRect = NSRect(x: nameRect.maxX - 18, y: rect.midY - 7, width: 16, height: 14)
             nameRect.size.width -= 22
-            CloudFileAppearance.drawIcon(for: entry.cloudStatus, in: cloudRect, color: TerminalTheme.cyan)
+            CloudFileAppearance.drawIcon(for: entry.cloudStatus, in: cloudRect, color: TerminalTheme.accent)
         }
         TerminalTheme.text(row.name, in: nameRect)
         TerminalTheme.text(size, in: sizeRect, alignment: .right)

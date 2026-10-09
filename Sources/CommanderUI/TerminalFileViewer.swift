@@ -97,9 +97,9 @@ final class TerminalFileViewer: NSView {
         let encoding = page?.mode == .hex ? "HEX / ASCII" : "UTF-8"
         let status = "\(encoding)   \(position)   Col \(horizontalOffset + 1)   \(percent.map { "\($0)%" } ?? "")"
         let statusWidth = min(bounds.width * 0.76, ceil((status as NSString).size(withAttributes: [.font: TerminalTheme.font]).width))
-        TerminalTheme.text(path, in: NSRect(x: 1, y: 0, width: max(0, bounds.width - statusWidth - 16), height: line), color: .black)
+        TerminalTheme.text(path, in: NSRect(x: 1, y: 0, width: max(0, bounds.width - statusWidth - 16), height: line), color: TerminalTheme.contrastText)
         TerminalTheme.text(status, in: NSRect(x: bounds.width - statusWidth - 2, y: 0,
-            width: statusWidth, height: line), color: .black, alignment: .right)
+            width: statusWidth, height: line), color: TerminalTheme.contrastText, alignment: .right)
         drawFunctionKeys(in: footer)
         NSGraphicsContext.saveGraphicsState()
         TerminalTextGeometry(bounds: bounds).contentRect.clip()
@@ -108,7 +108,7 @@ final class TerminalFileViewer: NSView {
                 let rect = NSRect(x: 1, y: CGFloat(index + 1) * line, width: bounds.width - 2, height: line)
                 if rect.intersects(dirtyRect) {
                     let displayed = String(row.text.dropFirst(horizontalOffset).prefix(visibleColumns))
-                    TerminalTheme.text(displayed, in: rect, color: TerminalTheme.cyan, truncate: .byClipping)
+                    TerminalTheme.text(displayed, in: rect, color: TerminalTheme.accent, truncate: .byClipping)
                     if page.mode == .text {
                         drawSyntaxHighlights(forRow: index, displayed: displayed, in: rect)
                     }
@@ -124,7 +124,7 @@ final class TerminalFileViewer: NSView {
                             NSRect(x: left, y: rect.minY, width: right - left, height: rect.height).clip()
                             TerminalTheme.selection.setFill()
                             rect.fill()
-                            TerminalTheme.text(displayed, in: rect, color: .black, truncate: .byClipping)
+                            TerminalTheme.text(displayed, in: rect, color: TerminalTheme.contrastText, truncate: .byClipping)
                             NSGraphicsContext.restoreGraphicsState()
                         }
                     }

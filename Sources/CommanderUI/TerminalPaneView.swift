@@ -93,7 +93,7 @@ final class TerminalPaneView: NSView {
         bounds.fill()
         let g = geometry
         let line = TerminalTheme.lineHeight
-        TerminalTheme.cyan.setStroke()
+        TerminalTheme.accent.setStroke()
         let border = NSBezierPath(rect: bounds.insetBy(dx: 2.5, dy: line / 2))
         border.lineWidth = 1
         border.stroke()
@@ -115,11 +115,11 @@ final class TerminalPaneView: NSView {
         let pathRect = NSRect(x: (bounds.width - pathWidth) / 2, y: 0, width: pathWidth, height: line)
         (isActive ? TerminalTheme.selection : TerminalTheme.background).setFill()
         pathRect.fill()
-        TerminalTheme.text(path, in: pathRect.insetBy(dx: titlePadding, dy: 0), color: isActive ? .black : TerminalTheme.cyan, alignment: .center)
+        TerminalTheme.text(path, in: pathRect.insetBy(dx: titlePadding, dy: 0), color: isActive ? TerminalTheme.contrastText : TerminalTheme.accent, alignment: .center)
 
         for column in 0..<2 {
             TerminalTheme.text("Name", in: NSRect(x: 6 + CGFloat(column) * g.columnWidth,
-                y: line, width: g.columnWidth, height: line), color: TerminalTheme.yellow, alignment: .center)
+                y: line, width: g.columnWidth, height: line), color: TerminalTheme.heading, alignment: .center)
             for row in 0..<g.rowsPerColumn {
                 guard let index = viewport.index(column: column, row: row, itemCount: state.rows.count) else { break }
                 let entry = state.rows[index]
@@ -147,7 +147,7 @@ final class TerminalPaneView: NSView {
         let summary = NSRect(x: (bounds.width - summaryWidth) / 2, y: bounds.height - line, width: summaryWidth, height: line)
         TerminalTheme.background.setFill()
         summary.fill()
-        TerminalTheme.text(status, in: summary, color: isError ? TerminalTheme.yellow : TerminalTheme.cyan, alignment: .center)
+        TerminalTheme.text(status, in: summary, color: isError ? TerminalTheme.warning : TerminalTheme.accent, alignment: .center)
     }
 
     private func move(_ delta: Int, extending: Bool = false) {

@@ -5,13 +5,13 @@ import FileManagerCore
 /// precedence here; rendering never performs filesystem queries.
 @MainActor
 enum FileColorScheme {
-    static let directory = TerminalTheme.white
-    static let regularFile = TerminalTheme.cyan
-    static let hidden = NSColor(srgbRed: 0.35, green: 0.46, blue: 0.61, alpha: 1)
-    static let archive = NSColor(srgbRed: 1, green: 0.40, blue: 0.80, alpha: 1)
-    static let executable = NSColor(srgbRed: 0.25, green: 0.90, blue: 0.35, alpha: 1)
-    static let selected = NSColor.black
-    static let marked = TerminalTheme.yellow
+    static var directory: NSColor { TerminalTheme.primaryText }
+    static var regularFile: NSColor { TerminalTheme.accent }
+    static var hidden: NSColor { TerminalTheme.hiddenFile }
+    static var archive: NSColor { TerminalTheme.archiveFile }
+    static var executable: NSColor { TerminalTheme.executableFile }
+    static var selected: NSColor { TerminalTheme.contrastText }
+    static var marked: NSColor { TerminalTheme.markedFile }
 
     static let archiveExtensions: Set<String> = [
         "zip", "zipx", "7z", "rar", "tar", "gz", "gzip", "bz2", "bzip2",
