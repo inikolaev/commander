@@ -85,7 +85,7 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
             pathField.isBordered = false
             pathField.drawsBackground = false
             pathField.backgroundColor = TerminalTheme.selection
-            pathField.textColor = .black
+            pathField.textColor = TerminalTheme.contrastText
             pathField.font = TerminalTheme.font
             pathField.focusRingType = .none
             pathField.delegate = self
@@ -97,6 +97,15 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        pathField.textColor = TerminalTheme.contrastText
+        if let editor = pathField.currentEditor() as? NSTextView {
+            editor.insertionPointColor = TerminalTheme.contrastText
+        }
+        needsDisplay = true
+    }
 
     override func layout() {
         super.layout()
@@ -115,7 +124,7 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
             window?.makeFirstResponder(pathField)
             pathField.selectText(nil)
             if let editor = pathField.currentEditor() as? NSTextView {
-                editor.insertionPointColor = .black
+                editor.insertionPointColor = TerminalTheme.contrastText
                 editor.selectedTextAttributes = [.backgroundColor: NSColor.black, .foregroundColor: gray]
             }
         } else { window?.makeFirstResponder(self) }
