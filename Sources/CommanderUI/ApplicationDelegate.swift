@@ -8,6 +8,7 @@ public final class ApplicationDelegate: NSObject, NSApplicationDelegate, @precon
     private let exitCoordinator = ExitCoordinator()
     private var updaterController: SPUStandardUpdaterController!
     private var updateAccessory: NSTitlebarAccessoryViewController?
+    private var appearanceMenuItems: [CommanderAppearanceMode: NSMenuItem] = [:]
 
     public override init() {
         super.init()
@@ -28,6 +29,7 @@ public final class ApplicationDelegate: NSObject, NSApplicationDelegate, @precon
            let icon = NSImage(contentsOf: iconURL) {
             NSApp.applicationIconImage = icon
         }
+        CommanderAppearancePreference.applyToApplication()
         installMenu()
         let controller = CommanderWindowController()
         mainWindow = controller
@@ -124,7 +126,44 @@ public final class ApplicationDelegate: NSObject, NSApplicationDelegate, @precon
         let editItem = NSMenuItem()
         editItem.submenu = edit
         menu.addItem(editItem)
+
+        let view = NSMenu(title: "View")
+        let appearance = NSMenu(title: "Appearance")
+        for mode in CommanderAppearanceMode.allCases {
+            let item = appearance.addItem(
+                withTitle: mode.menuTitle,
+                action: #selector(selectAppearance(_:)),
+                keyEquivalent: ""
+            )
+            item.target = self
+            item.representedObject = mode.rawValue
+            appearanceMenuItems[mode] = item
+        }
+        let appearanceItem = NSMenuItem(title: "Appearance", action: nil, keyEquivalent: "")
+        appearanceItem.submenu = appearance
+        view.addItem(appearanceItem)
+        let viewItem = NSMenuItem()
+        viewItem.submenu = view
+        menu.addItem(viewItem)
+
         NSApp.mainMenu = menu
+        updateAppearanceMenu()
+    }
+
+    @objc private func selectAppearance(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String,
+              let mode = CommanderAppearanceMode(rawValue: raw) else { return }
+        CommanderAppearancePreference.mode = mode
+        CommanderAppearancePreference.applyToApplication()
+        updateAppearanceMenu()
+        mainWindow?.refreshAppearance()
+    }
+
+    private func updateAppearanceMenu() {
+        let selected = CommanderAppearancePreference.mode
+        for (mode, item) in appearanceMenuItems {
+            item.state = mode == selected ? .on : .off
+        }
     }
 }
 
@@ -162,15 +201,16 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
         )
         window.title = "Commander"
         window.minSize = NSSize(width: 700, height: 380)
-        window.appearance = NSAppearance(named: .darkAqua)
-        window.backgroundColor = TerminalTheme.background
+        window.backgroundColor = TerminalTheme.windowBackground
         window.titlebarAppearsTransparent = true
         window.isReleasedWhenClosed = false
         super.init(window: window)
         window.delegate = self
         let root = NSViewController()
-        root.view = NSView()
+        let rootView = AppearanceObservingView()
+        root.view = rootView
         window.contentViewController = root
+        rootView.onAppearanceChanged = { [weak self] in self?.refreshAppearance() }
         for pane in panes { root.addChild(pane) }
 
         window.onModifiersChanged = { [weak self] flags in
@@ -226,6 +266,19 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func refreshAppearance() {
+        guard let window else { return }
+        window.backgroundColor = TerminalTheme.windowBackground
+        if let contentView = window.contentView {
+            invalidateAppearance(in: contentView)
+        }
+    }
+
+    private func invalidateAppearance(in view: NSView) {
+        view.needsDisplay = true
+        for child in view.subviews { invalidateAppearance(in: child) }
+    }
 
     func windowShouldClose(_ sender: NSWindow) -> Bool {
         onQuitRequested()
@@ -499,5 +552,16 @@ private final class CommanderWindow: NSWindow {
     override func sendEvent(_ event: NSEvent) {
         onModifiersChanged?(event.modifierFlags)
         super.sendEvent(event)
+    }
+}
+
+
+@MainActor
+private final class AppearanceObservingView: NSView {
+    var onAppearanceChanged: (() -> Void)?
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        onAppearanceChanged?()
     }
 }
