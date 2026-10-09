@@ -11,11 +11,11 @@ enum TerminalTheme {
     static let yellow = NSColor(srgbRed: 0.95, green: 0.89, blue: 0.20, alpha: 1)
     // Syntax colors intentionally vary in both hue and luminance so token
     // classes remain distinct against the saturated terminal-blue background.
-    static let syntaxProperty = NSColor(srgbRed: 0.96, green: 0.78, blue: 0.42, alpha: 1)
-    static let syntaxString = NSColor(srgbRed: 0.60, green: 0.78, blue: 0.61, alpha: 1)
-    static let syntaxNumber = NSColor(srgbRed: 0.94, green: 0.58, blue: 0.38, alpha: 1)
-    static let syntaxConstant = NSColor(srgbRed: 0.79, green: 0.62, blue: 0.88, alpha: 1)
-    static let syntaxComment = NSColor(srgbRed: 0.46, green: 0.55, blue: 0.60, alpha: 1)
+    static let syntaxProperty = NSColor(srgbRed: 0.78, green: 0.64, blue: 0.27, alpha: 1)
+    static let syntaxString = NSColor(srgbRed: 0.43, green: 0.72, blue: 0.47, alpha: 1)
+    static let syntaxNumber = NSColor(srgbRed: 0.66, green: 0.49, blue: 0.27, alpha: 1)
+    static let syntaxConstant = NSColor(srgbRed: 0.56, green: 0.46, blue: 0.80, alpha: 1)
+    static let syntaxComment = NSColor(srgbRed: 0.35, green: 0.43, blue: 0.50, alpha: 1)
     static let font = NSFont.monospacedSystemFont(ofSize: 13, weight: .medium)
     static let cellAdvance: CGFloat = ("0" as NSString).size(withAttributes: [.font: font]).width
     static let cellWidth: CGFloat = ceil(cellAdvance)
