@@ -24,6 +24,7 @@ final class PaneViewController: NSViewController {
     private var listingStatus = ""
     private var isError = false
     var showHidden = false
+    var onDirectoryChanged: (() -> Void)?
     var onAction: ((PaneAction) -> Void)?
 
     init(title: String, directory: URL, reader: any DirectoryReading) {
@@ -168,6 +169,7 @@ final class PaneViewController: NSViewController {
                 // Capture the cursor at completion: the user can move it during a background read.
                 let selection = automatic ? self.state.selectedRow?.url : preferredSelection
                 self.state.replace(directory: directory, entries: entries, preferredSelection: selection, directoryModified: modified)
+                self.onDirectoryChanged?()
                 let wasListingStatus = self.status == self.listingStatus
                 self.listingStatus = "\(entries.count) items\(hidden ? " · hidden shown" : "")"
                 if !automatic || wasListingStatus || self.isError {

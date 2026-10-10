@@ -4,6 +4,7 @@ import EditorCore
 /// Owns the editor lifetime and modal file operations, independently of rendering.
 @MainActor
 final class FileEditorCoordinator {
+    var responder: NSResponder? { view }
     var onClose: (() -> Void)?
     private(set) var isBusy = false
     private weak var window: NSWindow?

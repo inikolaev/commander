@@ -5,6 +5,7 @@ import SyntaxCore
 /// Coalesces navigation input while disk reads run on the document actor.
 @MainActor
 final class FileViewerCoordinator {
+    var isBusy: Bool { task != nil || showingError }
     private(set) var view: TerminalFileViewer?
     private weak var window: NSWindow?
     private weak var previousResponder: NSResponder?
@@ -81,7 +82,10 @@ final class FileViewerCoordinator {
             case .navigate(let command): self?.request(command)
             }
         }
-        viewer.onResize = { [weak self] in self?.request(.stay) }
+        viewer.onResize = { [weak self, weak viewer] in
+            guard viewer?.window != nil else { return }
+            self?.request(.stay)
+        }
         window.makeFirstResponder(viewer)
     }
 
