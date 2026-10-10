@@ -54,7 +54,7 @@ final class TerminalPaneView: NSView {
         setAccessibilityElement(true)
         setAccessibilityRole(.list)
         setAccessibilityLabel(name)
-        setAccessibilityHelp("Use Space to mark entries, arrows to move, Tab to switch panes, Return to open, and Delete to go to the parent folder.")
+        setAccessibilityHelp("Use Space to mark entries, arrows to move, Tab to switch panes, Return to open, and Ctrl-PageUp to go to the parent folder.")
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
     override var isFlipped: Bool { true }
@@ -171,6 +171,10 @@ final class TerminalPaneView: NSView {
             onInput?(.locations(key == "1" ? 0 : 1))
             return
         }
+        if modifiers == .control, key == .pageUp {
+            onInput?(.parent)
+            return
+        }
         guard event.modifierFlags.intersection([.command, .control, .option]).isEmpty else {
             super.keyDown(with: event)
             return
@@ -199,7 +203,7 @@ final class TerminalPaneView: NSView {
         case .f8: onInput?(.delete)
         case .tab, .backTab: onInput?(.switchPane)
         case .carriageReturn, .enter: onInput?(.open)
-        case .delete, .backspace: onInput?(.parent)
+        case .delete, .backspace: break // Backspace must never change directories.
         case .downArrow: move(1, extending: event.modifierFlags.contains(.shift))
         case .upArrow: move(-1, extending: event.modifierFlags.contains(.shift))
         case .leftArrow: move(-viewport.rowsPerColumn, extending: event.modifierFlags.contains(.shift))

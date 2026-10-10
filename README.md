@@ -54,7 +54,7 @@ The universal bundle is also available at `dist/universal/Commander.app`.
 | Left / Right | Move between name columns |
 | Home / End | First / last item |
 | Page Up / Page Down | Move by one visible page |
-| Backspace | Go to parent, selecting the folder you left |
+| Ctrl-PageUp | Go to parent, selecting the folder you left |
 | Command-L | Go to a path (absolute, relative, or `~`) |
 | Command-R | Refresh active pane, preserving selection if possible |
 | Command-period | Toggle hidden files in active pane |
@@ -362,17 +362,32 @@ this opening and do not change system defaults. Launch errors appear in a dialog
 
 ### Built-in terminal (experiment)
 
-Press **Cmd-O** to replace the panes with a libghostty terminal; press it again
-to return to the panes. Each tab creates its own terminal on first use. Its shell,
-running commands, selection, and scrollback survive hiding it and switching tabs.
-Closing the tab ends its terminal. After `exit`, Cmd-O creates a fresh shell.
+Each tab starts its own persistent zsh terminal. A compact prompt stays visible
+below the panes with scrolling disabled. Start typing from a pane to edit a shell
+command; Enter asks zsh whether its actual editing buffer contains a command.
+Empty input opens the selected entry, including after deleting or clearing a
+command. Space retains file marking until command editing starts.
 
-This first version runs `/bin/zsh` as an interactive login shell and reads your
-normal zsh startup files. Changing the active pane or its directory updates the
-shell directory without adding a command to history or disturbing unfinished
-input. While a command runs, the latest directory change waits for the next
-prompt. Scrolling, selection, copy/paste, terminal key handling, and resizing are
-provided by libghostty. Cmd-O is reserved, including inside terminal programs.
+Submitting a command expands the terminal before execution. When the shell
+returns to its prompt, the panes and compact prompt are restored, including after
+a failed or interrupted command. **Cmd-O** toggles the full terminal manually. Its shell, running commands,
+selection, and scrollback survive switching views and tabs. Closing a tab ends
+its terminal. After `exit`, typing or Cmd-O creates a fresh shell.
+
+Backspace edits command text and never changes directories; Ctrl-PageUp goes to
+the parent directory. While panes are visible, arrows, Home/End, and PageUp/PageDown
+navigate files, and Tab/Shift-Tab switch panes, even while editing a command.
+The command stays intact across pane navigation. Other editing keys go to zsh;
+use Cmd-O for normal terminal arrows, history, and Tab completion.
+Clearing the command returns focus to the pane; Escape cancels editing. Wrapped
+input can grow the compact prompt to six rows.
+
+The terminal runs `/bin/zsh` as an interactive login shell and reads your normal
+zsh startup files. Changing the active pane or its directory updates the shell
+directory without adding a command to history or disturbing unfinished input.
+While a command runs, the latest directory change waits for the next prompt.
+The full view supports libghostty scrolling, selection, copy/paste, terminal key
+handling, and resizing. Cmd-O is reserved, including inside terminal programs.
 
 The pinned [libghostty Swift package](https://github.com/Lakr233/libghostty-spm)
 provides the native surface and binary engine. `scripts/build-app.sh` includes its

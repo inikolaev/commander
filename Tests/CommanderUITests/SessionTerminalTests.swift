@@ -39,7 +39,8 @@ import Testing
     #expect(!first.isTerminalVisible)
     #expect(controller.window?.firstResponder === pane)
     #expect(first.terminal === terminal)
-    #expect(terminal.view.isHidden)
+    #expect(!terminal.view.isHidden)
+    #expect(terminal.view.isCompact)
     let requestFile = terminal.mailbox.directory.appendingPathComponent("directory")
     let request = try Data(contentsOf: requestFile)
     let panes = first.root.children.compactMap { $0 as? PaneViewController }
@@ -76,4 +77,97 @@ import Testing
     #expect(!controller.selectedTab.isTerminalVisible)
     #expect(controller.selectedTab.terminal === terminal)
     #expect(window.firstResponder !== terminal.view)
+}
+
+@Test @MainActor func compactPromptExpandsBeforeExecutionAndRestoresOnCompletion() throws {
+    _ = NSApplication.shared
+    let controller = CommanderWindowController()
+    defer { controller.selectedTab.closeTerminal(); controller.window?.orderOut(nil) }
+    controller.start()
+    let tab = controller.selectedTab
+    let terminal = try #require(tab.terminal)
+    tab.root.view.layoutSubtreeIfNeeded()
+    #expect(!tab.isTerminalVisible)
+    #expect(terminal.view.isCompact)
+    #expect(terminal.view.frame.height > 0)
+    #expect(terminal.view.frame.height < 50)
+    terminal.handleShellEvent("execute test-1")
+    #expect(tab.isTerminalVisible)
+    #expect(!terminal.view.isCompact)
+    #expect(terminal.view.frame.height > 200)
+    terminal.handleShellEvent("running")
+    terminal.handleShellEvent("prompt 0")
+    #expect(!tab.isTerminalVisible)
+    #expect(terminal.view.isCompact)
+    #expect(tab.terminal === terminal)
+    terminal.handleShellEvent("execute test-2")
+    terminal.handleShellEvent("prompt 1")
+    #expect(!tab.isTerminalVisible) // Failure is still completion.
+    terminal.handleShellEvent("execute test-3")
+    terminal.handleShellEvent("prompt 130")
+    #expect(!tab.isTerminalVisible) // Interrupted commands also return to panes.
+    tab.toggleTerminal()
+    terminal.handleShellEvent("prompt 0")
+    #expect(tab.isTerminalVisible) // Explicit Cmd-O view never auto-collapses.
+}
+
+@Test @MainActor func paneTypingUsesTerminalAndErasingRestoresPaneFocus() throws {
+    _ = NSApplication.shared
+    let controller = CommanderWindowController()
+    defer { controller.selectedTab.closeTerminal(); controller.window?.orderOut(nil) }
+    controller.start()
+    let tab = controller.selectedTab
+    let terminal = try #require(tab.terminal)
+    let pane = tab.root.children[0].view
+    func key(_ text: String, code: UInt16) throws -> NSEvent {
+        try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [],
+            timestamp: 1, windowNumber: controller.window!.windowNumber, context: nil,
+            characters: text, charactersIgnoringModifiers: text, isARepeat: false, keyCode: code))
+    }
+    #expect(tab.routeTerminalInput(try key("a", code: 0)))
+    #expect(controller.window?.firstResponder === terminal.view)
+    terminal.handleShellEvent("input 0 1") // A delayed initial notification must not steal focus.
+    #expect(controller.window?.firstResponder === terminal.view)
+    terminal.handleShellEvent("input 1 1")
+    terminal.handleShellEvent("input 0 1")
+    #expect(controller.window?.firstResponder === pane)
+    #expect(!tab.routeTerminalInput(try key(" ", code: 49))) // Pane marking remains available.
+    #expect(tab.routeTerminalInput(try key("\r", code: 36))) // Shell decides whether Enter opens or executes.
+    #expect(!tab.isTerminalVisible) // No expansion until the shell acknowledges nonempty input.
+}
+
+@Test @MainActor func compactPromptKeepsNavigationAndTabWithPanesWhileEditing() throws {
+    _ = NSApplication.shared
+    let controller = CommanderWindowController()
+    defer { controller.selectedTab.closeTerminal(); controller.window?.orderOut(nil) }
+    controller.start()
+    let tab = controller.selectedTab
+    let terminal = try #require(tab.terminal)
+    let panes = tab.root.children.compactMap { $0 as? PaneViewController }
+    let left = try #require(panes[0].view as? TerminalPaneView)
+    let right = try #require(panes[1].view as? TerminalPaneView)
+    func key(_ special: NSEvent.SpecialKey) throws -> NSEvent {
+        let text = String(special.unicodeScalar)
+        return try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
+            modifierFlags: special == .backTab ? .shift : [], timestamp: 1,
+            windowNumber: controller.window!.windowNumber, context: nil,
+            characters: text, charactersIgnoringModifiers: text, isARepeat: false, keyCode: 0))
+    }
+    controller.window?.makeFirstResponder(terminal.view)
+    terminal.handleShellEvent("input 1 1")
+    for arrow: NSEvent.SpecialKey in [.upArrow, .downArrow, .leftArrow, .rightArrow] {
+        #expect(tab.routeTerminalInput(try key(arrow)))
+        #expect(controller.window?.firstResponder === terminal.view)
+    }
+    #expect(tab.routeTerminalInput(try key(.tab)))
+    #expect(right.isActive && !left.isActive)
+    #expect(!tab.isTerminalVisible)
+    #expect(controller.window?.firstResponder === terminal.view)
+    #expect(terminal.hasInput)
+    #expect(!tab.routeTerminalInput(try key(.backspace))) // Continue editing in zsh.
+    #expect(tab.routeTerminalInput(try key(.backTab)))
+    #expect(left.isActive && !right.isActive)
+    tab.toggleTerminal()
+    #expect(!tab.routeTerminalInput(try key(.downArrow)))
+    #expect(!tab.routeTerminalInput(try key(.tab))) // Expanded terminal retains normal keys.
 }

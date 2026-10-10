@@ -119,7 +119,7 @@ import FileManagerCore
     #expect(state.markedURLs.isEmpty)
 }
 
-@Test @MainActor func paneSpecialKeysPreserveTabEnterAndBackspaceActions() throws {
+@Test @MainActor func paneSpecialKeysKeepBackspaceSeparateFromParentNavigation() throws {
     _ = NSApplication.shared
     let view = TerminalPaneView(name: "Test")
     var actions: [PaneInput] = []
@@ -131,15 +131,19 @@ import FileManagerCore
             context: nil, characters: text, charactersIgnoringModifiers: text, isARepeat: false, keyCode: 0))
         view.keyDown(with: event)
     }
-    #expect(actions.count == 6)
-    guard actions.count == 6 else { return }
+    #expect(actions.count == 4) // Backspace and Delete produce no pane action.
+    guard actions.count == 4 else { return }
     for action in actions[0..<2] {
         if case .switchPane = action {} else { Issue.record("Expected pane switch") }
     }
     for action in actions[2..<4] {
         if case .open = action {} else { Issue.record("Expected open") }
     }
-    for action in actions[4..<6] {
-        if case .parent = action {} else { Issue.record("Expected parent directory") }
-    }
+    let pageUp = String(NSEvent.SpecialKey.pageUp.unicodeScalar)
+    let parent = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
+        modifierFlags: .control, timestamp: 2, windowNumber: 0, context: nil,
+        characters: pageUp, charactersIgnoringModifiers: pageUp, isARepeat: false, keyCode: 116))
+    view.keyDown(with: parent)
+    #expect(actions.count == 5)
+    if case .parent = actions.last {} else { Issue.record("Expected parent directory") }
 }
