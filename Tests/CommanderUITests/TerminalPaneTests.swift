@@ -43,32 +43,32 @@ import FileManagerCore
     }
     defer { view.onInput = nil }
     view.update(state: state, status: "\(entries.count) items")
-    func press(_ keyCode: UInt16) throws {
+    func press(_ key: NSEvent.SpecialKey) throws {
         let event = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
             modifierFlags: [], timestamp: 1, windowNumber: 0, context: nil,
-            characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: keyCode))
+            characters: String(key.unicodeScalar), charactersIgnoringModifiers: String(key.unicodeScalar), isARepeat: false, keyCode: 0))
         view.keyDown(with: event)
     }
-    try press(124) // Right: next name column, not folder entry.
+    try press(.rightArrow) // Right: next name column, not folder entry.
     #expect(state.selectedIndex == view.geometry.rowsPerColumn)
-    try press(119) // End.
+    try press(.end) // End.
     #expect(state.selectedIndex == state.rows.count - 1)
     #expect(view.viewport.firstIndex > 0)
     view.setFrameSize(NSSize(width: 350, height: 380))
     let selection = try #require(state.selectedIndex)
     #expect((view.viewport.firstIndex..<view.viewport.firstIndex + view.viewport.capacity).contains(selection))
-    try press(115) // Home.
+    try press(.home) // Home.
     #expect(state.selectedIndex == 0)
     #expect(view.viewport.firstIndex == 0)
-    try press(48)
+    try press(.tab)
     #expect(switched)
-    try press(96) // F5 dispatches the same action as the footer button.
+    try press(.f5) // F5 dispatches the same action as the footer button.
     #expect(copied)
-    try press(100)
+    try press(.f8)
     #expect(deleted)
-    try press(99)
+    try press(.f3)
     #expect(viewed)
-    try press(109)
+    try press(.f10)
     #expect(quit)
 
     // Optional render artifact comes from this test view, not from screen capture.
@@ -117,4 +117,29 @@ import FileManagerCore
     }
     view.keyDown(with: space)
     #expect(state.markedURLs.isEmpty)
+}
+
+@Test @MainActor func paneSpecialKeysPreserveTabEnterAndBackspaceActions() throws {
+    _ = NSApplication.shared
+    let view = TerminalPaneView(name: "Test")
+    var actions: [PaneInput] = []
+    view.onInput = { actions.append($0) }
+    for key: NSEvent.SpecialKey in [.tab, .backTab, .carriageReturn, .enter, .delete, .backspace] {
+        let text = String(key.unicodeScalar)
+        let event = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
+            modifierFlags: key == .backTab ? .shift : [], timestamp: 1, windowNumber: 0,
+            context: nil, characters: text, charactersIgnoringModifiers: text, isARepeat: false, keyCode: 0))
+        view.keyDown(with: event)
+    }
+    #expect(actions.count == 6)
+    guard actions.count == 6 else { return }
+    for action in actions[0..<2] {
+        if case .switchPane = action {} else { Issue.record("Expected pane switch") }
+    }
+    for action in actions[2..<4] {
+        if case .open = action {} else { Issue.record("Expected open") }
+    }
+    for action in actions[4..<6] {
+        if case .parent = action {} else { Issue.record("Expected parent directory") }
+    }
 }

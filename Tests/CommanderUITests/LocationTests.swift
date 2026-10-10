@@ -89,7 +89,8 @@ private func waitForLocations(_ window: NSWindow) async throws -> TerminalOperat
     var requests: [Int] = []
     view.onInput = { if case .locations(let index) = $0 { requests.append(index) } }
     for (code, flags, text): (UInt16, NSEvent.ModifierFlags, String) in [
-        (122, [.option, .function], ""), (120, [.option, .function], ""),
+        (0, [.option, .function], String(NSEvent.SpecialKey.f1.unicodeScalar)),
+        (0, [.option, .function], String(NSEvent.SpecialKey.f2.unicodeScalar)),
         (18, .command, "1"), (19, .command, "2"),
     ] {
         let event = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,

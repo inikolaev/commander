@@ -60,10 +60,10 @@ import FileManagerCore
     let view = TerminalPaneView(name: "Test")
     var actions: [PaneInput] = []
     view.onInput = { actions.append($0) }
-    for code: UInt16 in [99, 118, 96, 97, 98, 100, 109] {
+    for key: NSEvent.SpecialKey in [.f3, .f4, .f5, .f6, .f7, .f8, .f10] {
         view.keyDown(with: try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
             modifierFlags: [.shift], timestamp: 0, windowNumber: 0, context: nil,
-            characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: code)))
+            characters: String(key.unicodeScalar), charactersIgnoringModifiers: String(key.unicodeScalar), isARepeat: false, keyCode: 0)))
     }
     #expect(actions.count == 2)
     if case .createFile = actions.first {} else { Issue.record("Expected create file") }

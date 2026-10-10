@@ -11,7 +11,8 @@ import EditorCore
     for flags: NSEvent.ModifierFlags in [[], [.shift]] {
         pane.keyDown(with: try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
             modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil,
-            characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 118)))
+            characters: String(NSEvent.SpecialKey.f4.unicodeScalar),
+            charactersIgnoringModifiers: String(NSEvent.SpecialKey.f4.unicodeScalar), isARepeat: false, keyCode: 0)))
     }
     #expect(actions.count == 2)
     if case .createFile = actions.last {} else { Issue.record("Expected create file action") }

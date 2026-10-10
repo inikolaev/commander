@@ -1,5 +1,4 @@
 import AppKit
-import Carbon.HIToolbox
 import FileManagerCore
 
 /// Geometry shared by painting and hit testing. Coordinates start at the top left.
@@ -158,14 +157,14 @@ final class TerminalPaneView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
-        let keyCode = Int(event.keyCode)
+        let key = event.specialKey
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         if modifiers == .command, event.charactersIgnoringModifiers?.lowercased() == "d" {
             onInput?(.matchDirectory)
             return
         }
-        if modifiers == .option, [kVK_F1, kVK_F2].contains(keyCode) {
-            onInput?(.locations(keyCode == kVK_F1 ? 0 : 1))
+        if modifiers == .option, [.f1, .f2].contains(key) {
+            onInput?(.locations(key == .f1 ? 0 : 1))
             return
         }
         if modifiers == .command, let key = event.charactersIgnoringModifiers, ["1", "2"].contains(key) {
@@ -176,32 +175,39 @@ final class TerminalPaneView: NSView {
             super.keyDown(with: event)
             return
         }
-        if event.modifierFlags.contains(.shift), [kVK_F3, kVK_F4, kVK_F5, kVK_F6, kVK_F7, kVK_F8, kVK_F10].contains(keyCode) {
-            if keyCode == kVK_F6 { onInput?(.rename) }
-            if keyCode == kVK_F4 { onInput?(.createFile) }
+        if event.modifierFlags.contains(.shift), [.f3, .f4, .f5, .f6, .f7, .f8, .f10].contains(key) {
+            if key == .f6 { onInput?(.rename) }
+            if key == .f4 { onInput?(.createFile) }
             return
         }
-        switch keyCode {
-        case kVK_Space: prefix = ""; if !event.isARepeat { onInput?(.toggleMark) }
-        case kVK_F10: onInput?(.quit)
-        case kVK_F3: onInput?(.viewFile)
-        case kVK_F4: onInput?(.editFile)
-        case kVK_F5: onInput?(.copy)
-        case kVK_F6: onInput?(.move)
-        case kVK_F7: onInput?(.createDirectory)
-        case kVK_F8: onInput?(.delete)
-        case kVK_Tab: onInput?(.switchPane)
-        case kVK_Return, kVK_ANSI_KeypadEnter: onInput?(.open)
-        case kVK_Delete: onInput?(.parent)
-        case kVK_DownArrow: move(1, extending: event.modifierFlags.contains(.shift))
-        case kVK_UpArrow: move(-1, extending: event.modifierFlags.contains(.shift))
-        case kVK_LeftArrow: move(-viewport.rowsPerColumn, extending: event.modifierFlags.contains(.shift))
-        case kVK_RightArrow: move(viewport.rowsPerColumn, extending: event.modifierFlags.contains(.shift))
-        case kVK_PageUp: move(-viewport.capacity)
-        case kVK_PageDown: move(viewport.capacity)
-        case kVK_Home: if !state.rows.isEmpty { onInput?(.select(0)) }
-        case kVK_End: if !state.rows.isEmpty { onInput?(.select(state.rows.count - 1)) }
-        case kVK_Escape: prefix = ""
+        if event.charactersIgnoringModifiers == " " {
+            prefix = ""
+            if !event.isARepeat { onInput?(.toggleMark) }
+            return
+        }
+        if event.charactersIgnoringModifiers == "\u{1B}" {
+            prefix = ""
+            return
+        }
+        switch key {
+        case .f10: onInput?(.quit)
+        case .f3: onInput?(.viewFile)
+        case .f4: onInput?(.editFile)
+        case .f5: onInput?(.copy)
+        case .f6: onInput?(.move)
+        case .f7: onInput?(.createDirectory)
+        case .f8: onInput?(.delete)
+        case .tab, .backTab: onInput?(.switchPane)
+        case .carriageReturn, .enter: onInput?(.open)
+        case .delete, .backspace: onInput?(.parent)
+        case .downArrow: move(1, extending: event.modifierFlags.contains(.shift))
+        case .upArrow: move(-1, extending: event.modifierFlags.contains(.shift))
+        case .leftArrow: move(-viewport.rowsPerColumn, extending: event.modifierFlags.contains(.shift))
+        case .rightArrow: move(viewport.rowsPerColumn, extending: event.modifierFlags.contains(.shift))
+        case .pageUp: move(-viewport.capacity)
+        case .pageDown: move(viewport.capacity)
+        case .home: if !state.rows.isEmpty { onInput?(.select(0)) }
+        case .end: if !state.rows.isEmpty { onInput?(.select(state.rows.count - 1)) }
         default:
             guard let text = event.characters, !text.isEmpty,
                   text.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) && !(0xF700...0xF8FF).contains($0.value) }) else { return }
