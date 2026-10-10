@@ -16,7 +16,11 @@ final class CommanderTabSession: NSObject {
         shortcuts.shiftPressed = flags.contains(.shift)
         shortcuts.optionPressed = flags.contains(.option)
     }
+    private(set) var terminal: SessionTerminal?
+    private(set) var isTerminalVisible = false
     func restoreFocus() {
+        guard root.view.window === window else { return }
+        if isTerminalVisible, let terminal { window?.makeFirstResponder(terminal.view); return }
         window?.makeFirstResponder(editor?.responder ?? viewer?.view ?? activePane.view)
     }
     var isExitPromptVisible = false
@@ -34,7 +38,7 @@ final class CommanderTabSession: NSObject {
     private var editor: FileEditorCoordinator?
     private var viewer: FileViewerCoordinator?
     var fileOperationInProgress: Bool { locationCoordinator.isPresented || fileOpenCoordinator.isBusy || editor?.isBusy == true || viewer?.isBusy == true || renameCoordinator.isBusy || moveCoordinator.isBusy || createDirectoryCoordinator.isBusy || copyCoordinator.isBusy || deleteCoordinator.isBusy }
-    private var operationInProgress: Bool { isExitPromptVisible || fileOperationInProgress || viewer != nil || editor != nil }
+    private var operationInProgress: Bool { isTerminalVisible || isExitPromptVisible || fileOperationInProgress || viewer != nil || editor != nil }
     private var activePane: PaneViewController { panes[activeIndex] }
 
     init(window: NSWindow, directories: [URL], locationReader: any LocationReading) {
@@ -94,7 +98,11 @@ final class CommanderTabSession: NSObject {
             left.widthAnchor.constraint(equalTo: right.widthAnchor),
         ])
         for (index, pane) in panes.enumerated() {
-            pane.onDirectoryChanged = { [weak self] in self?.onTitleChanged?() }
+            pane.onDirectoryChanged = { [weak self] in
+                guard let self else { return }
+                self.onTitleChanged?()
+                if self.activeIndex == index { self.syncTerminalDirectory() }
+            }
             pane.onAction = { [weak self] action in self?.handle(action, from: index) }
         }
     }
@@ -105,7 +113,9 @@ final class CommanderTabSession: NSObject {
     }
 
     private func activate(_ index: Int) {
+        let changed = activeIndex != index
         activeIndex = index
+        syncTerminalDirectory(force: changed)
         onTitleChanged?()
         for (paneIndex, pane) in panes.enumerated() { pane.setActive(paneIndex == index) }
         if window?.firstResponder !== panes[index].view { panes[index].focus() }
@@ -114,7 +124,10 @@ final class CommanderTabSession: NSObject {
     private func handle(_ action: PaneAction, from index: Int) {
         switch action {
         case .activate:
+            guard !isTerminalVisible else { return }
+            let changed = activeIndex != index
             activeIndex = index
+            syncTerminalDirectory(force: changed)
             onTitleChanged?()
             for (paneIndex, pane) in panes.enumerated() { pane.setActive(paneIndex == index) }
         case .switchPane: activate(1 - index)
@@ -136,6 +149,52 @@ final class CommanderTabSession: NSObject {
         case .delete: deleteSelected()
         case .quit: self.onQuitRequested()
         }
+    }
+
+    @discardableResult
+    func toggleTerminal() -> Bool {
+        guard !isExitPromptVisible, !fileOperationInProgress, viewer == nil, editor == nil, window?.attachedSheet == nil else { return false }
+        if terminal == nil {
+            do {
+                let terminal = try SessionTerminal(directory: activePane.state.directory)
+                self.terminal = terminal
+                terminal.onExit = { [weak self] in self?.closeTerminal() }
+                let view = terminal.view
+                view.translatesAutoresizingMaskIntoConstraints = false
+                root.view.addSubview(view)
+                NSLayoutConstraint.activate([
+                    view.leadingAnchor.constraint(equalTo: root.view.leadingAnchor),
+                    view.trailingAnchor.constraint(equalTo: root.view.trailingAnchor),
+                    view.topAnchor.constraint(equalTo: root.view.topAnchor),
+                    view.bottomAnchor.constraint(equalTo: root.view.bottomAnchor),
+                ])
+            } catch {
+                activePane.showStatus("Cannot start terminal: \(error.localizedDescription)", isError: true)
+                return true
+            }
+        }
+        isTerminalVisible.toggle()
+        terminal?.view.isHidden = !isTerminalVisible
+        terminal?.view.setSurfaceVisible(isTerminalVisible)
+        panes.forEach { $0.view.isHidden = isTerminalVisible }
+        shortcuts.isHidden = isTerminalVisible
+        if !isTerminalVisible { panes.forEach { $0.refresh() } }
+        restoreFocus()
+        return true
+    }
+
+    func closeTerminal() {
+        terminal?.view.removeFromSuperview()
+        terminal = nil
+        isTerminalVisible = false
+        panes.forEach { $0.view.isHidden = false }
+        shortcuts.isHidden = false
+        restoreFocus()
+    }
+
+    private func syncTerminalDirectory(force: Bool = false) {
+        do { try terminal?.changeDirectory(activePane.state.directory, force: force) }
+        catch { activePane.showStatus("Cannot sync terminal directory: \(error.localizedDescription)", isError: true) }
     }
 
     private func renameSelected() {

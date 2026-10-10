@@ -194,9 +194,22 @@ public final class ApplicationDelegate: NSObject, NSApplicationDelegate, @precon
 /// Observes modifiers before dispatch, including while a dialog owns keyboard focus.
 @MainActor
 final class CommanderWindow: NSWindow {
+    var onToggleTerminal: (() -> Bool)?
+    static func isTerminalToggle(_ event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection([.shift, .control, .option, .command])
+        return event.type == .keyDown && event.charactersIgnoringModifiers?.lowercased() == "o"
+            && modifiers == .command
+    }
+    // Handle the toggle through either AppKit keyboard dispatch path.
+    // Intercept here so the embedded terminal cannot consume the toggle.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        if Self.isTerminalToggle(event), onToggleTerminal?() == true { return true }
+        return super.performKeyEquivalent(with: event)
+    }
     var onModifiersChanged: ((NSEvent.ModifierFlags) -> Void)?
     override func sendEvent(_ event: NSEvent) {
         onModifiersChanged?(event.modifierFlags)
+        if Self.isTerminalToggle(event), onToggleTerminal?() == true { return }
         super.sendEvent(event)
     }
 }

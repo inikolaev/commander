@@ -312,7 +312,7 @@ stalled network folders can still take time to load.
 ## Verification
 
 ```sh
-swift test
+swift test --no-parallel
 ```
 
 Core tests cover sorting, hidden files, symbolic directory links, read errors,
@@ -359,3 +359,25 @@ Other… opens a custom folder browser starting in /Applications. Choose an .app
 enter subfolders, use .. to go up, or Enter path… for a folder/application path
 (including ~). Cancel returns to the suggested apps. App choices apply only to
 this opening and do not change system defaults. Launch errors appear in a dialog.
+
+### Built-in terminal (experiment)
+
+Press **Cmd-O** to replace the panes with a libghostty terminal; press it again
+to return to the panes. Each tab creates its own terminal on first use. Its shell,
+running commands, selection, and scrollback survive hiding it and switching tabs.
+Closing the tab ends its terminal. After `exit`, Cmd-O creates a fresh shell.
+
+This first version runs `/bin/zsh` as an interactive login shell and reads your
+normal zsh startup files. Changing the active pane or its directory updates the
+shell directory without adding a command to history or disturbing unfinished
+input. While a command runs, the latest directory change waits for the next
+prompt. Scrolling, selection, copy/paste, terminal key handling, and resizing are
+provided by libghostty. Cmd-O is reserved, including inside terminal programs.
+
+The pinned [libghostty Swift package](https://github.com/Lakr233/libghostty-spm)
+provides the native surface and binary engine. `scripts/build-app.sh` includes its
+runtime resources. Run `python3 scripts/test-terminal-shell.py` to exercise the
+prompt and busy-shell directory synchronization through a real PTY.
+
+Run the tests serially: AppKit tests share `NSApplication` and native terminal
+runtime state. Parallel execution can cause asynchronous UI tests to time out.

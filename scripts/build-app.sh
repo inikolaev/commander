@@ -18,11 +18,25 @@ BUILD_ARGS=(-c release --arch "$ARCH")
 APP="dist/$ARCH/Commander.app"
 swift build "${BUILD_ARGS[@]}"
 BIN_DIR="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)"
+# SwiftPM assumes resource bundles live at the app root, which codesign rejects.
+# Teach its generated accessors to use Contents/Resources, then relink. The
+# original build-directory fallback remains available for command-line runs.
+while IFS= read -r accessor; do
+    if grep -q 'Bundle.main.bundleURL.appendingPathComponent' "$accessor"; then
+        perl -pi -e 's/Bundle\.main\.bundleURL\.appendingPathComponent/Bundle.main.resourceURL!.appendingPathComponent/g' "$accessor"
+    fi
+done < <(find "$BIN_DIR" -path '*/DerivedSources/resource_bundle_accessor.swift')
+swift build "${BUILD_ARGS[@]}"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp Assets/Commander.icns "$APP/Contents/Resources/Commander.icns"
 cp LICENSE "$APP/Contents/Resources/LICENSE"
 cp THIRD-PARTY-NOTICES.txt "$APP/Contents/Resources/THIRD-PARTY-NOTICES.txt"
 cp "$BIN_DIR/Commander" "$APP/Contents/MacOS/Commander"
+# Include both Commander’s shell hooks and Ghostty’s runtime resources.
+for bundle in "$BIN_DIR"/*.bundle; do
+    [[ -d "$bundle" ]] || continue
+    ditto "$bundle" "$APP/Contents/Resources/$(basename "$bundle")"
+done
 SPARKLE_FRAMEWORK=$(find .build/artifacts -type d -name Sparkle.framework -print -quit)
 if [[ -z "$SPARKLE_FRAMEWORK" ]]; then
     echo "Sparkle.framework was not found in SwiftPM artifacts" >&2
