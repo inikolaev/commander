@@ -155,6 +155,8 @@ close and reopen the viewer to see the replacement. There is no automatic tailin
 ### File editor
 
 F4 in the panes opens the file under the cursor in a custom-drawn editor.
+Shift-F4 prompts for a filename in the active directory and opens it in the editor.
+New files are created on save (including empty files); existing names open for editing.
 F4 inside the viewer still toggles hex mode.
 
 - Arrows, Home/End, Command-arrows, and Page Up/Down navigate.
@@ -194,7 +196,7 @@ is pinned to an immutable revision; its MIT notice is in
 Shift-F6 opens a rename dialog prefilled with the current entry’s name, ignoring
 marked entries. It renames within the current folder and never overwrites an
 existing destination. Errors return to the entered name for correction. While
-Shift is held, the panels’ footer shows only supported Shift commands (6 Rename);
+Shift is held, the panels’ footer shows only supported Shift commands (4 New file, 6 Rename);
 release Shift to restore the usual commands. Shift-clicking that slot also renames.
 
 

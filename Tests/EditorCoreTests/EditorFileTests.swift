@@ -148,3 +148,25 @@ private func fixture(_ body: (URL) throws -> Void) throws {
         }
     }
 }
+
+@Test func newEditorFileIsDeferredAndCannotOverwriteConcurrentCreation() throws {
+    try fixture { root in
+        let url = root.appendingPathComponent("new.txt")
+        let file = try EditorFile.openOrNew(name: "new.txt", in: root)
+        #expect(file.isNew)
+        #expect(!FileManager.default.fileExists(atPath: url.path))
+        let saved = try file.save(text: "")
+        #expect(!saved.isNew)
+        #expect(try Data(contentsOf: url).isEmpty)
+        let reopened = try EditorFile.openOrNew(name: "new.txt", in: root)
+        #expect(!reopened.isNew)
+        #expect(throws: (any Error).self) { try file.save(text: "overwrite") }
+        #expect(try Data(contentsOf: url).isEmpty)
+        for name in ["", " ", ".", "..", "a/b", "a\0b"] {
+            #expect(throws: EditorFile.Failure.self) { try EditorFile.openOrNew(name: name, in: root) }
+        }
+        let link = root.appendingPathComponent("link")
+        try FileManager.default.createSymbolicLink(atPath: link.path, withDestinationPath: "missing")
+        #expect(throws: (any Error).self) { try EditorFile.openOrNew(name: "link", in: root) }
+    }
+}

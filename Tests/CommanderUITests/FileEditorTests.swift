@@ -3,7 +3,7 @@ import Testing
 import EditorCore
 @testable import CommanderUI
 
-@Test @MainActor func f4OpensEditorActionAndShiftF4IsEmpty() throws {
+@Test @MainActor func f4OpensEditorAndShiftF4CreatesFile() throws {
     _ = NSApplication.shared
     let pane = TerminalPaneView(name: "Test")
     var actions: [PaneInput] = []
@@ -13,7 +13,9 @@ import EditorCore
             modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil,
             characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 118)))
     }
-    #expect(actions.count == 1)
+    #expect(actions.count == 2)
+    if case .createFile = actions.last {} else { Issue.record("Expected create file action") }
+    #expect(TerminalKeyBar.command(number: 4, shift: true) == .createFile)
     if case .editFile = actions.first {} else { Issue.record("Expected edit action") }
     #expect(TerminalKeyBar().labels[4] == "Edit")
 }
@@ -171,4 +173,54 @@ import EditorCore
     viewer.setFrameSize(NSSize(width: 800, height: height - 1))
     #expect(editor.visibleRows == 9)
     #expect(viewer.visibleRows == 9)
+}
+
+@Test @MainActor func newFilePromptCancelRetryAndEmptySave() async throws {
+    _ = NSApplication.shared
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+    let pane = TerminalPaneView(name: "Test")
+    window.contentView = pane
+    window.makeFirstResponder(pane)
+    let coordinator = FileEditorCoordinator()
+    var closed = false
+    coordinator.onClose = { closed = true }
+    func dialog() throws -> TerminalOperationDialog {
+        try #require(pane.subviews.compactMap { $0 as? TerminalOperationDialog }.first)
+    }
+    coordinator.presentNewFile(directory: root, window: window)
+    try dialog().onCancel?()
+    #expect(closed)
+    #expect(!coordinator.isBusy)
+    #expect(window.firstResponder === pane)
+    closed = false
+    coordinator.presentNewFile(directory: root, window: window)
+    try dialog().onConfirm?("../invalid")
+    for _ in 0..<200 {
+        if let current = try? dialog(), case .error = current.mode { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    let error = try dialog()
+    guard case .error = error.mode else { Issue.record("Expected validation error"); return }
+    error.onDismiss?()
+    #expect(coordinator.isBusy)
+    try dialog().onConfirm?("empty.txt")
+    for _ in 0..<200 {
+        if !coordinator.isBusy { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(pane.subviews.contains { $0 is TerminalFileEditor })
+    let url = root.appendingPathComponent("empty.txt")
+    #expect(!FileManager.default.fileExists(atPath: url.path))
+    coordinator.save()
+    for _ in 0..<200 {
+        if !coordinator.isBusy { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(try Data(contentsOf: url).isEmpty)
+    coordinator.requestClose()
+    #expect(closed)
+    #expect(window.firstResponder === pane)
 }

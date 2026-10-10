@@ -28,7 +28,7 @@ struct PaneGeometry {
 enum PaneInput {
     case toggleMark
     case extendSelection(Int), endRangeSelection
-    case activate, switchPane, matchDirectory, open, parent, copy, move, rename, delete, viewFile, editFile, quit, createDirectory
+    case activate, switchPane, matchDirectory, open, parent, copy, move, rename, delete, viewFile, editFile, createFile, quit, createDirectory
     case locations(Int)
     case select(Int)
 }
@@ -176,6 +176,7 @@ final class TerminalPaneView: NSView {
         }
         if event.modifierFlags.contains(.shift), [99, 118, 96, 97, 98, 100, 109].contains(event.keyCode) {
             if event.keyCode == 97 { onInput?(.rename) }
+            if event.keyCode == 118 { onInput?(.createFile) }
             return
         }
         switch event.keyCode {
