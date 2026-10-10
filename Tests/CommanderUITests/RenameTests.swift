@@ -55,22 +55,23 @@ import FileManagerCore
 }
 
 
-@Test @MainActor func shiftFunctionKeysOnlyRouteRename() throws {
+@Test @MainActor func shiftFunctionKeysRouteSupportedActions() throws {
     _ = NSApplication.shared
     let view = TerminalPaneView(name: "Test")
     var actions: [PaneInput] = []
     view.onInput = { actions.append($0) }
-    for code: UInt16 in [99, 96, 97, 98, 100, 109] {
+    for key: NSEvent.SpecialKey in [.f3, .f4, .f5, .f6, .f7, .f8, .f10] {
         view.keyDown(with: try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
             modifierFlags: [.shift], timestamp: 0, windowNumber: 0, context: nil,
-            characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: code)))
+            characters: String(key.unicodeScalar), charactersIgnoringModifiers: String(key.unicodeScalar), isARepeat: false, keyCode: 0)))
     }
-    #expect(actions.count == 1)
-    if case .rename = actions.first {} else { Issue.record("Expected rename") }
+    #expect(actions.count == 2)
+    if case .createFile = actions.first {} else { Issue.record("Expected create file") }
+    if case .rename = actions.last {} else { Issue.record("Expected rename") }
     let bar = TerminalKeyBar()
     #expect(bar.labels[6] == "Move")
     bar.shiftPressed = true
-    #expect(bar.labels == [6: "Rename"])
+    #expect(bar.labels == [4: "New file", 6: "Rename"])
     #expect(TerminalKeyBar.command(number: 5, shift: true) == nil)
     #expect(TerminalKeyBar.command(number: 6, shift: true) == .rename)
     bar.shiftPressed = false

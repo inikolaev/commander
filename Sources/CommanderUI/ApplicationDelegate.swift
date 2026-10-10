@@ -224,6 +224,7 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
             case .rightLocations: self.chooseLocation(for: 1)
             case .viewFile: self.viewSelected()
             case .editFile: self.editSelected()
+            case .createFile: self.createFile()
             case .copy: self.copySelected()
             case .move: self.moveSelected()
             case .rename: self.renameSelected()
@@ -312,6 +313,7 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
         case .parent: panes[index].goToParent()
         case .viewFile: viewSelected()
         case .editFile: editSelected()
+        case .createFile: createFile()
         case .copy: copySelected()
         case .move: moveSelected()
         case .rename: renameSelected()
@@ -362,6 +364,17 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate {
     func prepareForTermination(_ completion: @escaping (Bool) -> Void) {
         if let editor { editor.requestClose(completion: completion) }
         else { completion(true) }
+    }
+
+    private func createFile() {
+        guard let window, !operationInProgress, !activePane.isLoading else { return }
+        let coordinator = FileEditorCoordinator()
+        coordinator.onClose = { [weak self] in
+            self?.editor = nil
+            self?.panes.forEach { $0.refresh() }
+        }
+        editor = coordinator
+        coordinator.presentNewFile(directory: activePane.state.directory, window: window)
     }
 
     private func editSelected() {

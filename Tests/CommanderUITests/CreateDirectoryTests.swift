@@ -57,7 +57,8 @@ import FileManagerCore
     var invoked = false
     view.onInput = { if case .createDirectory = $0 { invoked = true } }
     let key = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: 0,
-        windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 98))
+        windowNumber: 0, context: nil, characters: String(NSEvent.SpecialKey.f7.unicodeScalar),
+            charactersIgnoringModifiers: String(NSEvent.SpecialKey.f7.unicodeScalar), isARepeat: false, keyCode: 0))
     view.keyDown(with: key)
     #expect(invoked)
     #expect(TerminalKeyBar.Command(rawValue: 7) == .createDirectory)

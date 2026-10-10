@@ -12,6 +12,40 @@ final class FileEditorCoordinator {
     private var file: EditorFile?
     private let presenter = OperationDialogPresenter()
 
+    func presentNewFile(directory: URL, window: NSWindow) {
+        self.window = window
+        previousResponder = window.firstResponder
+        isBusy = true
+        askFileName(directory: directory, name: "", window: window)
+    }
+
+    private func askFileName(directory: URL, name: String, window: NSWindow) {
+        let dialog = TerminalOperationDialog(mode: .textInput(title: "New file",
+            prompt: "File name:", value: name, confirmTitle: "Edit"))
+        dialog.onCancel = { [weak self] in self?.finish() }
+        dialog.onConfirm = { [weak self] name in
+            guard let self else { return }
+            self.presenter.present(TerminalOperationDialog(mode: .busy(title: "Editor",
+                message: "Opening \(name)…")), window: window)
+            Task { [weak self] in
+                do {
+                    let file = try await Task.detached { try EditorFile.openOrNew(name: name, in: directory) }.value
+                    guard let self else { return }
+                    self.presenter.dismiss(window: window)
+                    self.file = file
+                    self.install(file, window: window)
+                    self.isBusy = false
+                } catch {
+                    self?.showError(error) { [weak self] in
+                        self?.isBusy = true
+                        self?.askFileName(directory: directory, name: name, window: window)
+                    }
+                }
+            }
+        }
+        presenter.present(dialog, window: window)
+    }
+
     func present(url: URL, window: NSWindow) {
         self.window = window
         previousResponder = window.firstResponder
@@ -50,7 +84,7 @@ final class FileEditorCoordinator {
     func save(completion: ((Bool) -> Void)? = nil) {
         guard !isBusy, let file, let view, let window else { completion?(false); return }
         view.unmarkText()
-        guard view.document.isModified else { completion?(true); return }
+        guard view.document.isModified || file.isNew else { completion?(true); return }
         isBusy = true
         let text = view.document.text(in: NSRange(location: 0, length: view.document.length))
         presenter.present(TerminalOperationDialog(mode: .busy(title: "Save", message: "Saving \(file.url.lastPathComponent)…")), window: window)
@@ -111,6 +145,7 @@ final class FileEditorCoordinator {
     }
     private func finish() {
         if let window { presenter.dismiss(window: window) }
+        isBusy = false
         view?.removeFromSuperview()
         view = nil
         window?.makeFirstResponder(previousResponder)

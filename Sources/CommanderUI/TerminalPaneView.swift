@@ -28,7 +28,7 @@ struct PaneGeometry {
 enum PaneInput {
     case toggleMark
     case extendSelection(Int), endRangeSelection
-    case activate, switchPane, matchDirectory, open, parent, copy, move, rename, delete, viewFile, editFile, quit, createDirectory
+    case activate, switchPane, matchDirectory, open, parent, copy, move, rename, delete, viewFile, editFile, createFile, quit, createDirectory
     case locations(Int)
     case select(Int)
 }
@@ -157,13 +157,14 @@ final class TerminalPaneView: NSView {
     }
 
     override func keyDown(with event: NSEvent) {
+        let key = event.specialKey
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         if modifiers == .command, event.charactersIgnoringModifiers?.lowercased() == "d" {
             onInput?(.matchDirectory)
             return
         }
-        if modifiers == .option, [122, 120].contains(event.keyCode) {
-            onInput?(.locations(event.keyCode == 122 ? 0 : 1))
+        if modifiers == .option, [.f1, .f2].contains(key) {
+            onInput?(.locations(key == .f1 ? 0 : 1))
             return
         }
         if modifiers == .command, let key = event.charactersIgnoringModifiers, ["1", "2"].contains(key) {
@@ -174,31 +175,39 @@ final class TerminalPaneView: NSView {
             super.keyDown(with: event)
             return
         }
-        if event.modifierFlags.contains(.shift), [99, 118, 96, 97, 98, 100, 109].contains(event.keyCode) {
-            if event.keyCode == 97 { onInput?(.rename) }
+        if event.modifierFlags.contains(.shift), [.f3, .f4, .f5, .f6, .f7, .f8, .f10].contains(key) {
+            if key == .f6 { onInput?(.rename) }
+            if key == .f4 { onInput?(.createFile) }
             return
         }
-        switch event.keyCode {
-        case 49: prefix = ""; if !event.isARepeat { onInput?(.toggleMark) }
-        case 109: onInput?(.quit) // F10
-        case 99: onInput?(.viewFile) // F3
-        case 118: onInput?(.editFile) // F4
-        case 96: onInput?(.copy) // F5
-        case 97: onInput?(.move) // F6
-        case 98: onInput?(.createDirectory) // F7
-        case 100: onInput?(.delete) // F8
-        case 48: onInput?(.switchPane)
-        case 36, 76: onInput?(.open)
-        case 51: onInput?(.parent)
-        case 125: move(1, extending: event.modifierFlags.contains(.shift))
-        case 126: move(-1, extending: event.modifierFlags.contains(.shift))
-        case 123: move(-viewport.rowsPerColumn, extending: event.modifierFlags.contains(.shift))
-        case 124: move(viewport.rowsPerColumn, extending: event.modifierFlags.contains(.shift))
-        case 116: move(-viewport.capacity)
-        case 121: move(viewport.capacity)
-        case 115: if !state.rows.isEmpty { onInput?(.select(0)) }
-        case 119: if !state.rows.isEmpty { onInput?(.select(state.rows.count - 1)) }
-        case 53: prefix = ""
+        if event.charactersIgnoringModifiers == " " {
+            prefix = ""
+            if !event.isARepeat { onInput?(.toggleMark) }
+            return
+        }
+        if event.charactersIgnoringModifiers == "\u{1B}" {
+            prefix = ""
+            return
+        }
+        switch key {
+        case .f10: onInput?(.quit)
+        case .f3: onInput?(.viewFile)
+        case .f4: onInput?(.editFile)
+        case .f5: onInput?(.copy)
+        case .f6: onInput?(.move)
+        case .f7: onInput?(.createDirectory)
+        case .f8: onInput?(.delete)
+        case .tab, .backTab: onInput?(.switchPane)
+        case .carriageReturn, .enter: onInput?(.open)
+        case .delete, .backspace: onInput?(.parent)
+        case .downArrow: move(1, extending: event.modifierFlags.contains(.shift))
+        case .upArrow: move(-1, extending: event.modifierFlags.contains(.shift))
+        case .leftArrow: move(-viewport.rowsPerColumn, extending: event.modifierFlags.contains(.shift))
+        case .rightArrow: move(viewport.rowsPerColumn, extending: event.modifierFlags.contains(.shift))
+        case .pageUp: move(-viewport.capacity)
+        case .pageDown: move(viewport.capacity)
+        case .home: if !state.rows.isEmpty { onInput?(.select(0)) }
+        case .end: if !state.rows.isEmpty { onInput?(.select(state.rows.count - 1)) }
         default:
             guard let text = event.characters, !text.isEmpty,
                   text.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0) && !(0xF700...0xF8FF).contains($0.value) }) else { return }

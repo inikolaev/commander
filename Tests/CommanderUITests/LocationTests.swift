@@ -89,7 +89,8 @@ private func waitForLocations(_ window: NSWindow) async throws -> TerminalOperat
     var requests: [Int] = []
     view.onInput = { if case .locations(let index) = $0 { requests.append(index) } }
     for (code, flags, text): (UInt16, NSEvent.ModifierFlags, String) in [
-        (122, [.option, .function], ""), (120, [.option, .function], ""),
+        (0, [.option, .function], String(NSEvent.SpecialKey.f1.unicodeScalar)),
+        (0, [.option, .function], String(NSEvent.SpecialKey.f2.unicodeScalar)),
         (18, .command, "1"), (19, .command, "2"),
     ] {
         let event = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
@@ -135,7 +136,7 @@ private func waitForLocations(_ window: NSWindow) async throws -> TerminalOperat
     bar.shiftPressed = true
     #expect(bar.labels.isEmpty)
     bar.optionPressed = false
-    #expect(bar.labels == [6: "Rename"])
+    #expect(bar.labels == [4: "New file", 6: "Rename"])
     bar.shiftPressed = false
     #expect(bar.labels[1] == nil)
     #expect(bar.labels[3] == "View")

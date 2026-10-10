@@ -7,6 +7,7 @@ public struct EditorFile: Sendable {
     public let text: String
     // Initial line index is prepared alongside normalization, in UTF-16 offsets.
     let preparedLineStarts: [Int]?
+    public private(set) var isNew = false
     private let original: Data
     private let newline: String
     private let hasBOM: Bool
@@ -29,6 +30,24 @@ public struct EditorFile: Sendable {
             original: data, newline: prepared.newline, hasBOM: bom)
     }
 
+    /// Opens an existing name, or prepares an unsaved file without touching disk.
+    public static func openOrNew(name: String, in directory: URL) throws -> EditorFile {
+        guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              name != ".", name != "..", !name.contains("/"), !name.contains("\0") else {
+            throw Failure("Enter a file name, without slashes. The names . and .. are not allowed.")
+        }
+        let url = directory.appendingPathComponent(name, isDirectory: false)
+        do {
+            _ = try FileManager.default.attributesOfItem(atPath: url.path)
+        } catch let error as NSError where error.domain == NSCocoaErrorDomain && [NSFileNoSuchFileError, NSFileReadNoSuchFileError].contains(error.code) {
+            var file = EditorFile(url: url, text: "", preparedLineStarts: [0],
+                original: Data(), newline: "\n", hasBOM: false)
+            file.isNew = true
+            return file
+        }
+        return try open(url)
+    }
+
     /// Saves to a sibling temporary file, then replaces the original. Symlinks
     /// remain links. Reject external modifications instead of silently losing them.
     public func save(text: String) throws -> EditorFile {
@@ -36,6 +55,12 @@ public struct EditorFile: Sendable {
         var data = Data()
         if hasBOM { data.append(contentsOf: [0xEF, 0xBB, 0xBF]) }
         data.append(contentsOf: text.replacingOccurrences(of: "\n", with: newline).utf8)
+        if isNew {
+            // Exclusive creation also rejects a file or symlink added since the prompt.
+            try data.write(to: url, options: .withoutOverwriting)
+            return EditorFile(url: url, text: text, preparedLineStarts: nil,
+                original: data, newline: newline, hasBOM: hasBOM)
+        }
         let manager = FileManager.default
         let attributes = try manager.attributesOfItem(atPath: url.path)
         guard (attributes[.referenceCount] as? NSNumber)?.intValue ?? 1 <= 1 else {
