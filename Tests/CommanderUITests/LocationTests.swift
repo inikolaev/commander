@@ -136,7 +136,7 @@ private func waitForLocations(_ window: NSWindow) async throws -> TerminalOperat
     bar.shiftPressed = true
     #expect(bar.labels.isEmpty)
     bar.optionPressed = false
-    #expect(bar.labels == [6: "Rename"])
+    #expect(bar.labels == [4: "New file", 6: "Rename"])
     bar.shiftPressed = false
     #expect(bar.labels[1] == nil)
     #expect(bar.labels[3] == "View")
