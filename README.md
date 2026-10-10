@@ -40,6 +40,9 @@ The universal bundle is also available at `dist/universal/Commander.app`.
 
 | Key | Action |
 | --- | --- |
+| Command-T | Open an independent tab at the current pane paths |
+| Command-W | Close current tab (confirm quitting for the last tab) |
+| Command-Shift-[ / ] | Previous / next tab |
 | Up / Down | Move selection |
 | Tab / Shift-Tab | Switch active pane |
 | Option-F1 / Command-1 | Choose location for the left pane |
@@ -80,6 +83,26 @@ F10 in the panes, Command-Q, Quit, and closing the main window ask for exit
 confirmation. Cancel is selected initially; Tab selects Quit. Active file
 operations must finish or be cancelled before quitting. F10 inside the viewer
 continues to close the viewer and return to the panes.
+
+### Tabs
+
+Each tab retains its two pane paths, active pane, selections, marks, hidden-file settings,
+and any open viewer or unsaved editor. New tabs start at the current tab’s two paths
+with fresh pane state. Tab names follow the active pane’s path (`~` for home).
+Use File → Rename Tab or right-click a tab to give it a custom name; an empty name
+restores automatic naming. The tab context menu also offers Close Other Tabs,
+Close Tabs to the Right, and a Tab Color palette (including No Color). Colors
+belong to individual tabs and survive navigation and renaming. Bulk closing
+checks unsaved edits in each tab; Cancel stops the remaining closes.
+Close with the × button or Command-W. Unsaved edits
+are checked when closing a tab and across all tabs when quitting.
+
+The tab strip is hidden when only one tab is open; Command-T reveals it again.
+View → Tab Placement switches between tabs in the window title bar and a separate
+row beneath it. The placement preference is remembered. Scroll over the strip
+with a mouse wheel or trackpad to reach overflowing tabs; selecting a tab reveals it.
+Tab switching is temporarily blocked during modal file operations or dialogs.
+Tabs themselves are not restored after restarting the app.
 
 ### File colors
 
