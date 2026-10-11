@@ -38,7 +38,8 @@ jobs:
       - name: Test
         run: |
           swift --version
-          swift test
+          # AppKit and Ghostty share process-wide UI state.
+          swift test --no-parallel
 
 
   release:

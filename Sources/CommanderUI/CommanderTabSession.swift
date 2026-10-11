@@ -16,7 +16,18 @@ final class CommanderTabSession: NSObject {
         shortcuts.shiftPressed = flags.contains(.shift)
         shortcuts.optionPressed = flags.contains(.option)
     }
+    private(set) var terminal: SessionTerminal?
+    // True means expanded; the compact prompt stays visible beside the panes.
+    private(set) var isTerminalVisible = false
+    private var automaticallyExpanded = false
+    private let terminalHost = NSView()
+    private let paneCover = NSView()
+    private var paneBottom: NSLayoutConstraint!
+    private var terminalTop: NSLayoutConstraint!
+    private var editingPrompt = false
     func restoreFocus() {
+        guard root.view.window === window else { return }
+        if (isTerminalVisible || editingPrompt) && editor == nil && viewer == nil, let terminal { window?.makeFirstResponder(terminal.view); return }
         window?.makeFirstResponder(editor?.responder ?? viewer?.view ?? activePane.view)
     }
     var isExitPromptVisible = false
@@ -34,7 +45,7 @@ final class CommanderTabSession: NSObject {
     private var editor: FileEditorCoordinator?
     private var viewer: FileViewerCoordinator?
     var fileOperationInProgress: Bool { locationCoordinator.isPresented || fileOpenCoordinator.isBusy || editor?.isBusy == true || viewer?.isBusy == true || renameCoordinator.isBusy || moveCoordinator.isBusy || createDirectoryCoordinator.isBusy || copyCoordinator.isBusy || deleteCoordinator.isBusy }
-    private var operationInProgress: Bool { isExitPromptVisible || fileOperationInProgress || viewer != nil || editor != nil }
+    private var operationInProgress: Bool { isTerminalVisible || isExitPromptVisible || fileOperationInProgress || viewer != nil || editor != nil }
     private var activePane: PaneViewController { panes[activeIndex] }
 
     init(window: NSWindow, directories: [URL], locationReader: any LocationReading) {
@@ -48,7 +59,10 @@ final class CommanderTabSession: NSObject {
         super.init()
         let rootView = AppearanceObservingView()
         root.view = rootView
-        rootView.onAppearanceChanged = { [weak window] in window?.backgroundColor = TerminalTheme.windowBackground }
+        rootView.onAppearanceChanged = { [weak self, weak window] in
+            window?.backgroundColor = TerminalTheme.windowBackground
+            self?.paneCover.layer?.backgroundColor = TerminalTheme.windowBackground.cgColor
+        }
         for pane in panes { root.addChild(pane) }
 
         shortcuts.onCommand = { [weak self] command in
@@ -71,7 +85,11 @@ final class CommanderTabSession: NSObject {
         let right = panes[1].view
         // Explicit edge constraints make the panes fill the content area, independently
         // of label intrinsic widths and NSStackView cross-axis alignment behavior.
-        for child in [left, right, shortcuts] {
+        paneCover.wantsLayer = true
+        paneCover.layer?.backgroundColor = TerminalTheme.windowBackground.cgColor
+        // Cover the gaps between panes as well as the panes themselves. The
+        // terminal remains mounted at a constant size beneath this overlay.
+        for child in [terminalHost, paneCover, left, right, shortcuts] {
             child.translatesAutoresizingMaskIntoConstraints = false
             root.view.addSubview(child)
         }
@@ -79,14 +97,24 @@ final class CommanderTabSession: NSObject {
         let paneSpacing: CGFloat = 2
         let keyBarInset: CGFloat = 0
         let keyBarGap: CGFloat = 0
+        paneBottom = left.bottomAnchor.constraint(equalTo: shortcuts.topAnchor, constant: -keyBarGap)
+        terminalTop = terminalHost.topAnchor.constraint(equalTo: root.view.topAnchor)
         NSLayoutConstraint.activate([
+            terminalTop,
+            terminalHost.bottomAnchor.constraint(equalTo: shortcuts.topAnchor),
+            paneCover.leadingAnchor.constraint(equalTo: root.view.leadingAnchor),
+            paneCover.trailingAnchor.constraint(equalTo: root.view.trailingAnchor),
+            paneCover.topAnchor.constraint(equalTo: root.view.topAnchor),
+            paneCover.bottomAnchor.constraint(equalTo: left.bottomAnchor),
+            terminalHost.leadingAnchor.constraint(equalTo: root.view.leadingAnchor),
+            terminalHost.trailingAnchor.constraint(equalTo: root.view.trailingAnchor),
             shortcuts.heightAnchor.constraint(equalToConstant: TerminalTheme.lineHeight),
             shortcuts.leadingAnchor.constraint(equalTo: root.view.leadingAnchor, constant: keyBarInset),
             shortcuts.trailingAnchor.constraint(equalTo: root.view.trailingAnchor, constant: -keyBarInset),
             shortcuts.bottomAnchor.constraint(equalTo: root.view.bottomAnchor, constant: -keyBarInset),
             left.leadingAnchor.constraint(equalTo: root.view.leadingAnchor, constant: paneInset),
             left.topAnchor.constraint(equalTo: root.view.topAnchor, constant: paneInset),
-            left.bottomAnchor.constraint(equalTo: shortcuts.topAnchor, constant: -keyBarGap),
+            paneBottom,
             right.leadingAnchor.constraint(equalTo: left.trailingAnchor, constant: paneSpacing),
             right.trailingAnchor.constraint(equalTo: root.view.trailingAnchor, constant: -paneInset),
             right.topAnchor.constraint(equalTo: left.topAnchor),
@@ -94,7 +122,11 @@ final class CommanderTabSession: NSObject {
             left.widthAnchor.constraint(equalTo: right.widthAnchor),
         ])
         for (index, pane) in panes.enumerated() {
-            pane.onDirectoryChanged = { [weak self] in self?.onTitleChanged?() }
+            pane.onDirectoryChanged = { [weak self] in
+                guard let self else { return }
+                self.onTitleChanged?()
+                if self.activeIndex == index { self.syncTerminalDirectory() }
+            }
             pane.onAction = { [weak self] action in self?.handle(action, from: index) }
         }
     }
@@ -102,10 +134,14 @@ final class CommanderTabSession: NSObject {
     func start() {
         for pane in panes { pane.load(pane.state.directory) }
         activate(0)
+        ensureTerminal()
     }
 
     private func activate(_ index: Int) {
+        editingPrompt = false
+        let changed = activeIndex != index
         activeIndex = index
+        syncTerminalDirectory(force: changed)
         onTitleChanged?()
         for (paneIndex, pane) in panes.enumerated() { pane.setActive(paneIndex == index) }
         if window?.firstResponder !== panes[index].view { panes[index].focus() }
@@ -114,7 +150,11 @@ final class CommanderTabSession: NSObject {
     private func handle(_ action: PaneAction, from index: Int) {
         switch action {
         case .activate:
+            guard !isTerminalVisible else { return }
+            editingPrompt = false
+            let changed = activeIndex != index
             activeIndex = index
+            syncTerminalDirectory(force: changed)
             onTitleChanged?()
             for (paneIndex, pane) in panes.enumerated() { pane.setActive(paneIndex == index) }
         case .switchPane: activate(1 - index)
@@ -136,6 +176,174 @@ final class CommanderTabSession: NSObject {
         case .delete: deleteSelected()
         case .quit: self.onQuitRequested()
         }
+    }
+
+    @discardableResult
+    private func ensureTerminal() -> Bool {
+        if terminal != nil { return true }
+        do {
+            let terminal = try SessionTerminal(directory: activePane.state.directory)
+            self.terminal = terminal
+            terminal.onExit = { [weak self] in self?.closeTerminal() }
+            terminal.onOpenSelection = { [weak self] in
+                guard let self, !self.operationInProgress, self.window?.attachedSheet == nil else { return }
+                self.editingPrompt = false
+                self.restoreFocus()
+                self.handle(.open, from: self.activeIndex)
+            }
+            terminal.onExecute = { [weak self] in
+                guard let self, !self.operationInProgress, self.window?.attachedSheet == nil else { return false }
+                self.automaticallyExpanded = true
+                return self.setTerminalExpanded(true)
+            }
+            terminal.onPrompt = { [weak self] _ in
+                guard let self, self.automaticallyExpanded else { return }
+                self.automaticallyExpanded = false
+                self.setTerminalExpanded(false)
+            }
+            var previouslyHadInput = false
+            terminal.onInputChanged = { [weak self] hasInput, _ in
+                let cleared = previouslyHadInput && !hasInput
+                previouslyHadInput = hasInput
+                guard let self else { return }
+                self.updatePromptHeight()
+                if cleared, !self.isTerminalVisible, self.editingPrompt {
+                    self.editingPrompt = false
+                    if self.window?.firstResponder === self.terminal?.view { self.restoreFocus() }
+                }
+            }
+            terminal.onCellHeightChanged = { [weak self] in self?.updatePromptHeight() }
+            let view = terminal.view
+            view.translatesAutoresizingMaskIntoConstraints = false
+            terminalHost.addSubview(view)
+            NSLayoutConstraint.activate([
+                view.leadingAnchor.constraint(equalTo: terminalHost.leadingAnchor),
+                view.trailingAnchor.constraint(equalTo: terminalHost.trailingAnchor),
+                view.topAnchor.constraint(equalTo: terminalHost.topAnchor),
+                view.bottomAnchor.constraint(equalTo: terminalHost.bottomAnchor),
+            ])
+            updatePromptHeight()
+            return true
+        } catch {
+            activePane.showStatus("Cannot start terminal: \(error.localizedDescription)", isError: true)
+            return false
+        }
+    }
+
+    private func updatePromptHeight() {
+        guard let terminal else {
+            paneBottom.constant = 0
+            terminalTop.constant = 0
+            return
+        }
+        // Ghostty uses whole cell rows. Put the leftover fraction above the
+        // terminal instead of leaving an apparent blank line below its prompt.
+        let available = max(0, root.view.bounds.height - TerminalTheme.lineHeight)
+        terminalTop.constant = available.truncatingRemainder(dividingBy: terminal.cellHeight)
+        paneBottom.constant = -ceil(terminal.cellHeight * CGFloat(terminal.inputRows))
+    }
+
+    @discardableResult
+    func toggleTerminal() -> Bool {
+        guard !isExitPromptVisible, !fileOperationInProgress, viewer == nil, editor == nil,
+              window?.attachedSheet == nil else { return false }
+        guard ensureTerminal() else { return true }
+        // Consume Cmd-O while a foreground command owns terminal input. Keep
+        // automatic restoration armed so completion still brings the panes back.
+        if isTerminalVisible, terminal?.isAtPrompt != true { return true }
+        automaticallyExpanded = false
+        setTerminalExpanded(!isTerminalVisible)
+        return true
+    }
+
+    @discardableResult
+    private func setTerminalExpanded(_ expanded: Bool) -> Bool {
+        guard let terminal else { return false }
+        do { try terminal.setCompact(!expanded) }
+        catch { activePane.showStatus(error.localizedDescription, isError: true); return false }
+        isTerminalVisible = expanded
+        editingPrompt = expanded
+        panes.forEach { $0.view.isHidden = expanded }
+        paneCover.isHidden = expanded
+        root.view.layoutSubtreeIfNeeded()
+        if !expanded { panes.forEach { $0.refresh() } }
+        restoreFocus()
+        return true
+    }
+
+    /// Called before AppKit dispatch, only for this tab's panes or terminal.
+    /// Enter always goes to ZLE; its accept-line widget reads the real buffer.
+    func routeTerminalInput(_ event: NSEvent) -> Bool {
+        guard event.type == .keyDown, !isTerminalVisible, !operationInProgress,
+              window?.attachedSheet == nil,
+              let responder = window?.firstResponder,
+              responder === activePane.view || responder === terminal?.view else { return false }
+        let key = event.specialKey
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        let terminalFocused = responder === terminal?.view
+        let functionKeys: [NSEvent.SpecialKey] = [.f1, .f2, .f3, .f4, .f5, .f6, .f7, .f8, .f9, .f10]
+        if terminalFocused, modifiers == .control, key == .pageUp {
+            activePane.view.keyDown(with: event)
+            return true
+        }
+        if let key, functionKeys.contains(key), terminalFocused {
+            activePane.view.keyDown(with: event)
+            return true
+        }
+        let paneNavigation: [NSEvent.SpecialKey] = [.upArrow, .downArrow, .leftArrow, .rightArrow, .home, .end, .pageUp, .pageDown]
+        if terminalFocused, let key, paneNavigation.contains(key),
+           modifiers.subtracting(.shift).isEmpty {
+            activePane.view.keyDown(with: event)
+            return true
+        }
+        if (key == .tab || key == .backTab), modifiers.subtracting(.shift).isEmpty {
+            activate(1 - activeIndex)
+            if terminalFocused {
+                // Switch the active pane without abandoning the shell's input
+                // buffer: spaces and Backspace must keep editing the command.
+                editingPrompt = true
+                window?.makeFirstResponder(terminal?.view)
+            }
+            return true
+        }
+        if terminalFocused, event.charactersIgnoringModifiers == "\u{1B}" {
+            terminal?.view.sendKey(.c, modifiers: .ctrl)
+            editingPrompt = false
+            restoreFocus()
+            return true
+        }
+        if terminalFocused { return false }
+        let isEnter = key == .carriageReturn || key == .enter
+        let isPaste = modifiers == .command && event.charactersIgnoringModifiers?.lowercased() == "v"
+        let printable = event.characters.map { !$0.isEmpty && $0.unicodeScalars.allSatisfy {
+            !CharacterSet.controlCharacters.contains($0) && !(0xF700...0xF8FF).contains($0.value)
+        } } ?? false
+        // Space retains pane marking until command editing starts.
+        guard isEnter || isPaste || (printable && !modifiers.contains(.command)
+            && !modifiers.contains(.control) && event.characters != " ") else { return false }
+        guard ensureTerminal(), let terminal else { return true }
+        editingPrompt = true
+        window?.makeFirstResponder(terminal.view)
+        if isPaste { terminal.view.performBindingAction("paste_from_clipboard") }
+        else { terminal.view.keyDown(with: event) }
+        return true
+    }
+
+    func closeTerminal() {
+        terminal?.view.removeFromSuperview()
+        terminal = nil
+        automaticallyExpanded = false
+        editingPrompt = false
+        isTerminalVisible = false
+        updatePromptHeight()
+        panes.forEach { $0.view.isHidden = false }
+        paneCover.isHidden = false
+        restoreFocus()
+    }
+
+    private func syncTerminalDirectory(force: Bool = false) {
+        do { try terminal?.changeDirectory(activePane.state.directory, force: force) }
+        catch { activePane.showStatus("Cannot sync terminal directory: \(error.localizedDescription)", isError: true) }
     }
 
     private func renameSelected() {

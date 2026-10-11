@@ -4,7 +4,8 @@ Licensed under the [MIT License](LICENSE).
 
 A native macOS two-pane file browser with a custom-drawn, Far-style interface.
 Blue panels, cyan borders, and two columns of monospaced filenames are drawn in
-a plain AppKit view, without native table or scroll widgets. No terminal or embedded web view. The editor uses TextBuffer behind a private adapter.
+a plain AppKit view, without native table or scroll widgets. Each tab includes a
+libghostty terminal; the editor uses TextBuffer behind a private adapter.
 Requires macOS 13+ and a Swift 6.2 or newer toolchain.
 
 ## Run
@@ -54,7 +55,7 @@ The universal bundle is also available at `dist/universal/Commander.app`.
 | Left / Right | Move between name columns |
 | Home / End | First / last item |
 | Page Up / Page Down | Move by one visible page |
-| Backspace | Go to parent, selecting the folder you left |
+| Ctrl-PageUp | Go to parent, selecting the folder you left |
 | Command-L | Go to a path (absolute, relative, or `~`) |
 | Command-R | Refresh active pane, preserving selection if possible |
 | Command-period | Toggle hidden files in active pane |
@@ -312,7 +313,7 @@ stalled network folders can still take time to load.
 ## Verification
 
 ```sh
-swift test
+swift test --no-parallel
 ```
 
 Core tests cover sorting, hidden files, symbolic directory links, read errors,
@@ -359,3 +360,50 @@ Other… opens a custom folder browser starting in /Applications. Choose an .app
 enter subfolders, use .. to go up, or Enter path… for a folder/application path
 (including ~). Cancel returns to the suggested apps. App choices apply only to
 this opening and do not change system defaults. Launch errors appear in a dialog.
+
+### Built-in terminal (experiment)
+
+Each tab starts its own persistent zsh terminal. It stays at full size behind
+opaque panes, with the bottom prompt rows exposed and scrolling disabled. The
+function-key bar keeps its reserved space in both views. Start typing from a pane to edit a shell
+command; Enter asks zsh whether its actual editing buffer contains a command.
+Empty input opens the selected entry, including after deleting or clearing a
+command. Space retains file marking until command editing starts.
+
+Submitting a command hides the pane overlay before execution. When the shell
+returns to its prompt, the panes and compact prompt are restored, including after
+a failed or interrupted command. **Cmd-O** toggles the full terminal manually at
+the shell prompt. While a command is running, Cmd-O keeps the terminal visible;
+completion still restores panes for commands launched from the compact prompt.
+The shell, selection, and scrollback survive switching views and tabs, and running
+commands continue when switching tabs. Closing a tab ends
+its terminal. After `exit`, typing or Cmd-O creates a fresh shell.
+
+Backspace edits command text and never changes directories; Ctrl-PageUp goes to
+the parent directory. While panes are visible, arrows, Home/End, and PageUp/PageDown
+navigate files, and Tab/Shift-Tab switch panes, even while editing a command.
+The command stays intact across pane navigation. Other editing keys go to zsh;
+use Cmd-O for normal terminal arrows, history, and Tab completion.
+Clearing the command returns focus to the pane; Escape cancels editing. Wrapped
+input can expose up to six prompt rows, retained until the next fresh prompt
+so deleting wrapped text cannot hide the cursor. Pane toggles and prompt wrapping never
+resize the terminal; actual window resizing still does.
+
+The terminal runs `/bin/zsh` as an interactive login shell and reads your normal
+zsh startup files. Changing the active pane or its directory updates the shell
+directory without adding a command to history or disturbing unfinished input.
+While a command runs, the latest directory change waits for the next prompt.
+The full view supports libghostty scrolling, selection, copy/paste, terminal key
+handling, and resizing. Cmd-O is reserved, including inside terminal programs.
+
+The pinned [libghostty Swift package](https://github.com/Lakr233/libghostty-spm)
+provides the native surface and binary engine. `scripts/build-app.sh` includes its
+runtime resources. Run `python3 scripts/test-terminal-shell.py` to exercise the
+prompt and busy-shell directory synchronization through a real PTY.
+
+Run the tests serially: AppKit tests share `NSApplication` and native terminal
+runtime state. Parallel execution can cause asynchronous UI tests to time out.
+
+The terminal advertises `xterm-ghostty`. Some macOS tools, including the system
+`top`, may not find the bundled terminfo when running with elevated privileges.
+Use `TERM=xterm-256color top` as a compatibility workaround.

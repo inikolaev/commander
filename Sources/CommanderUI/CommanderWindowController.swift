@@ -37,6 +37,8 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate, NSM
         let tab = makeTab(directories: [home, home])
         tabs = [tab]
         window.contentViewController = tab.root
+        window.onTerminalInput = { [weak self] event in self?.selectedTab.routeTerminalInput(event) ?? false }
+        window.onToggleTerminal = { [weak self] in self?.selectedTab.toggleTerminal() ?? false }
         window.onModifiersChanged = { [weak self] flags in self?.selectedTab.updateModifiers(flags) }
         tabStrip.onSelect = { [weak self] id in self?.selectTab(id: id) }
         tabStrip.onClose = { [weak self] id in
@@ -155,6 +157,7 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate, NSM
                     return // Leave the editor and all remaining tabs intact on Cancel.
                 }
                 tab.closeViewer()
+                tab.closeTerminal()
                 self.tabs.remove(at: index)
                 self.selectedIndex = min(index, self.tabs.count - 1)
                 self.attach(self.selectedTab)
