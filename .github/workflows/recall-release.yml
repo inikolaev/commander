@@ -60,10 +60,18 @@ jobs:
           PY
       - name: Withdraw public downloads while retaining the tag
         run: |
-          # Drafts preserve assets and an audit record but stop public downloads.
-          # Re-running this workflow is safe if deployment failed after withdrawal.
+          # Hide downloads immediately. Only republish the record after removing
+          # every uploaded asset and deploying the recalled feed.
           gh release edit "$RECALL_TAG" --draft=true \
             --notes-file "$RUNNER_TEMP/recall-notes.md"
+          gh release view "$RECALL_TAG" --json assets --jq '.assets[].name' \
+            > "$RUNNER_TEMP/recalled-assets.txt"
+          while IFS= read -r asset; do
+            [[ -n "$asset" ]] || continue
+            gh release delete-asset "$RECALL_TAG" "$asset" --yes
+          done < "$RUNNER_TEMP/recalled-assets.txt"
+          gh release view "$RECALL_TAG" --json assets,isDraft | \
+            jq -e '.isDraft == true and (.assets | length) == 0'
       - uses: actions/configure-pages@v6
       - uses: actions/upload-pages-artifact@v5
         with:
@@ -71,7 +79,15 @@ jobs:
       - name: Deploy recalled feed
         id: deploy
         uses: actions/deploy-pages@v5
+      - name: Publish the asset-free recall record
+        run: |
+          # Recheck immediately before publishing: never expose leftover binaries.
+          gh release view "$RECALL_TAG" --json assets | jq -e '(.assets | length) == 0'
+          gh release edit "$RECALL_TAG" --draft=false --latest=false \
+            --title "Commander ${RECALL_TAG#v} (RECALLED — do not install)"
+          gh release view "$RECALL_TAG" --json assets,isDraft | \
+            jq -e '.isDraft == false and (.assets | length) == 0'
       - name: Record recall
         run: |
-          printf 'Recalled `%s`: public release withdrawn and Sparkle entries removed.\n' "$RECALL_TAG" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Recalled `%s`: uploaded assets deleted, Sparkle entries removed, and a non-latest recall record published.\n' "$RECALL_TAG" >> "$GITHUB_STEP_SUMMARY"
           printf 'The Git tag is retained to prevent reuse of its build number. Already downloaded or installed copies cannot be revoked.\n' >> "$GITHUB_STEP_SUMMARY"

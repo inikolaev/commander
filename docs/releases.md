@@ -28,25 +28,33 @@ In GitHub Actions, select **Recall release**, choose **Run workflow** on `main`,
 and supply the exact tag (for example `v2026.10.81`) and a reason.
 
 The workflow fetches the live Sparkle feed, removes the specified build's entries
-for both architectures, converts the GitHub release to a draft, and deploys the
-updated feed to GitHub Pages. Other feed entries remain intact; if none remain,
-clients receive a valid empty feed. It does not automatically promote an older
-release. Release assets, notes, and the Git tag are retained for audit and recovery.
-Public downloads stop being available when the release becomes a draft.
+for both architectures, temporarily makes the GitHub release a draft to hide its
+downloads, and deletes all uploaded assets. After deploying the updated feed, it
+publishes an asset-free **RECALLED — do not install** record with `latest=false`.
+The completed recall is a normal published record rather than a draft pinned at
+the top of the release list. GitHub's automatic source archives may still be shown;
+there are no uploaded app binaries, installers, or checksums.
+
+Other feed entries remain intact; if none remain, clients receive a valid empty
+feed. It does not automatically promote an older release in Sparkle. Release
+notes and the Git tag remain for transparency and build-number reservation.
+Uploaded assets are permanently deleted; keep any forensic copies separately.
 
 Recall, release publication, and ordinary Pages deployment share a concurrency
 group so they cannot overwrite each other's feed changes while running. Ordinary
 Pages deployment preserves the live feed and fails if it cannot fetch it. Recalled
-drafts are excluded from cleanup and cannot be republished by the release workflow.
+records are excluded from release-note baselines and cannot receive new assets
+through the release workflow. Temporary recalled drafts are excluded from cleanup.
 
-If withdrawal succeeds but Pages deployment fails, rerun Recall release with the
-same tag. Feed removal is idempotent. Inspect the deployed `appcast.xml` and the
-release's draft status after completion. CDN/client caches may delay propagation;
+If asset deletion or Pages deployment fails, the release stays a draft. Rerun
+Recall release with the same tag to finish; already deleted assets and removed
+feed entries do not block a retry. Inspect the deployed `appcast.xml`, the public
+recall title, and the empty uploaded-assets list after completion. CDN/client caches may delay propagation;
 a recall cannot revoke an already downloaded or installed copy. Clients whose app
 crashes at startup may need to install the fixed version manually.
 
 Publish the fix as a new, higher build. Do not delete the retained tag or manually
-republish the recalled draft. Deleting a GitHub release alone does not update the
+restore binaries to the recalled record. Deleting a GitHub release alone does not update the
 static Sparkle feed. This workflow must first be merged into `main` to be available.
 
 ## Local packaging
