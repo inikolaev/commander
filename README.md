@@ -4,7 +4,8 @@ Licensed under the [MIT License](LICENSE).
 
 A native macOS two-pane file browser with a custom-drawn, Far-style interface.
 Blue panels, cyan borders, and two columns of monospaced filenames are drawn in
-a plain AppKit view, without native table or scroll widgets. No terminal or embedded web view. The editor uses TextBuffer behind a private adapter.
+a plain AppKit view, without native table or scroll widgets. Each tab includes a
+libghostty terminal; the editor uses TextBuffer behind a private adapter.
 Requires macOS 13+ and a Swift 6.2 or newer toolchain.
 
 ## Run
@@ -362,16 +363,20 @@ this opening and do not change system defaults. Launch errors appear in a dialog
 
 ### Built-in terminal (experiment)
 
-Each tab starts its own persistent zsh terminal. A compact prompt stays visible
-below the panes with scrolling disabled. Start typing from a pane to edit a shell
+Each tab starts its own persistent zsh terminal. It stays at full size behind
+opaque panes, with the bottom prompt rows exposed and scrolling disabled. The
+function-key bar keeps its reserved space in both views. Start typing from a pane to edit a shell
 command; Enter asks zsh whether its actual editing buffer contains a command.
 Empty input opens the selected entry, including after deleting or clearing a
 command. Space retains file marking until command editing starts.
 
-Submitting a command expands the terminal before execution. When the shell
+Submitting a command hides the pane overlay before execution. When the shell
 returns to its prompt, the panes and compact prompt are restored, including after
-a failed or interrupted command. **Cmd-O** toggles the full terminal manually. Its shell, running commands,
-selection, and scrollback survive switching views and tabs. Closing a tab ends
+a failed or interrupted command. **Cmd-O** toggles the full terminal manually at
+the shell prompt. While a command is running, Cmd-O keeps the terminal visible;
+completion still restores panes for commands launched from the compact prompt.
+The shell, selection, and scrollback survive switching views and tabs, and running
+commands continue when switching tabs. Closing a tab ends
 its terminal. After `exit`, typing or Cmd-O creates a fresh shell.
 
 Backspace edits command text and never changes directories; Ctrl-PageUp goes to
@@ -380,7 +385,9 @@ navigate files, and Tab/Shift-Tab switch panes, even while editing a command.
 The command stays intact across pane navigation. Other editing keys go to zsh;
 use Cmd-O for normal terminal arrows, history, and Tab completion.
 Clearing the command returns focus to the pane; Escape cancels editing. Wrapped
-input can grow the compact prompt to six rows.
+input can expose up to six prompt rows, retained until the next fresh prompt
+so deleting wrapped text cannot hide the cursor. Pane toggles and prompt wrapping never
+resize the terminal; actual window resizing still does.
 
 The terminal runs `/bin/zsh` as an interactive login shell and reads your normal
 zsh startup files. Changing the active pane or its directory updates the shell
@@ -396,3 +403,7 @@ prompt and busy-shell directory synchronization through a real PTY.
 
 Run the tests serially: AppKit tests share `NSApplication` and native terminal
 runtime state. Parallel execution can cause asynchronous UI tests to time out.
+
+The terminal advertises `xterm-ghostty`. Some macOS tools, including the system
+`top`, may not find the bundled terminfo when running with elevated privileges.
+Use `TERM=xterm-256color top` as a compatibility workaround.

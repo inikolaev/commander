@@ -53,7 +53,7 @@ final class TerminalDirectoryMailbox {
     func setCompact(_ compact: Bool) throws {
         try Data((compact ? "compact" : "full").utf8)
             .write(to: directory.appendingPathComponent("mode"), options: .atomic)
-        notifyShell()
+        // Mode changes only alter input routing; they do not redraw the prompt.
     }
 
     func acknowledge(_ token: String) {
@@ -97,6 +97,7 @@ final class SessionTerminal: TerminalSurfaceCloseDelegate, TerminalSurfaceGridRe
     private(set) var hasInput = false
     private(set) var isAtPrompt = false
     private(set) var cellHeight: CGFloat = 20
+    private(set) var bottomPadding: CGFloat = 0
     private(set) var inputRows = 1
     // Retained independently of visibility and window attachment.
     private let controller: TerminalController
@@ -157,18 +158,24 @@ final class SessionTerminal: TerminalSurfaceCloseDelegate, TerminalSurfaceGridRe
         case "execute":
             guard fields.count == 2 else { return }
             guard onExecute?() == true else { return }
-            // The caller lays out the full terminal before acknowledging. The
+            isAtPrompt = false
+            // The caller removes the pane overlay before acknowledging. The
             // shell's accept-line widget cannot start the command before this.
             mailbox.acknowledge(String(fields[1]))
         case "running": isAtPrompt = false
         case "prompt":
             guard fields.count == 2, let status = Int(fields[1]) else { return }
             isAtPrompt = true
+            hasInput = false
+            inputRows = 1
             onPrompt?(status)
+            onInputChanged?(false, inputRows)
         case "input":
             guard fields.count == 3, let rows = Int(fields[2]) else { return }
             hasInput = fields[1] == "1"
-            inputRows = min(6, max(1, rows))
+            // ZLE does not move the prompt back down when a wrapped buffer
+            // shrinks. Keep its space exposed until the next anchored prompt.
+            inputRows = max(inputRows, min(6, max(1, rows)))
             onInputChanged?(hasInput, inputRows)
             if view.isCompact { view.performBindingAction("scroll_to_bottom") }
         default: break
@@ -178,8 +185,11 @@ final class SessionTerminal: TerminalSurfaceCloseDelegate, TerminalSurfaceGridRe
     func terminalDidResize(_ size: TerminalGridMetrics) {
         let scale = view.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
         let height = CGFloat(size.cellHeightPixels) / scale
-        guard height > 0, abs(height - cellHeight) > 0.1 else { return }
+        guard height > 0 else { return }
+        let padding = max(0, view.bounds.height - CGFloat(size.rows) * height)
+        guard abs(height - cellHeight) > 0.1 || abs(padding - bottomPadding) > 0.1 else { return }
         cellHeight = height
+        bottomPadding = padding
         // Layout must not reenter a Ghostty resize callback.
         Task { @MainActor [weak self] in self?.onCellHeightChanged?() }
     }

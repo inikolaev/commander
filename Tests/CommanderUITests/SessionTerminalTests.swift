@@ -35,6 +35,7 @@ import Testing
     let terminal = try #require(first.terminal)
     #expect(first.isTerminalVisible)
     #expect(controller.window?.firstResponder === terminal.view)
+    terminal.handleShellEvent("prompt 0")
     #expect(first.toggleTerminal())
     #expect(!first.isTerminalVisible)
     #expect(controller.window?.firstResponder === pane)
@@ -73,6 +74,7 @@ import Testing
     #expect(window.performKeyEquivalent(with: event))
     let terminal = try #require(controller.selectedTab.terminal)
     #expect(window.firstResponder === terminal.view)
+    terminal.handleShellEvent("prompt 0")
     #expect(window.performKeyEquivalent(with: event))
     #expect(!controller.selectedTab.isTerminalVisible)
     #expect(controller.selectedTab.terminal === terminal)
@@ -89,17 +91,37 @@ import Testing
     tab.root.view.layoutSubtreeIfNeeded()
     #expect(!tab.isTerminalVisible)
     #expect(terminal.view.isCompact)
-    #expect(terminal.view.frame.height > 0)
-    #expect(terminal.view.frame.height < 50)
+    let size = terminal.view.frame.size
+    #expect(size.height > 200)
+    let pane = try #require(tab.root.children.first?.view)
+    #expect(!pane.isHidden)
+    terminal.handleShellEvent("prompt 0")
     terminal.handleShellEvent("execute test-1")
     #expect(tab.isTerminalVisible)
     #expect(!terminal.view.isCompact)
-    #expect(terminal.view.frame.height > 200)
+    #expect(terminal.view.frame.size == size)
+    #expect(pane.isHidden)
+    // Cmd-O must be blocked even before the preexec notification arrives.
+    #expect(!terminal.isAtPrompt)
+    #expect(tab.toggleTerminal())
+    #expect(tab.isTerminalVisible)
     terminal.handleShellEvent("running")
+    #expect(tab.toggleTerminal())
+    #expect(tab.isTerminalVisible)
+    #expect(controller.window?.firstResponder === terminal.view)
     terminal.handleShellEvent("prompt 0")
     #expect(!tab.isTerminalVisible)
     #expect(terminal.view.isCompact)
     #expect(tab.terminal === terminal)
+    #expect(terminal.view.frame.size == size)
+    #expect(!pane.isHidden)
+    terminal.handleShellEvent("input 1 4")
+    tab.root.view.layoutSubtreeIfNeeded()
+    #expect(terminal.view.frame.size == size) // Wrapped input changes only the overlay.
+    terminal.handleShellEvent("input 0 1")
+    #expect(terminal.inputRows == 4) // Erasing must not cover the prompt left above the bottom.
+    terminal.handleShellEvent("prompt 0")
+    #expect(terminal.inputRows == 1)
     terminal.handleShellEvent("execute test-2")
     terminal.handleShellEvent("prompt 1")
     #expect(!tab.isTerminalVisible) // Failure is still completion.
@@ -109,6 +131,13 @@ import Testing
     tab.toggleTerminal()
     terminal.handleShellEvent("prompt 0")
     #expect(tab.isTerminalVisible) // Explicit Cmd-O view never auto-collapses.
+    terminal.handleShellEvent("running")
+    #expect(tab.toggleTerminal())
+    #expect(tab.isTerminalVisible)
+    terminal.handleShellEvent("prompt 0")
+    #expect(tab.isTerminalVisible)
+    #expect(tab.toggleTerminal())
+    #expect(!tab.isTerminalVisible) // Manual toggle works again at the prompt.
 }
 
 @Test @MainActor func paneTypingUsesTerminalAndErasingRestoresPaneFocus() throws {

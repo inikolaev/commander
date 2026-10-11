@@ -1,7 +1,6 @@
 # The shell owns input state. The host never reconstructs it from keystrokes.
 typeset -g _commander_mailbox=$COMMANDER_DIRECTORY_MAILBOX
-typeset -g _commander_last_request='' _commander_last_input='' _commander_mode='full'
-typeset -g _commander_saved_prompt=$PROMPT _commander_saved_rprompt=$RPROMPT
+typeset -g _commander_last_request='' _commander_last_input=''
 typeset -gi _commander_sequence=0
 exec {_commander_notify}<>"$_commander_mailbox/notify"
 exec {_commander_events}<>"$_commander_mailbox/events"
@@ -10,19 +9,6 @@ exec {_commander_responses}<>"$_commander_mailbox/responses"
 _commander_event() { builtin print -r -- "$*" >&$_commander_events; }
 _commander_update_prompt() {
     emulate -L zsh
-    local mode=$(<"$_commander_mailbox/mode")
-    if [[ $mode != $_commander_mode ]]; then
-        if [[ $mode == compact ]]; then
-            _commander_saved_prompt=$PROMPT
-            _commander_saved_rprompt=$RPROMPT
-            PROMPT='%~ %# '
-            RPROMPT=''
-        else
-            PROMPT=$_commander_saved_prompt
-            RPROMPT=$_commander_saved_rprompt
-        fi
-        _commander_mode=$mode
-    fi
     # End the prompt on every redraw, including SIGWINCH and reset-prompt.
     # Without OSC 133 B, Ghostty waits for its prompt redraw timeout.
     local prompt_end=$'%{\e]133;B\a%}'
@@ -70,7 +56,7 @@ _commander_accept_line() {
         # between a delayed input-state notification and pressing Enter.
         local token="$$-$((++_commander_sequence))" response
         _commander_event "execute $token"
-        # Do not execute into a one-row PTY if the host is unavailable.
+        # Do not execute behind the panes if the host is unavailable.
         while IFS= read -r -t 2 -u $_commander_responses response; do
             if [[ $response == $token ]]; then
                 _commander_update_prompt
@@ -78,7 +64,7 @@ _commander_accept_line() {
                 return
             fi
         done
-        zle -M 'Commander did not acknowledge terminal expansion; press Enter to retry'
+        zle -M 'Commander did not acknowledge terminal reveal; press Enter to retry'
         return
     fi
     zle .accept-line
@@ -87,7 +73,9 @@ _commander_precmd() {
     local exit_status=$?
     _commander_apply_directory
     _commander_update_prompt
-    printf '\e]133;D;%s\a\e]133;A\a' "$exit_status"
+    # CUP clamps to the last row. Output remains above the fresh prompt;
+    # no terminal resize or screen clear is needed to reveal the panes.
+    printf '\e]133;D;%s\a\e[9999;1H\e]133;A\a' "$exit_status"
     _commander_event "prompt $exit_status"
     _commander_last_input=''
 }

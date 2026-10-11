@@ -1,3 +1,9 @@
+# Discard macOS login's banner before user startup files can print anything.
+# This bootstrap runs only for Commander's initial shell, not nested shells.
+if [[ -o interactive ]]; then
+    builtin printf '\e[2J\e[3J\e[H'
+fi
+
 # Restore the user's startup directory before loading their normal configuration.
 if [[ -n ${COMMANDER_ORIGINAL_ZDOTDIR+x} ]]; then
     ZDOTDIR=$COMMANDER_ORIGINAL_ZDOTDIR

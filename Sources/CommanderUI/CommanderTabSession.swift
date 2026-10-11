@@ -21,10 +21,9 @@ final class CommanderTabSession: NSObject {
     private(set) var isTerminalVisible = false
     private var automaticallyExpanded = false
     private let terminalHost = NSView()
-    private var compactConstraints: [NSLayoutConstraint] = []
-    private var expandedConstraints: [NSLayoutConstraint] = []
-    private var promptHeight: NSLayoutConstraint!
+    private let paneCover = NSView()
     private var paneBottom: NSLayoutConstraint!
+    private var terminalTop: NSLayoutConstraint!
     private var editingPrompt = false
     func restoreFocus() {
         guard root.view.window === window else { return }
@@ -60,7 +59,10 @@ final class CommanderTabSession: NSObject {
         super.init()
         let rootView = AppearanceObservingView()
         root.view = rootView
-        rootView.onAppearanceChanged = { [weak window] in window?.backgroundColor = TerminalTheme.windowBackground }
+        rootView.onAppearanceChanged = { [weak self, weak window] in
+            window?.backgroundColor = TerminalTheme.windowBackground
+            self?.paneCover.layer?.backgroundColor = TerminalTheme.windowBackground.cgColor
+        }
         for pane in panes { root.addChild(pane) }
 
         shortcuts.onCommand = { [weak self] command in
@@ -83,7 +85,11 @@ final class CommanderTabSession: NSObject {
         let right = panes[1].view
         // Explicit edge constraints make the panes fill the content area, independently
         // of label intrinsic widths and NSStackView cross-axis alignment behavior.
-        for child in [left, right, shortcuts, terminalHost] {
+        paneCover.wantsLayer = true
+        paneCover.layer?.backgroundColor = TerminalTheme.windowBackground.cgColor
+        // Cover the gaps between panes as well as the panes themselves. The
+        // terminal remains mounted at a constant size beneath this overlay.
+        for child in [terminalHost, paneCover, left, right, shortcuts] {
             child.translatesAutoresizingMaskIntoConstraints = false
             root.view.addSubview(child)
         }
@@ -91,13 +97,15 @@ final class CommanderTabSession: NSObject {
         let paneSpacing: CGFloat = 2
         let keyBarInset: CGFloat = 0
         let keyBarGap: CGFloat = 0
-        promptHeight = terminalHost.heightAnchor.constraint(equalToConstant: 0)
         paneBottom = left.bottomAnchor.constraint(equalTo: shortcuts.topAnchor, constant: -keyBarGap)
-        compactConstraints = [promptHeight, terminalHost.bottomAnchor.constraint(equalTo: shortcuts.topAnchor)]
-        expandedConstraints = [terminalHost.topAnchor.constraint(equalTo: root.view.topAnchor),
-                               terminalHost.bottomAnchor.constraint(equalTo: root.view.bottomAnchor)]
-        NSLayoutConstraint.activate(compactConstraints)
+        terminalTop = terminalHost.topAnchor.constraint(equalTo: root.view.topAnchor)
         NSLayoutConstraint.activate([
+            terminalTop,
+            terminalHost.bottomAnchor.constraint(equalTo: shortcuts.topAnchor),
+            paneCover.leadingAnchor.constraint(equalTo: root.view.leadingAnchor),
+            paneCover.trailingAnchor.constraint(equalTo: root.view.trailingAnchor),
+            paneCover.topAnchor.constraint(equalTo: root.view.topAnchor),
+            paneCover.bottomAnchor.constraint(equalTo: left.bottomAnchor),
             terminalHost.leadingAnchor.constraint(equalTo: root.view.leadingAnchor),
             terminalHost.trailingAnchor.constraint(equalTo: root.view.trailingAnchor),
             shortcuts.heightAnchor.constraint(equalToConstant: TerminalTheme.lineHeight),
@@ -223,9 +231,16 @@ final class CommanderTabSession: NSObject {
     }
 
     private func updatePromptHeight() {
-        let height = terminal.map { ceil($0.cellHeight * CGFloat($0.inputRows)) } ?? 0
-        promptHeight.constant = height
-        paneBottom.constant = -height
+        guard let terminal else {
+            paneBottom.constant = 0
+            terminalTop.constant = 0
+            return
+        }
+        // Ghostty uses whole cell rows. Put the leftover fraction above the
+        // terminal instead of leaving an apparent blank line below its prompt.
+        let available = max(0, root.view.bounds.height - TerminalTheme.lineHeight)
+        terminalTop.constant = available.truncatingRemainder(dividingBy: terminal.cellHeight)
+        paneBottom.constant = -ceil(terminal.cellHeight * CGFloat(terminal.inputRows))
     }
 
     @discardableResult
@@ -233,6 +248,9 @@ final class CommanderTabSession: NSObject {
         guard !isExitPromptVisible, !fileOperationInProgress, viewer == nil, editor == nil,
               window?.attachedSheet == nil else { return false }
         guard ensureTerminal() else { return true }
+        // Consume Cmd-O while a foreground command owns terminal input. Keep
+        // automatic restoration armed so completion still brings the panes back.
+        if isTerminalVisible, terminal?.isAtPrompt != true { return true }
         automaticallyExpanded = false
         setTerminalExpanded(!isTerminalVisible)
         return true
@@ -245,12 +263,9 @@ final class CommanderTabSession: NSObject {
         catch { activePane.showStatus(error.localizedDescription, isError: true); return false }
         isTerminalVisible = expanded
         editingPrompt = expanded
-        NSLayoutConstraint.deactivate(expanded ? compactConstraints : expandedConstraints)
-        NSLayoutConstraint.activate(expanded ? expandedConstraints : compactConstraints)
         panes.forEach { $0.view.isHidden = expanded }
-        shortcuts.isHidden = expanded
+        paneCover.isHidden = expanded
         root.view.layoutSubtreeIfNeeded()
-        terminal.view.fitToSize()
         if !expanded { panes.forEach { $0.refresh() } }
         restoreFocus()
         return true
@@ -320,11 +335,9 @@ final class CommanderTabSession: NSObject {
         automaticallyExpanded = false
         editingPrompt = false
         isTerminalVisible = false
-        NSLayoutConstraint.deactivate(expandedConstraints)
-        NSLayoutConstraint.activate(compactConstraints)
         updatePromptHeight()
         panes.forEach { $0.view.isHidden = false }
-        shortcuts.isHidden = false
+        paneCover.isHidden = false
         restoreFocus()
     }
 

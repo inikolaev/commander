@@ -48,6 +48,7 @@ with tempfile.TemporaryDirectory() as tmp:
     try:
         initial=drain(1)
         assert b'READY>' in initial, initial
+        assert b'\x1b[9999;1H' in initial, 'Fresh prompt must be anchored at the bottom'
         assert b'\x1b]133;B\x07' in initial, 'Initial prompt must include input-start marker'
         for rows in [1, 40, 1, 40]:
             fcntl.ioctl(fd, termios.TIOCSWINSZ, struct.pack('HHHH', rows, 120, 0, 0))
