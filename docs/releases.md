@@ -1,29 +1,68 @@
 # macOS releases
 
-Every push to `main` runs `.github/workflows/release.yml`. It tests the project,
-builds a release-mode universal executable (arm64 and x86_64), packages
-`Commander.app`, verifies its signature and architectures, and publishes a GitHub
-Release with the ZIP and a SHA-256 checksum. You can also run **macOS release**
-manually from GitHub Actions on `main`. Failed tests/builds do not publish a release.
+Main-branch CI invokes `.github/workflows/release.yml` after its checks pass.
+Release-affecting changes produce separate Apple silicon and Intel builds. You can
+also run **macOS release** manually on `main`.
 
 ## Version format
 
-Versions use `YYYY.M.build`, for example `2026.9.42`. The year and month come from
-the original workflow creation date in UTC. The final number is GitHub's increasing
-run number for this workflow; it does not reset each month or year. Failed runs may
-leave gaps. This is calendar versioning, not a semantic compatibility promise.
+Versions use `YYYY.M.build`, for example `2026.10.82`. The date comes from the
+workflow creation time. The build number is one greater than the largest release
+build found in Git tags, including tags belonging to recalled or deleted releases.
+Keep release tags permanently: they reserve build numbers already distributed to
+clients. `CFBundleVersion` and Sparkle's version both contain that build number.
 
-The version appears in `CFBundleShortVersionString`, the archive filename, the
-release title, and its Git tag (`v2026.9.42`). `CFBundleVersion` holds the run number.
-Tags associate each release with its exact source commit. GitHub Actions maintains
-the counter, so no bot commits or manually updated version file are needed.
-Keep this workflow's identity/history to retain its counter.
+## Release notes after a recall
 
-Re-running an existing workflow keeps its version. Publication uses a draft until
-both assets are uploaded; a retry can finish a draft. Already published releases
-are left unchanged. Use a new manual run to create another release of the same
-commit. Concurrent runs use distinct versions; no push is canceled to make way
-for a newer push.
+Generated notes explicitly compare against the highest prior published stable
+release, excluding drafts, prereleases, and releases marked as recalled. For
+example, if build 81 was recalled, build 82 compares with build 80, including both
+the changes introduced in 81 and the fixes in 82. Notes name recalled releases in
+that interval for transparency. The old notes are not copied verbatim: GitHub
+regenerates the combined change list and comparison link. Later releases resume
+comparing against the latest working published release.
+
+## Recall a broken release
+
+In GitHub Actions, select **Recall release**, choose **Run workflow** on `main`,
+and supply the exact tag (for example `v2026.10.81`) and a reason.
+
+The workflow fetches the live Sparkle feed, removes the specified build's entries
+for both architectures, temporarily makes the GitHub release a draft to hide its
+downloads, and deletes all uploaded assets. After deploying the updated feed, it
+publishes an asset-free **RECALLED — do not install** record with `latest=false`.
+The workflow then explicitly marks the highest-build published, non-recalled
+stable release as GitHub **Latest** and verifies that selection. Drafts and
+prereleases are excluded. Recalling an older build keeps a newer eligible release
+as Latest; if no eligible release exists, the workflow reports that in its summary
+without marking a replacement. This changes GitHub's Latest link, not the Sparkle
+feed's remaining entries.
+
+The completed recall is a normal published record rather than a draft pinned at
+the top of the release list. GitHub's automatic source archives may still be shown;
+there are no uploaded app binaries, installers, or checksums.
+
+Other feed entries remain intact; if none remain, clients receive a valid empty
+feed. It does not automatically promote an older release in Sparkle. Release
+notes and the Git tag remain for transparency and build-number reservation.
+Uploaded assets are permanently deleted; keep any forensic copies separately.
+
+Recall, release publication, and ordinary Pages deployment share a concurrency
+group so they cannot overwrite each other's feed changes while running. Ordinary
+Pages deployment preserves the live feed and fails if it cannot fetch it. Recalled
+records are excluded from release-note baselines and cannot receive new assets
+through the release workflow. Temporary recalled drafts are excluded from cleanup.
+
+If asset deletion or Pages deployment fails, the release stays a draft. Rerun
+Recall release with the same tag to finish; already deleted assets and removed
+feed entries do not block a retry. Inspect the deployed `appcast.xml`, the public
+recall title, and the empty uploaded-assets list after completion. CDN/client caches may delay propagation;
+a recall cannot revoke an already downloaded or installed copy. Clients whose app
+crashes at startup may need to install the fixed version manually.
+
+Publish the fix as a new, higher build. Do not delete the retained tag or manually
+restore binaries to the recalled record. Deleting a GitHub release alone does not update the
+static Sparkle feed. This workflow must first be merged into `main` to be available.
 
 ## Local packaging
 

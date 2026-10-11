@@ -1,0 +1,108 @@
+name: Recall release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to withdraw, e.g. v2026.10.81'
+        required: true
+        type: string
+      reason:
+        description: 'Reason for recalling the release'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Serialize all feed publishers so an older deployment cannot undo a recall.
+concurrency:
+  group: commander-publication
+  cancel-in-progress: false
+
+jobs:
+  recall:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RECALL_TAG: ${{ inputs.tag }}
+      RECALL_REASON: ${{ inputs.reason }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          ref: main
+      - name: Prepare recalled feed and release record
+        run: |
+          gh release view "$RECALL_TAG" --json tagName,body > "$RUNNER_TEMP/recalled-release.json"
+          # Fail closed: never replace the live feed with a stale repository copy.
+          curl --fail --silent --show-error --location \
+            -H 'Cache-Control: no-cache' \
+            "https://inikolaev.github.io/commander/appcast.xml?recall=$GITHUB_RUN_ID" \
+            --output docs/appcast.xml
+          python3 scripts/release-feed.py recall docs/appcast.xml "$RECALL_TAG"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          release = json.loads((root / 'recalled-release.json').read_text())
+          assert release['tagName'] == os.environ['RECALL_TAG']
+          reason = os.environ['RECALL_REASON']
+          (root / 'recall-notes.md').write_text(
+              '<!-- commander-recalled -->\nRecalled: ' + reason + '\n\n' + (release['body'] or ''))
+          PY
+      - name: Withdraw public downloads while retaining the tag
+        run: |
+          # Hide downloads immediately. Only republish the record after removing
+          # every uploaded asset and deploying the recalled feed.
+          gh release edit "$RECALL_TAG" --draft=true \
+            --notes-file "$RUNNER_TEMP/recall-notes.md"
+          gh release view "$RECALL_TAG" --json assets --jq '.assets[].name' \
+            > "$RUNNER_TEMP/recalled-assets.txt"
+          while IFS= read -r asset; do
+            [[ -n "$asset" ]] || continue
+            gh release delete-asset "$RECALL_TAG" "$asset" --yes
+          done < "$RUNNER_TEMP/recalled-assets.txt"
+          gh release view "$RECALL_TAG" --json assets,isDraft | \
+            jq -e '.isDraft == true and (.assets | length) == 0'
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs
+      - name: Deploy recalled feed
+        id: deploy
+        uses: actions/deploy-pages@v5
+      - name: Publish the asset-free recall record
+        run: |
+          # Recheck immediately before publishing: never expose leftover binaries.
+          gh release view "$RECALL_TAG" --json assets | jq -e '(.assets | length) == 0'
+          gh release edit "$RECALL_TAG" --draft=false --latest=false \
+            --title "Commander ${RECALL_TAG#v} (RECALLED — do not install)"
+          gh release view "$RECALL_TAG" --json assets,isDraft | \
+            jq -e '.isDraft == false and (.assets | length) == 0'
+      - name: Restore Latest to the newest available stable release
+        run: |
+          gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100" | \
+            jq 'add' | python3 scripts/release-feed.py latest-stable "$RECALL_TAG" \
+            > "$RUNNER_TEMP/latest-stable-tag.txt"
+          latest_tag=$(cat "$RUNNER_TEMP/latest-stable-tag.txt")
+          if [[ -n "$latest_tag" ]]; then
+            gh release edit "$latest_tag" --latest=true
+            actual_latest=$(gh api "repos/$GH_REPO/releases/latest" --jq .tag_name)
+            [[ "$actual_latest" == "$latest_tag" ]]
+            printf 'GitHub Latest restored to `%s`.\n' "$latest_tag" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '::warning::No published non-recalled stable release is available to mark Latest.'
+            printf 'No eligible stable release exists; no replacement was marked Latest.\n' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Record recall
+        run: |
+          printf 'Recalled `%s`: uploaded assets deleted, Sparkle entries removed, and a non-latest recall record published.\n' "$RECALL_TAG" >> "$GITHUB_STEP_SUMMARY"
+          printf 'The Git tag is retained to prevent reuse of its build number. Already downloaded or installed copies cannot be revoked.\n' >> "$GITHUB_STEP_SUMMARY"
