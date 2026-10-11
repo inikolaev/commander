@@ -87,6 +87,21 @@ jobs:
             --title "Commander ${RECALL_TAG#v} (RECALLED — do not install)"
           gh release view "$RECALL_TAG" --json assets,isDraft | \
             jq -e '.isDraft == false and (.assets | length) == 0'
+      - name: Restore Latest to the newest available stable release
+        run: |
+          gh api --paginate --slurp "repos/$GH_REPO/releases?per_page=100" | \
+            jq 'add' | python3 scripts/release-feed.py latest-stable "$RECALL_TAG" \
+            > "$RUNNER_TEMP/latest-stable-tag.txt"
+          latest_tag=$(cat "$RUNNER_TEMP/latest-stable-tag.txt")
+          if [[ -n "$latest_tag" ]]; then
+            gh release edit "$latest_tag" --latest=true
+            actual_latest=$(gh api "repos/$GH_REPO/releases/latest" --jq .tag_name)
+            [[ "$actual_latest" == "$latest_tag" ]]
+            printf 'GitHub Latest restored to `%s`.\n' "$latest_tag" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo '::warning::No published non-recalled stable release is available to mark Latest.'
+            printf 'No eligible stable release exists; no replacement was marked Latest.\n' >> "$GITHUB_STEP_SUMMARY"
+          fi
       - name: Record recall
         run: |
           printf 'Recalled `%s`: uploaded assets deleted, Sparkle entries removed, and a non-latest recall record published.\n' "$RECALL_TAG" >> "$GITHUB_STEP_SUMMARY"

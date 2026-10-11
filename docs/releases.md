@@ -31,6 +31,13 @@ The workflow fetches the live Sparkle feed, removes the specified build's entrie
 for both architectures, temporarily makes the GitHub release a draft to hide its
 downloads, and deletes all uploaded assets. After deploying the updated feed, it
 publishes an asset-free **RECALLED — do not install** record with `latest=false`.
+The workflow then explicitly marks the highest-build published, non-recalled
+stable release as GitHub **Latest** and verifies that selection. Drafts and
+prereleases are excluded. Recalling an older build keeps a newer eligible release
+as Latest; if no eligible release exists, the workflow reports that in its summary
+without marking a replacement. This changes GitHub's Latest link, not the Sparkle
+feed's remaining entries.
+
 The completed recall is a normal published record rather than a draft pinned at
 the top of the release list. GitHub's automatic source archives may still be shown;
 there are no uploaded app binaries, installers, or checksums.

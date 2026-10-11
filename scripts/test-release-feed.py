@@ -65,6 +65,27 @@ class ReleaseFeedTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             feed.notes_context([], 'v2026.10.82')
 
+    def test_latest_skips_recalled_drafts_and_prereleases(self):
+        releases = [
+            {'tag_name': 'v2026.9.79'},
+            {'tag_name': 'v2026.10.80', 'body': None},
+            {'tag_name': 'v2026.10.81', 'body': '<!-- commander-recalled -->'},
+            {'tag_name': 'v2026.10.82'},
+            {'tag_name': 'v2026.10.83', 'draft': True},
+            {'tag_name': 'v2026.10.84', 'prerelease': True},
+            {'tag_name': 'unrelated'},
+        ]
+        self.assertEqual(feed.latest_stable(releases, 'v2026.10.82'), 'v2026.10.80')
+        # Recalling an older build must not demote a newer working release.
+        self.assertEqual(feed.latest_stable(releases, 'v2026.10.81'), 'v2026.10.82')
+
+    def test_latest_without_eligible_release(self):
+        self.assertIsNone(feed.latest_stable([], 'v2026.10.81'))
+        self.assertIsNone(feed.latest_stable([
+            {'tag_name': 'v2026.10.81'},
+            {'tag_name': 'v2026.10.80', 'body': '<!-- commander-recalled -->'},
+        ], 'v2026.10.81'))
+
     def test_invalid_tag_is_rejected(self):
         for tag in ['v2026.10.81;echo bad', '2026.10.81', '../81']:
             with self.assertRaises(ValueError):

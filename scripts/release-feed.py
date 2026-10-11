@@ -43,6 +43,18 @@ def next_build(tags):
     return max(numbers) + 1
 
 
+def latest_stable(releases, excluded_tag):
+    """Restore GitHub Latest without moving backward when recalling an older build."""
+    build_number(excluded_tag)
+    eligible = [r for r in releases if TAG.fullmatch(r.get('tag_name', ''))
+                and r['tag_name'] != excluded_tag
+                and not r.get('draft') and not r.get('prerelease')
+                and '<!-- commander-recalled -->' not in (r.get('body') or '')]
+    if not eligible:
+        return None
+    return max(eligible, key=lambda r: build_number(r['tag_name']))['tag_name']
+
+
 def notes_context(releases, target):
     """Compare with the latest public stable release, never a recalled build."""
     target_number = build_number(target)
@@ -69,10 +81,14 @@ if __name__ == '__main__':
     commands.add_parser('next-build')
     notes = commands.add_parser('notes-context')
     notes.add_argument('target')
+    latest = commands.add_parser('latest-stable')
+    latest.add_argument('excluded_tag')
     args = parser.parse_args()
     if args.command == 'recall':
         print(f'Removed {recall(args.feed, args.tag)} appcast entries for {args.tag}')
     elif args.command == 'next-build':
         print(next_build(json.load(sys.stdin)))
+    elif args.command == 'latest-stable':
+        print(latest_stable(json.load(sys.stdin), args.excluded_tag) or '')
     else:
         print(json.dumps(notes_context(json.load(sys.stdin), args.target)))
