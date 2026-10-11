@@ -40,6 +40,7 @@ jobs:
           swift --version
           # AppKit and Ghostty share process-wide UI state.
           swift test --no-parallel
+          python3 scripts/test-app-swiftc.py
 
 
   smoke-build:

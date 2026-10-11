@@ -55,6 +55,7 @@ jobs:
             LICENSE
             THIRD-PARTY-NOTICES.txt
             scripts/build-app.sh
+            scripts/app-swiftc.py
             scripts/package-app.sh
             scripts/package-dmg.sh
             scripts/prepare-signing.sh
