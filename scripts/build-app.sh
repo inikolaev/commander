@@ -26,6 +26,9 @@ while IFS= read -r accessor; do
         perl -pi -e 's/Bundle\.main\.bundleURL\.appendingPathComponent/Bundle.main.resourceURL!.appendingPathComponent/g' "$accessor"
     fi
 done < <(find "$BIN_DIR" -path '*/DerivedSources/resource_bundle_accessor.swift')
+# SwiftPM can recompile derived sources without invalidating the link step.
+# Remove the previous executable so the resource accessor changes are linked.
+rm -f "$BIN_DIR/Commander"
 swift build "${BUILD_ARGS[@]}"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp Assets/Commander.icns "$APP/Contents/Resources/Commander.icns"
@@ -78,5 +81,9 @@ else
     codesign --force --options runtime --sign - "$SPARKLE/Versions/B/Updater.app"
     codesign --force --options runtime --sign - "$SPARKLE"
     codesign --force --sign - "$APP"
+fi
+# Exercise the actual packaged accessors, rejecting build-directory fallbacks.
+if [[ "$ARCH" == "$(uname -m)" ]]; then
+    "$APP/Contents/MacOS/Commander" --verify-bundled-resources
 fi
 printf 'Built %s for %s\n' "$APP" "$ARCH"
