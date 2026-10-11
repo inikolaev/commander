@@ -16,17 +16,12 @@ fi
 
 BUILD_ARGS=(-c release --arch "$ARCH")
 APP="dist/$ARCH/Commander.app"
+# SwiftPM can regenerate accessors during planning. Patch only at the compiler
+# boundary, after planning, so the compiled code always uses Contents/Resources.
+export COMMANDER_REAL_SWIFTC="$(xcrun --find swiftc)"
+export SWIFT_EXEC="$PWD/scripts/app-swiftc.py"
 swift build "${BUILD_ARGS[@]}"
 BIN_DIR="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)"
-# SwiftPM assumes resource bundles live at the app root, which codesign rejects.
-# Teach its generated accessors to use Contents/Resources, then relink. The
-# original build-directory fallback remains available for command-line runs.
-while IFS= read -r accessor; do
-    if grep -q 'Bundle.main.bundleURL.appendingPathComponent' "$accessor"; then
-        perl -pi -e 's/Bundle\.main\.bundleURL\.appendingPathComponent/Bundle.main.resourceURL!.appendingPathComponent/g' "$accessor"
-    fi
-done < <(find "$BIN_DIR" -path '*/DerivedSources/resource_bundle_accessor.swift')
-swift build "${BUILD_ARGS[@]}"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
 cp Assets/Commander.icns "$APP/Contents/Resources/Commander.icns"
 cp LICENSE "$APP/Contents/Resources/LICENSE"
@@ -78,5 +73,9 @@ else
     codesign --force --options runtime --sign - "$SPARKLE/Versions/B/Updater.app"
     codesign --force --options runtime --sign - "$SPARKLE"
     codesign --force --sign - "$APP"
+fi
+# Exercise the actual packaged accessors, rejecting build-directory fallbacks.
+if [[ "$ARCH" == "$(uname -m)" ]]; then
+    "$APP/Contents/MacOS/Commander" --verify-bundled-resources
 fi
 printf 'Built %s for %s\n' "$APP" "$ARCH"

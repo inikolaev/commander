@@ -36,7 +36,29 @@ public final class ApplicationDelegate: NSObject, NSApplicationDelegate, @precon
         controller.showWindow(nil)
         NSApp.activate(ignoringOtherApps: true)
         controller.start()
-        updaterController.startUpdater()
+        if CommandLine.arguments.contains("--smoke-test") {
+            verifySmokeStartup(controller)
+        } else {
+            updaterController.startUpdater()
+        }
+    }
+
+    /// Exercise normal window/terminal startup and wait for the real shell prompt.
+    private func verifySmokeStartup(_ controller: CommanderWindowController) {
+        let deadline = Date().addingTimeInterval(20)
+        Task { @MainActor in
+            while Date() < deadline {
+                if controller.selectedTab.terminal?.isAtPrompt == true {
+                    controller.selectedTab.closeTerminal()
+                    print("COMMANDER_SMOKE_READY")
+                    exit(0)
+                }
+                try? await Task.sleep(for: .milliseconds(100))
+            }
+            controller.selectedTab.closeTerminal()
+            fputs("Smoke test timed out waiting for shell prompt\n", stderr)
+            exit(1)
+        }
     }
 
     public func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
