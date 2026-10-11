@@ -1,0 +1,77 @@
+name: Recall release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to withdraw, e.g. v2026.10.81'
+        required: true
+        type: string
+      reason:
+        description: 'Reason for recalling the release'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+# Serialize all feed publishers so an older deployment cannot undo a recall.
+concurrency:
+  group: commander-publication
+  cancel-in-progress: false
+
+jobs:
+  recall:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      RECALL_TAG: ${{ inputs.tag }}
+      RECALL_REASON: ${{ inputs.reason }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+          ref: main
+      - name: Prepare recalled feed and release record
+        run: |
+          gh release view "$RECALL_TAG" --json tagName,body > "$RUNNER_TEMP/recalled-release.json"
+          # Fail closed: never replace the live feed with a stale repository copy.
+          curl --fail --silent --show-error --location \
+            -H 'Cache-Control: no-cache' \
+            "https://inikolaev.github.io/commander/appcast.xml?recall=$GITHUB_RUN_ID" \
+            --output docs/appcast.xml
+          python3 scripts/release-feed.py recall docs/appcast.xml "$RECALL_TAG"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          release = json.loads((root / 'recalled-release.json').read_text())
+          assert release['tagName'] == os.environ['RECALL_TAG']
+          reason = os.environ['RECALL_REASON']
+          (root / 'recall-notes.md').write_text(
+              '<!-- commander-recalled -->\nRecalled: ' + reason + '\n\n' + (release['body'] or ''))
+          PY
+      - name: Withdraw public downloads while retaining the tag
+        run: |
+          # Drafts preserve assets and an audit record but stop public downloads.
+          # Re-running this workflow is safe if deployment failed after withdrawal.
+          gh release edit "$RECALL_TAG" --draft=true \
+            --notes-file "$RUNNER_TEMP/recall-notes.md"
+      - uses: actions/configure-pages@v6
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs
+      - name: Deploy recalled feed
+        id: deploy
+        uses: actions/deploy-pages@v5
+      - name: Record recall
+        run: |
+          printf 'Recalled `%s`: public release withdrawn and Sparkle entries removed.\n' "$RECALL_TAG" >> "$GITHUB_STEP_SUMMARY"
+          printf 'The Git tag is retained to prevent reuse of its build number. Already downloaded or installed copies cannot be revoked.\n' >> "$GITHUB_STEP_SUMMARY"

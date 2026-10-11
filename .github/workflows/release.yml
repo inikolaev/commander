@@ -22,8 +22,8 @@ permissions:
   actions: read
 
 concurrency:
-  group: commander-release
-  cancel-in-progress: true
+  group: commander-publication
+  cancel-in-progress: false
 
 jobs:
   changes:
@@ -71,12 +71,10 @@ jobs:
           created_at=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .created_at)
           year=${created_at:0:4}
           month=${created_at:5:2}
-          latest_tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
-          if [[ ! "$latest_tag" =~ ^v[0-9]{4}\.[0-9]{1,2}\.([0-9]+)$ ]]; then
-            echo "Latest release tag has unexpected format: $latest_tag" >&2
-            exit 1
-          fi
-          build_number=$((${BASH_REMATCH[1]} + 1))
+          # Tags survive recalls and release deletion. Never reuse a shipped build.
+          build_number=$(gh api --paginate "repos/$GITHUB_REPOSITORY/tags?per_page=100" \
+            --jq '.[].name' | jq -Rs 'split("\n") | map(select(length > 0))' | \
+            python3 scripts/release-feed.py next-build)
           app_version="$year.$((10#$month)).$build_number"
           echo "app_version=$app_version" >> "$GITHUB_OUTPUT"
           echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
@@ -194,7 +192,7 @@ jobs:
         shell: bash
         run: |
           gh api --paginate "repos/$GITHUB_REPOSITORY/releases?per_page=100" \
-            --jq '.[] | select(.draft == true) | .tag_name' |
+            --jq '.[] | select(.draft == true and ((.body // "") | contains("<!-- commander-recalled -->") | not)) | .tag_name' |
           while IFS= read -r tag; do
             [[ -n "$tag" ]] || continue
             echo "Deleting stale draft release $tag"
@@ -210,7 +208,11 @@ jobs:
       - name: Publish release
         shell: bash
         run: |
-          if gh release view "$RELEASE_TAG" --json isDraft > "$RUNNER_TEMP/release.json"; then
+          if gh release view "$RELEASE_TAG" --json isDraft,body > "$RUNNER_TEMP/release.json"; then
+            if jq -e '(.body // "") | contains("<!-- commander-recalled -->")' "$RUNNER_TEMP/release.json" > /dev/null; then
+              echo "Release $RELEASE_TAG was recalled; refusing to republish it." >&2
+              exit 1
+            fi
             if [[ $(jq -r .isDraft "$RUNNER_TEMP/release.json") == false ]]; then
               echo "Release $RELEASE_TAG already exists and is published; refusing to overwrite or republish it." >&2
               exit 1
