@@ -42,9 +42,49 @@ jobs:
           swift test --no-parallel
 
 
+  smoke-build:
+    runs-on: macos-15
+    timeout-minutes: 20
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Build packaged app
+        run: |
+          bash scripts/build-app.sh
+          ditto -c -k --keepParent "dist/$(uname -m)/Commander.app" "$RUNNER_TEMP/Commander-smoke.zip"
+          cp scripts/smoke-test-app.py "$RUNNER_TEMP/smoke-test-app.py"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: Commander-startup-smoke
+          path: |
+            ${{ runner.temp }}/Commander-smoke.zip
+            ${{ runner.temp }}/smoke-test-app.py
+          retention-days: 3
+
+  smoke-launch:
+    needs: [smoke-build]
+    runs-on: macos-15
+    timeout-minutes: 5
+    steps:
+      # Deliberately no checkout or build cache: only the packaged app is present.
+      - uses: actions/download-artifact@v8
+        with:
+          name: Commander-startup-smoke
+          path: ${{ runner.temp }}/commander-smoke
+      - name: Launch on a fresh runner
+        run: |
+          cd "$RUNNER_TEMP/commander-smoke"
+          ditto -x -k Commander-smoke.zip .
+          codesign --verify --deep --strict Commander.app
+          python3 smoke-test-app.py Commander.app
+
+
   release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [test]
+    needs: [test, smoke-launch]
     permissions:
       actions: read
       contents: write
