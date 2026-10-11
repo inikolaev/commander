@@ -7,10 +7,30 @@ also run **macOS release** manually on `main`.
 ## Version format
 
 Versions use `YYYY.M.build`, for example `2026.10.82`. The date comes from the
-workflow creation time. The build number is one greater than the largest release
-build found in Git tags, including tags belonging to recalled or deleted releases.
-Keep release tags permanently: they reserve build numbers already distributed to
-clients. `CFBundleVersion` and Sparkle's version both contain that build number.
+workflow creation time. Build numbers are allocated from `release-numbers.json`
+on the separate **release-state** branch before any build starts. This ledger is
+independent of GitHub releases, tags, and the Latest flag. Failed builds consume
+a number; rerunning the same GitHub workflow run reuses its reserved number and
+version. Atomic non-force Git ref updates prevent concurrent reservations from
+receiving the same number. The branch's commit history provides an audit trail.
+
+`CFBundleVersion` and Sparkle's version both contain the reserved build number.
+Deleting a release or tag never decrements the ledger. Do not delete or reset the
+`release-state` branch. Keep backups of that branch; if it is unavailable, publishing
+fails closed instead of attempting to reconstruct the counter from release metadata.
+
+Initialize the ledger **once**, after checking the highest number ever shipped or
+reserved (including deleted/recalled releases). For this migration, build 81 is
+already used and the next reservation must be at least 82:
+
+```sh
+python3 scripts/release-number.py --repo inikolaev/commander initialize --last-build 81
+```
+
+Initialization refuses to replace an existing branch. Do not run it to recover a
+deleted ledger: restore the branch from its history/backup instead. The workflow's
+`contents: write` permission must allow ordinary fast-forward updates on this
+branch; no force pushes or changes to `main` are used for numbering.
 
 ## Release notes after a recall
 
@@ -44,7 +64,8 @@ there are no uploaded app binaries, installers, or checksums.
 
 Other feed entries remain intact; if none remain, clients receive a valid empty
 feed. It does not automatically promote an older release in Sparkle. Release
-notes and the Git tag remain for transparency and build-number reservation.
+notes and the Git tag remain for transparency. The independent ledger reserves
+build numbers even if those records are later deleted.
 Uploaded assets are permanently deleted; keep any forensic copies separately.
 
 Recall, release publication, and ordinary Pages deployment share a concurrency

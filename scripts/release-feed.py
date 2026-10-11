@@ -36,13 +36,6 @@ def recall(path, tag):
     return removed
 
 
-def next_build(tags):
-    numbers = [build_number(tag) for tag in tags if TAG.fullmatch(tag)]
-    if not numbers:
-        raise ValueError('No release tags found; refusing to reset the build counter')
-    return max(numbers) + 1
-
-
 def latest_stable(releases, excluded_tag):
     """Restore GitHub Latest without moving backward when recalling an older build."""
     build_number(excluded_tag)
@@ -78,7 +71,6 @@ if __name__ == '__main__':
     withdrawal = commands.add_parser('recall')
     withdrawal.add_argument('feed', type=Path)
     withdrawal.add_argument('tag')
-    commands.add_parser('next-build')
     notes = commands.add_parser('notes-context')
     notes.add_argument('target')
     latest = commands.add_parser('latest-stable')
@@ -86,8 +78,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.command == 'recall':
         print(f'Removed {recall(args.feed, args.tag)} appcast entries for {args.tag}')
-    elif args.command == 'next-build':
-        print(next_build(json.load(sys.stdin)))
     elif args.command == 'latest-stable':
         print(latest_stable(json.load(sys.stdin), args.excluded_tag) or '')
     else:

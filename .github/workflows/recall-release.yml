@@ -105,4 +105,4 @@ jobs:
       - name: Record recall
         run: |
           printf 'Recalled `%s`: uploaded assets deleted, Sparkle entries removed, and a non-latest recall record published.\n' "$RECALL_TAG" >> "$GITHUB_STEP_SUMMARY"
-          printf 'The Git tag is retained to prevent reuse of its build number. Already downloaded or installed copies cannot be revoked.\n' >> "$GITHUB_STEP_SUMMARY"
+          printf 'The release ledger permanently reserves this build number; the Git tag remains for transparency. Already downloaded or installed copies cannot be revoked.\n' >> "$GITHUB_STEP_SUMMARY"

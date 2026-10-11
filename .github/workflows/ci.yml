@@ -41,6 +41,7 @@ jobs:
           # AppKit and Ghostty share process-wide UI state.
           swift test --no-parallel
           python3 scripts/test-release-feed.py
+          python3 scripts/test-release-number.py
 
 
   release:

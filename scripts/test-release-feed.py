@@ -39,11 +39,6 @@ class ReleaseFeedTests(unittest.TestCase):
                 feed.recall(path, 'v2026.10.81')
             self.assertEqual(path.read_text(), '<html/>')
 
-    def test_counter_uses_highest_retained_tag_across_months(self):
-        self.assertEqual(feed.next_build(['v2026.9.80', 'v2026.10.81', 'other', 'v2026.8.79']), 82)
-        with self.assertRaises(ValueError):
-            feed.next_build([])
-
     def test_notes_skip_recalled_drafts_and_prereleases(self):
         releases = [
             {'tag_name': 'v2026.10.80', 'draft': False},

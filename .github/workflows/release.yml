@@ -28,6 +28,9 @@ concurrency:
 jobs:
   changes:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
     outputs:
       release: ${{ steps.release_changes.outputs.release }}
       app_version: ${{ steps.version.outputs.app_version }}
@@ -69,13 +72,11 @@ jobs:
         shell: bash
         run: |
           created_at=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID" --jq .created_at)
-          year=${created_at:0:4}
-          month=${created_at:5:2}
-          # Tags survive recalls and release deletion. Never reuse a shipped build.
-          build_number=$(gh api --paginate "repos/$GITHUB_REPOSITORY/tags?per_page=100" \
-            --jq '.[].name' | jq -Rs 'split("\n") | map(select(length > 0))' | \
-            python3 scripts/release-feed.py next-build)
-          app_version="$year.$((10#$month)).$build_number"
+          python3 scripts/release-number.py reserve \
+            --run-id "$GITHUB_RUN_ID" --created-at "$created_at" \
+            > "$RUNNER_TEMP/release-number.json"
+          build_number=$(jq -r .build "$RUNNER_TEMP/release-number.json")
+          app_version=$(jq -r .version "$RUNNER_TEMP/release-number.json")
           echo "app_version=$app_version" >> "$GITHUB_OUTPUT"
           echo "build_number=$build_number" >> "$GITHUB_OUTPUT"
           echo "tag=v$app_version" >> "$GITHUB_OUTPUT"
