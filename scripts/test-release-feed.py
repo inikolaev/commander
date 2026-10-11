@@ -44,6 +44,27 @@ class ReleaseFeedTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             feed.next_build([])
 
+    def test_notes_skip_recalled_drafts_and_prereleases(self):
+        releases = [
+            {'tag_name': 'v2026.10.80', 'draft': False},
+            {'tag_name': 'v2026.10.81', 'draft': True, 'body': '<!-- commander-recalled -->'},
+            {'tag_name': 'v2026.10.82', 'draft': False, 'body': '<!-- commander-recalled -->'},
+            {'tag_name': 'v2026.10.83', 'prerelease': True},
+            {'tag_name': 'v2026.10.84', 'draft': True},
+            {'tag_name': 'v2026.10.86', 'draft': False},
+        ]
+        self.assertEqual(feed.notes_context(releases, 'v2026.10.85'), {
+            'base': 'v2026.10.80', 'recalled': ['v2026.10.81', 'v2026.10.82']})
+        releases.append({'tag_name': 'v2026.10.85', 'draft': False})
+        self.assertEqual(feed.notes_context(releases, 'v2026.10.86'), {
+            'base': 'v2026.10.85', 'recalled': []})
+
+    def test_notes_after_deleted_release_use_previous_public_release(self):
+        self.assertEqual(feed.notes_context([{'tag_name': 'v2026.10.80'}], 'v2026.10.82'), {
+            'base': 'v2026.10.80', 'recalled': []})
+        with self.assertRaises(ValueError):
+            feed.notes_context([], 'v2026.10.82')
+
     def test_invalid_tag_is_rejected(self):
         for tag in ['v2026.10.81;echo bad', '2026.10.81', '../81']:
             with self.assertRaises(ValueError):

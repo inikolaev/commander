@@ -43,6 +43,23 @@ def next_build(tags):
     return max(numbers) + 1
 
 
+def notes_context(releases, target):
+    """Compare with the latest public stable release, never a recalled build."""
+    target_number = build_number(target)
+    earlier = [r for r in releases if TAG.fullmatch(r.get('tag_name', ''))
+               and build_number(r['tag_name']) < target_number]
+    stable = [r for r in earlier if not r.get('draft') and not r.get('prerelease')
+              and '<!-- commander-recalled -->' not in (r.get('body') or '')]
+    if not stable:
+        raise ValueError('No published stable release found for release-note comparison')
+    base = max(stable, key=lambda r: build_number(r['tag_name']))['tag_name']
+    recalled = sorted({r['tag_name'] for r in earlier
+                       if build_number(r['tag_name']) > build_number(base)
+                       and '<!-- commander-recalled -->' in (r.get('body') or '')},
+                      key=build_number)
+    return {'base': base, 'recalled': recalled}
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest='command', required=True)
@@ -50,8 +67,12 @@ if __name__ == '__main__':
     withdrawal.add_argument('feed', type=Path)
     withdrawal.add_argument('tag')
     commands.add_parser('next-build')
+    notes = commands.add_parser('notes-context')
+    notes.add_argument('target')
     args = parser.parse_args()
     if args.command == 'recall':
         print(f'Removed {recall(args.feed, args.tag)} appcast entries for {args.tag}')
-    else:
+    elif args.command == 'next-build':
         print(next_build(json.load(sys.stdin)))
+    else:
+        print(json.dumps(notes_context(json.load(sys.stdin), args.target)))

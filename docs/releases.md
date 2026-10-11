@@ -12,6 +12,16 @@ build found in Git tags, including tags belonging to recalled or deleted release
 Keep release tags permanently: they reserve build numbers already distributed to
 clients. `CFBundleVersion` and Sparkle's version both contain that build number.
 
+## Release notes after a recall
+
+Generated notes explicitly compare against the highest prior published stable
+release, excluding drafts, prereleases, and releases marked as recalled. For
+example, if build 81 was recalled, build 82 compares with build 80, including both
+the changes introduced in 81 and the fixes in 82. Notes name recalled releases in
+that interval for transparency. The old notes are not copied verbatim: GitHub
+regenerates the combined change list and comparison link. Later releases resume
+comparing against the latest working published release.
+
 ## Recall a broken release
 
 In GitHub Actions, select **Recall release**, choose **Run workflow** on `main`,

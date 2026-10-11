@@ -218,6 +218,10 @@ jobs:
               exit 1
             fi
           else
+            gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/releases?per_page=100" | \
+              jq 'add' | python3 scripts/release-feed.py notes-context "$RELEASE_TAG" \
+              > "$RUNNER_TEMP/notes-context.json"
+            notes_base=$(jq -r .base "$RUNNER_TEMP/notes-context.json")
             cat > "$RUNNER_TEMP/release-notes.md" <<NOTES
           Native macOS builds for Apple silicon (arm64) and Intel (x86_64). Requires macOS 13 or later.
 
@@ -225,8 +229,19 @@ jobs:
 
           Version: $APP_VERSION · Build: $APP_BUILD_NUMBER · Commit: $RELEASE_SHA
           NOTES
+            python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])
+          context = json.loads((root / 'notes-context.json').read_text())
+          with (root / 'release-notes.md').open('a') as notes:
+              notes.write(f"\nChanges since the last available stable release, `{context['base']}`.\n")
+              if context['recalled']:
+                  tags = ', '.join(f'`{tag}`' for tag in context['recalled'])
+                  notes.write(f"\nRecalled releases in this comparison: {tags}. Their changes are included in the comparison below, together with subsequent fixes.\n")
+          PY
             gh release create "$RELEASE_TAG" --target "$RELEASE_SHA" --draft \
-              --title "Commander $APP_VERSION" --generate-notes \
+              --title "Commander $APP_VERSION" --generate-notes --notes-start-tag "$notes_base" \
               --notes-file "$RUNNER_TEMP/release-notes.md"
           fi
           gh release upload "$RELEASE_TAG" \
