@@ -6,6 +6,7 @@ let package = Package(
     platforms: [.macOS(.v13)],
     products: [.executable(name: "Commander", targets: ["Commander"])],
     dependencies: [
+        .package(url: "https://github.com/inikolaev/libarchive-bin.git", exact: "3.8.10-1"),
         .package(url: "https://github.com/Lakr233/libghostty-spm.git", revision: "46a3e8f31efca1007198c7d5f43afa35026aaffb"),
         .package(url: "https://github.com/CleanCocoa/TextBuffer.git", revision: "3dfbfc13fe4e7f898a3b7c3d13d3eb1451eb8386"),
         .package(url: "https://github.com/ChimeHQ/SwiftTreeSitter", exact: "0.25.0"),
@@ -15,7 +16,10 @@ let package = Package(
     ],
     targets: [
         .target(name: "CFileCopy"),
-        .target(name: "FileManagerCore", dependencies: ["CFileCopy"]),
+        .target(name: "ArchiveCore", dependencies: [.product(name: "CLibArchive", package: "libarchive-bin")]),
+        .target(name: "FileManagerCore", dependencies: ["CFileCopy", "ArchiveCore"]),
+        .target(name: "ArchiveTestSupport", path: "Tests/ArchiveTestSupport", resources: [.copy("Fixtures")]),
+        .testTarget(name: "ArchiveCoreTests", dependencies: ["ArchiveCore", "ArchiveTestSupport"]),
         .target(name: "EditorCore", dependencies: [.product(name: "TextBuffer", package: "TextBuffer")]),
         .target(name: "SyntaxCore", dependencies: [
             .product(name: "SwiftTreeSitter", package: "SwiftTreeSitter"),
@@ -37,7 +41,7 @@ let package = Package(
             dependencies: ["CommanderUI"],
             linkerSettings: [.unsafeFlags(["-Xlinker", "-rpath", "-Xlinker", "@executable_path/../Frameworks"])]
         ),
-        .testTarget(name: "FileManagerCoreTests", dependencies: ["FileManagerCore"]),
-        .testTarget(name: "CommanderUITests", dependencies: ["CommanderUI"]),
+        .testTarget(name: "FileManagerCoreTests", dependencies: ["FileManagerCore", "ArchiveTestSupport"]),
+        .testTarget(name: "CommanderUITests", dependencies: ["CommanderUI", "ArchiveTestSupport"]),
     ]
 )

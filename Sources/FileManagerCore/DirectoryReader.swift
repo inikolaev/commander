@@ -39,7 +39,7 @@ public struct FileEntry: Sendable, Equatable {
     public init(url: URL, name: String, isDirectory: Bool, isSymbolicLink: Bool,
                 size: Int64?, modified: Date?, isExecutable: Bool = false, isHidden: Bool = false,
                 cloudStatus: CloudFileStatus = .none, identity: FileIdentity? = nil) {
-        self.selectionURL = url.standardizedFileURL
+        self.selectionURL = url.selectionAddress
         self.identity = identity
         self.cloudStatus = cloudStatus
         self.url = url

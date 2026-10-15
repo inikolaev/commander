@@ -23,6 +23,7 @@ final class TerminalKeyBar: NSView {
 
     private let cornerRadius: CGFloat = 0
 
+    var disabledCommands: Set<Command> = [] { didSet { needsDisplay = true } }
     var shiftPressed = false { didSet { needsDisplay = true } }
     var optionPressed = false { didSet { needsDisplay = true } }
 
@@ -36,7 +37,7 @@ final class TerminalKeyBar: NSView {
 
     var labels: [Int: String] {
         Dictionary(uniqueKeysWithValues: (1...10).compactMap { number in
-            Self.command(number: number, shift: shiftPressed, option: optionPressed).map { (number, $0.label) }
+            Self.command(number: number, shift: shiftPressed, option: optionPressed).flatMap { disabledCommands.contains($0) ? nil : (number, $0.label) }
         })
     }
 
@@ -64,7 +65,7 @@ final class TerminalKeyBar: NSView {
                shift: event.modifierFlags.contains(.shift),
                option: event.modifierFlags.contains(.option)
            ) {
-            onCommand?(command)
+            if !disabledCommands.contains(command) { onCommand?(command) }
         }
     }
 

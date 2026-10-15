@@ -1,5 +1,5 @@
 {
-  "originHash" : "f3591ffda6cb8187e4ed22a0593a6d3463467a4e29989f31265b26d75e622cdb",
+  "originHash" : "a2f1b7f9e5fd0b1efb36c2ba1db83026b0bbbf2de03ce4c871081b230780beab",
   "pins" : [
     {
       "identity" : "displaylink",
@@ -8,6 +8,15 @@
       "state" : {
         "revision" : "41bea2661e04bebcb1c4f15fc0b6197850100fdd",
         "version" : "3.0.1"
+      }
+    },
+    {
+      "identity" : "libarchive-bin",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/inikolaev/libarchive-bin.git",
+      "state" : {
+        "revision" : "f3fc5629b06d0f2bad4853dccb12247f4d537ed1",
+        "version" : "3.8.10-1"
       }
     },
     {
