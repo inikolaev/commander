@@ -6,6 +6,9 @@ public struct FileSystemPath: Hashable, Sendable {
     public init(_ url: URL) { self.url = url.isFileURL ? url.standardizedFileURL : url.standardized }
     public var localURL: URL? { url.isFileURL ? url : nil }
     public var parent: FileSystemPath? {
+        // Foundation versions differ on whether deleting a virtual root's last
+        // component returns "/" or an empty path. Both represent the root.
+        guard !url.path.isEmpty, url.path != "/" else { return nil }
         let parent = FileSystemPath(url.deletingLastPathComponent())
         return parent.url.path == url.path ? nil : parent
     }

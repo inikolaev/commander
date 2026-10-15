@@ -2,6 +2,20 @@ import Foundation
 import Testing
 @testable import FileManagerCore
 
+@Test(arguments: ["archive://session/", "archive://session", "file:///"])
+func filesystemRootsHaveNoParent(address: String) throws {
+    let root = FileSystemPath(try #require(URL(string: address)))
+    #expect(root.parent == nil)
+}
+
+@Test func topLevelVirtualDirectoryReturnsToRoot() throws {
+    let child = FileSystemPath(try #require(URL(string: "archive://session/folder")))
+    let root = try #require(child.parent)
+    #expect(root.url.host == "session")
+    #expect(root.url.path.isEmpty || root.url.path == "/")
+    #expect(root.parent == nil)
+}
+
 @Test func virtualAddressesNeverBecomeLocalPaths() throws {
     let url = try #require(URL(string: "archive://session/a%20b/file"))
     let path = FileSystemPath(url)
