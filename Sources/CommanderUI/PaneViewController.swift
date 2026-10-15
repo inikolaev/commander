@@ -135,14 +135,14 @@ final class PaneViewController: NSViewController {
         load(directory, preferredSelection: preferredSelection, automatic: false)
     }
 
-    private func load(_ directory: URL, preferredSelection: URL? = nil, automatic: Bool) {
+    private func load(_ directory: URL, preferredSelection: URL? = nil, automatic: Bool, session: FileSystemSession? = nil) {
         _ = view
         refreshTask?.cancel()
         refreshTask = nil
         refreshPending = false
         loadTask?.cancel()
         // Register asynchronously; completion requests another snapshot to cover changes during setup.
-        monitor(directory)
+        if directory.isFileURL { monitor(directory) }
         let id = UUID()
         requestID = id
         if !automatic {
@@ -151,24 +151,25 @@ final class PaneViewController: NSViewController {
             status = "Loading…"
             render()
         }
-        let reader = self.reader
+        let session = session ?? (directory.isFileURL
+            ? FileSystemSession(fileSystem: LocalFileSystem(reader: reader), path: FileSystemPath(directory))
+            : state.session.navigating(to: directory))
         let hidden = showHidden
         loadTask = Task { [weak self] in
             let result = await Task.detached(priority: .userInitiated) {
                 Result {
-                    let entries = try reader.entries(at: directory, showHidden: hidden)
-                    let modified = try? directory.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
-                    return (entries, modified)
+                    try session.fileSystem.snapshot(at: session.path, showHidden: hidden)
                 }
             }.value
             guard !Task.isCancelled, let self, self.requestID == id else { return }
             self.loadTask = nil
             self.isLoading = false
             switch result {
-            case .success(let (entries, modified)):
+            case .success(let snapshot):
+                let entries = snapshot.entries
                 // Capture the cursor at completion: the user can move it during a background read.
                 let selection = automatic ? self.state.selectedRow?.url : preferredSelection
-                self.state.replace(directory: directory, entries: entries, preferredSelection: selection, directoryModified: modified)
+                self.state.replace(directory: directory, entries: entries, preferredSelection: selection, directoryModified: snapshot.modified, session: session)
                 self.onDirectoryChanged?()
                 let wasListingStatus = self.status == self.listingStatus
                 self.listingStatus = "\(entries.count) items\(hidden ? " · hidden shown" : "")"
@@ -187,6 +188,10 @@ final class PaneViewController: NSViewController {
                 self.scheduleRefresh()
             }
         }
+    }
+
+    func load(session: FileSystemSession, preferredSelection: URL? = nil) {
+        load(session.path.url, preferredSelection: preferredSelection, automatic: false, session: session)
     }
 
     func restoreListingStatus() { showStatus(listingStatus) }

@@ -372,7 +372,7 @@ final class CommanderTabSession: NSObject {
     @objc func matchDirectory(_ sender: Any?) {
         guard !operationInProgress, !activePane.isLoading else { return }
         let destination = panes[1 - activeIndex]
-        destination.load(activePane.state.directory, preferredSelection: activePane.state.selectedRow?.url)
+        destination.load(session: activePane.state.session, preferredSelection: activePane.state.selectedRow?.url)
     }
 
     func closeViewer() { viewer?.close() }

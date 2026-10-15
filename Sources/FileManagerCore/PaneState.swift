@@ -26,7 +26,8 @@ public enum PaneRow: Sendable, Equatable {
 
 /// Pure navigation state. A failed directory read leaves the current pane intact.
 public struct PaneState: Sendable {
-    public private(set) var directory: URL
+    public private(set) var session: FileSystemSession
+    public var directory: URL { session.path.url }
     public private(set) var directoryModified: Date?
     public private(set) var rows: [PaneRow] = []
     public private(set) var selectedIndex: Int?
@@ -80,7 +81,7 @@ public struct PaneState: Sendable {
     }
 
     public init(directory: URL) {
-        self.directory = directory.standardizedFileURL
+        self.session = FileSystemSession(fileSystem: LocalFileSystem(), path: FileSystemPath(directory))
     }
 
     public var selectedRow: PaneRow? {
@@ -89,8 +90,7 @@ public struct PaneState: Sendable {
     }
 
     public var parent: URL? {
-        let candidate = directory.deletingLastPathComponent().standardizedFileURL
-        return candidate.path == directory.path ? nil : candidate
+        session.path.parent?.url ?? session.exitSelection?.deletingLastPathComponent()
     }
 
     public mutating func select(_ index: Int) {
@@ -98,18 +98,18 @@ public struct PaneState: Sendable {
         selectedIndex = rows.indices.contains(index) ? index : nil
     }
 
-    public mutating func replace(directory: URL, entries: [FileEntry], preferredSelection: URL? = nil, directoryModified: Date? = nil) {
+    public mutating func replace(directory: URL, entries: [FileEntry], preferredSelection: URL? = nil, directoryModified: Date? = nil, session: FileSystemSession? = nil) {
         endRangeSelection()
-        let sameDirectory = self.directory == directory.standardizedFileURL
+        let sameDirectory = self.directory == directory.selectionAddress
         let oldEntries = rows.compactMap { row -> FileEntry? in
             if case .entry(let entry) = row { return entry }
             return nil
         }
-        let byURL = Dictionary(entries.map { ($0.url.standardizedFileURL, $0) }, uniquingKeysWith: { first, _ in first })
+        let byURL = Dictionary(entries.map { ($0.url.selectionAddress, $0) }, uniquingKeysWith: { first, _ in first })
         let byIdentity = Dictionary(grouping: entries, by: \.identity)
         let oldByIdentity = Dictionary(grouping: oldEntries, by: \.identity)
         func matchingURL(for old: FileEntry) -> URL? {
-            let atSamePath = byURL[old.url.standardizedFileURL]
+            let atSamePath = byURL[old.url.selectionAddress]
             if let identity = old.identity {
                 // A path disambiguates unchanged hard links; otherwise only follow an unambiguous identity.
                 if atSamePath?.identity == identity { return atSamePath?.url }
@@ -123,19 +123,19 @@ public struct PaneState: Sendable {
         var selection = preferredSelection
         if sameDirectory {
             if let preferredSelection,
-               let old = oldEntries.first(where: { $0.url.standardizedFileURL == preferredSelection.standardizedFileURL }) {
+               let old = oldEntries.first(where: { $0.url.selectionAddress == preferredSelection.selectionAddress }) {
                 selection = matchingURL(for: old)
             }
             markedURLs = Set(oldEntries.filter { markedURLs.contains($0.selectionURL) }
-                .compactMap { matchingURL(for: $0)?.standardizedFileURL })
+                .compactMap { matchingURL(for: $0)?.selectionAddress })
         } else {
             markedURLs.removeAll()
         }
-        self.directory = directory.standardizedFileURL
+        self.session = session ?? self.session.navigating(to: directory)
         self.directoryModified = directoryModified
         rows = (parent.map { [PaneRow.parent($0)] } ?? []) + entries.map(PaneRow.entry)
         selectedIndex = selection.flatMap { preferred in
-            rows.firstIndex { $0.url.standardizedFileURL == preferred.standardizedFileURL }
+            rows.firstIndex { $0.url.selectionAddress == preferred.selectionAddress }
         } ?? (rows.isEmpty ? nil : 0)
     }
 }
