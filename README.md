@@ -407,3 +407,8 @@ runtime state. Parallel execution can cause asynchronous UI tests to time out.
 The terminal advertises `xterm-ghostty`. Some macOS tools, including the system
 `top`, may not find the bundled terminfo when running with elevated privileges.
 Use `TERM=xterm-256color top` as a compatibility workaround.
+
+Archive browsing: press Enter on a supported local archive to browse its folders
+read-only. Use `..` to return to the containing folder. See
+[archive browsing](docs/archive-browsing.md) for formats, controls, security limits,
+and current limitations.

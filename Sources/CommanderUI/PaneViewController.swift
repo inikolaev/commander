@@ -135,14 +135,18 @@ final class PaneViewController: NSViewController {
         load(directory, preferredSelection: preferredSelection, automatic: false)
     }
 
-    private func load(_ directory: URL, preferredSelection: URL? = nil, automatic: Bool, session: FileSystemSession? = nil) {
+    private func load(_ directory: URL, preferredSelection: URL? = nil, automatic: Bool, session: FileSystemSession? = nil, archiveURL: URL? = nil) {
         _ = view
         refreshTask?.cancel()
         refreshTask = nil
         refreshPending = false
         loadTask?.cancel()
         // Register asynchronously; completion requests another snapshot to cover changes during setup.
-        if directory.isFileURL { monitor(directory) }
+        if directory.isFileURL && archiveURL == nil { monitor(directory) }
+        else {
+            monitorTask?.cancel(); monitorTask = nil
+            directoryMonitor = nil; monitoredDirectory = nil
+        }
         let id = UUID()
         requestID = id
         if !automatic {
@@ -156,23 +160,25 @@ final class PaneViewController: NSViewController {
             : state.session.navigating(to: directory))
         let hidden = showHidden
         loadTask = Task { [weak self] in
-            let result = await Task.detached(priority: .userInitiated) {
+            let worker = Task.detached(priority: .userInitiated) {
                 Result {
-                    try session.fileSystem.snapshot(at: session.path, showHidden: hidden)
+                    let target = try archiveURL.map { try ArchiveFileSystem(url: $0).session } ?? session
+                    return (try target.fileSystem.snapshot(at: target.path, showHidden: hidden), target)
                 }
-            }.value
+            }
+            let result = await withTaskCancellationHandler { await worker.value } onCancel: { worker.cancel() }
             guard !Task.isCancelled, let self, self.requestID == id else { return }
             self.loadTask = nil
             self.isLoading = false
             switch result {
-            case .success(let snapshot):
+            case .success(let (snapshot, target)):
                 let entries = snapshot.entries
                 // Capture the cursor at completion: the user can move it during a background read.
                 let selection = automatic ? self.state.selectedRow?.url : preferredSelection
-                self.state.replace(directory: directory, entries: entries, preferredSelection: selection, directoryModified: snapshot.modified, session: session)
+                self.state.replace(directory: target.path.url, entries: entries, preferredSelection: selection, directoryModified: snapshot.modified, session: target)
                 self.onDirectoryChanged?()
                 let wasListingStatus = self.status == self.listingStatus
-                self.listingStatus = "\(entries.count) items\(hidden ? " · hidden shown" : "")"
+                self.listingStatus = "\(entries.count) items\(hidden ? " · hidden shown" : "")\(target.fileSystem.supportsFileOperations ? "" : " · read-only archive")"
                 if !automatic || wasListingStatus || self.isError {
                     self.status = self.listingStatus
                     self.isError = false
@@ -180,7 +186,7 @@ final class PaneViewController: NSViewController {
             case .failure(let error):
                 self.status = "Cannot open folder: \(error.localizedDescription)"
                 self.isError = true
-                self.monitor(self.state.directory)
+                if self.state.directory.isFileURL { self.monitor(self.state.directory) }
             }
             self.render()
             if self.refreshPending {
@@ -205,16 +211,23 @@ final class PaneViewController: NSViewController {
     func refresh() { load(state.directory, preferredSelection: state.selectedRow?.url) }
     func clearMarks() { state.clearMarks(); render() }
 
+    var canBrowseSelected: Bool {
+        guard let row = state.selectedRow else { return false }
+        return row.isDirectory || (state.directory.isFileURL && ArchiveFileSystem.recognizes(row.url))
+    }
+
     func openSelected() {
         guard !isLoading, let row = state.selectedRow else { return }
         if row.isDirectory {
             if case .parent = row { goToParent() }
             else { load(row.url) }
+        } else if state.directory.isFileURL && ArchiveFileSystem.recognizes(row.url) {
+            load(row.url, automatic: false, archiveURL: row.url)
         }
     }
 
     func goToParent() {
         guard !isLoading, let parent = state.parent else { return }
-        load(parent, preferredSelection: state.directory)
+        load(parent, preferredSelection: state.session.path.parent == nil ? state.session.exitSelection : state.directory)
     }
 }

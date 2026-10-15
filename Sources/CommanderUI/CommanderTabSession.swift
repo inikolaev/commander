@@ -9,8 +9,8 @@ final class CommanderTabSession: NSObject {
     var customTitle: String?
     var color: TabColor?
     var onTitleChanged: (() -> Void)?
-    var title: String { customTitle ?? (activePane.state.directory.path as NSString).abbreviatingWithTildeInPath }
-    var directories: [URL] { panes.map { $0.state.directory } }
+    var title: String { customTitle ?? (activePane.state.session.displayPath as NSString).abbreviatingWithTildeInPath }
+    var directories: [URL] { panes.map { $0.state.session.hostDirectory } }
     var canSwitch: Bool { !isExitPromptVisible && !fileOperationInProgress && window?.attachedSheet == nil }
     func updateModifiers(_ flags: NSEvent.ModifierFlags) {
         shortcuts.shiftPressed = flags.contains(.shift)
@@ -124,6 +124,7 @@ final class CommanderTabSession: NSObject {
         for (index, pane) in panes.enumerated() {
             pane.onDirectoryChanged = { [weak self] in
                 guard let self else { return }
+                self.updateCapabilities()
                 self.onTitleChanged?()
                 if self.activeIndex == index { self.syncTerminalDirectory() }
             }
@@ -163,8 +164,8 @@ final class CommanderTabSession: NSObject {
         case .open:
             guard !operationInProgress, !panes[index].isLoading, let window,
                   let row = panes[index].state.selectedRow else { return }
-            if row.isDirectory { panes[index].openSelected() }
-            else { fileOpenCoordinator.begin(file: row.url, window: window) }
+            if panes[index].canBrowseSelected { panes[index].openSelected() }
+            else if panes[index].state.session.fileSystem.supportsFileOperations { fileOpenCoordinator.begin(file: row.url, window: window) }
         case .parent: panes[index].goToParent()
         case .viewFile: viewSelected()
         case .editFile: editSelected()
@@ -182,7 +183,7 @@ final class CommanderTabSession: NSObject {
     private func ensureTerminal() -> Bool {
         if terminal != nil { return true }
         do {
-            let terminal = try SessionTerminal(directory: activePane.state.directory)
+            let terminal = try SessionTerminal(directory: activePane.state.session.hostDirectory)
             self.terminal = terminal
             terminal.onExit = { [weak self] in self?.closeTerminal() }
             terminal.onOpenSelection = { [weak self] in
@@ -342,11 +343,24 @@ final class CommanderTabSession: NSObject {
     }
 
     private func syncTerminalDirectory(force: Bool = false) {
-        do { try terminal?.changeDirectory(activePane.state.directory, force: force) }
+        updateCapabilities()
+        do { try terminal?.changeDirectory(activePane.state.session.hostDirectory, force: force) }
         catch { activePane.showStatus("Cannot sync terminal directory: \(error.localizedDescription)", isError: true) }
     }
 
+    private func updateCapabilities() {
+        var disabled: Set<TerminalKeyBar.Command> = []
+        if !activePane.state.session.fileSystem.supportsFileOperations {
+            disabled.formUnion([.viewFile, .editFile, .createFile, .createDirectory, .rename, .delete])
+        }
+        if !panes.allSatisfy({ $0.state.session.fileSystem.supportsFileOperations }) {
+            disabled.formUnion([.copy, .move])
+        }
+        shortcuts.disabledCommands = disabled
+    }
+
     private func renameSelected() {
+        guard activePane.state.session.fileSystem.supportsFileOperations else { return }
         guard let window, !operationInProgress, !activePane.isLoading,
               case .entry(let entry) = activePane.state.selectedRow else { return }
         let source = entry.url
@@ -354,6 +368,7 @@ final class CommanderTabSession: NSObject {
         renameCoordinator.begin(source: source, window: window) { [weak self] destination in
             guard let self else { return }
             for pane in self.panes {
+                guard pane.state.directory.isFileURL else { continue }
                 let directory = pane.state.directory.resolvingSymlinksInPath()
                 if entry.isDirectory && !entry.isSymbolicLink &&
                     (directory == canonicalSource || directory.path.hasPrefix(canonicalSource.path + "/")) {
@@ -383,6 +398,7 @@ final class CommanderTabSession: NSObject {
     }
 
     private func createFile() {
+        guard activePane.state.session.fileSystem.supportsFileOperations else { return }
         guard let window, !operationInProgress, !activePane.isLoading else { return }
         let coordinator = FileEditorCoordinator()
         coordinator.onClose = { [weak self] in
@@ -394,6 +410,7 @@ final class CommanderTabSession: NSObject {
     }
 
     private func editSelected() {
+        guard activePane.state.session.fileSystem.supportsFileOperations else { return }
         guard let window, !operationInProgress, !activePane.isLoading,
               case .entry(let entry) = activePane.state.selectedRow, !entry.isDirectory else { return }
         let coordinator = FileEditorCoordinator()
@@ -406,6 +423,7 @@ final class CommanderTabSession: NSObject {
     }
 
     private func viewSelected() {
+        guard activePane.state.session.fileSystem.supportsFileOperations else { return }
         guard let window, !operationInProgress, !activePane.isLoading,
               case .entry(let entry) = activePane.state.selectedRow, !entry.isDirectory else { return }
         let coordinator = FileViewerCoordinator()
@@ -419,6 +437,7 @@ final class CommanderTabSession: NSObject {
     }
 
     private func createDirectory() {
+        guard activePane.state.session.fileSystem.supportsFileOperations else { return }
         let sourcePane = activePane
         guard let window, !operationInProgress, !sourcePane.isLoading else { return }
         let parent = sourcePane.state.directory
@@ -432,6 +451,7 @@ final class CommanderTabSession: NSObject {
     }
 
     private func copySelected() {
+        guard panes.allSatisfy({ $0.state.session.fileSystem.supportsFileOperations }) else { return }
         let sourcePane = activePane
         let destinationPane = panes[1 - activeIndex]
         guard let window, !sourcePane.isLoading, !destinationPane.isLoading,
@@ -456,6 +476,7 @@ final class CommanderTabSession: NSObject {
     }
 
     private func moveSelected() {
+        guard panes.allSatisfy({ $0.state.session.fileSystem.supportsFileOperations }) else { return }
         let sourcePane = activePane
         let destinationPane = panes[1 - activeIndex]
         guard let window, !operationInProgress, !sourcePane.isLoading, !destinationPane.isLoading else { return }
@@ -487,6 +508,7 @@ final class CommanderTabSession: NSObject {
     }
 
     private func deleteSelected() {
+        guard activePane.state.session.fileSystem.supportsFileOperations else { return }
         let sourcePane = activePane
         guard let window, !operationInProgress, !sourcePane.isLoading else { return }
         let entries: [FileEntry]
@@ -511,6 +533,7 @@ final class CommanderTabSession: NSObject {
                 let names = Set(completed.map(\.lastPathComponent))
                 for pane in self.panes {
                     let directory = pane.state.directory
+                    guard directory.isFileURL else { continue }
                     if directory.standardizedFileURL == parent.standardizedFileURL ||
                        directory.resolvingSymlinksInPath() == parent.resolvingSymlinksInPath() {
                         let index = pane.state.selectedIndex ?? 0
@@ -559,14 +582,14 @@ final class CommanderTabSession: NSObject {
         alert.informativeText = "Enter an absolute path, a path relative to this pane, or use ~ for your home folder."
         alert.addButton(withTitle: "Go")
         alert.addButton(withTitle: "Cancel")
-        let field = NSTextField(string: pane.state.directory.path)
+        let field = NSTextField(string: pane.state.session.hostDirectory.path)
         field.frame = NSRect(x: 0, y: 0, width: 440, height: 24)
         alert.accessoryView = field
         alert.window.initialFirstResponder = field
         alert.beginSheetModal(for: window) { response in
             if response == .alertFirstButtonReturn, !field.stringValue.isEmpty {
                 let path = (field.stringValue as NSString).expandingTildeInPath
-                let url = path.hasPrefix("/") ? URL(fileURLWithPath: path) : pane.state.directory.appendingPathComponent(path)
+                let url = path.hasPrefix("/") ? URL(fileURLWithPath: path) : pane.state.session.hostDirectory.appendingPathComponent(path)
                 pane.load(url.standardizedFileURL)
             }
             pane.focus()

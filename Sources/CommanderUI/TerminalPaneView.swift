@@ -69,7 +69,7 @@ final class TerminalPaneView: NSView {
         self.isError = isError
         updateViewport()
         toolTip = isError ? status : nil
-        setAccessibilityValue("\(state.directory.path). \(state.selectedRow?.name ?? "Empty folder"). \(status)")
+        setAccessibilityValue("\(state.session.displayPath). \(state.selectedRow?.name ?? "Empty folder"). \(status)")
         needsDisplay = true
     }
 
@@ -107,7 +107,7 @@ final class TerminalPaneView: NSView {
         separators.line(to: NSPoint(x: bounds.width - 5, y: g.separatorY))
         separators.stroke()
 
-        let path = state.directory.path
+        let path = state.session.displayPath
         let textWidth = (path as NSString).size(withAttributes: [.font: TerminalTheme.font]).width
         // Text layout can discard trailing spaces; use geometric padding instead.
         let titlePadding: CGFloat = 8
