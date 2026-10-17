@@ -1,7 +1,7 @@
 # macOS releases
 
 Every push to `main` runs `.github/workflows/release.yml`. It tests the project,
-builds a release-mode universal executable (arm64 and x86_64), packages
+builds separate Release executables for arm64 and x86_64, packages
 `Commander.app`, verifies its signature and architectures, and publishes a GitHub
 Release with the ZIP and a SHA-256 checksum. You can also run **macOS release**
 manually from GitHub Actions on `main`. Failed tests/builds do not publish a release.
@@ -28,15 +28,21 @@ for a newer push.
 ## Local packaging
 
 ```sh
-APP_VERSION=2026.9.42 APP_BUILD_NUMBER=42 bash scripts/package-app.sh
+CONFIGURATION=release APP_VERSION=2026.9.42 APP_BUILD_NUMBER=42 bash scripts/package-app.sh arm64
 ```
 
-Local builds default to development version `0.1.0`, build `2`. Packaging creates
-`dist/Commander-2026.9.42-macOS-universal.zip` and the matching `.zip.sha256` file.
+Local builds default to Debug, development version `0.1.0`, build `2`.
+Debug uses `io.github.inikolaev.commander.debug`, displays as `Commander [DEBUG]`,
+and disables the updater. `CONFIGURATION=release` selects optimized compilation
+and the production identifier `io.github.inikolaev.commander`; the release workflow
+sets this explicitly. PR previews use Debug. No preference migration or cleanup runs.
+Both configurations write to `dist/<architecture>/Commander.app`.
+The command above creates `dist/Commander-2026.9.42-macOS-arm64.zip`
+and the matching `.zip.sha256` file.
 After downloading both release assets into one directory, verify with:
 
 ```sh
-shasum -a 256 -c Commander-2026.9.42-macOS-universal.zip.sha256
+shasum -a 256 -c Commander-2026.9.42-macOS-arm64.zip.sha256
 ```
 
 ## Runner and signing

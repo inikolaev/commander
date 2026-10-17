@@ -14,12 +14,19 @@ Requires macOS 13+ and a Swift 6.2 or newer toolchain.
 swift run Commander
 ```
 
-To create a standalone, locally ad-hoc signed app:
+To create a standalone, locally ad-hoc signed Debug app:
 
 ```sh
 bash scripts/build-app.sh
-open dist/Commander.app
+open "dist/$(uname -m)/Commander.app"
 ```
+
+Local app builds default to `CONFIGURATION=debug`, with bundle identifier
+`io.github.inikolaev.commander.debug` and display name `Commander [DEBUG]`.
+Debug builds do not check for updates. Use
+`CONFIGURATION=release bash scripts/build-app.sh` for an optimized build with the production identifier
+`io.github.inikolaev.commander`. Published releases explicitly use this configuration.
+Both configurations write to the same `dist/<architecture>/Commander.app` path.
 
 Both panes initially open your home directory.
 
@@ -29,13 +36,14 @@ Both panes initially open your home directory.
 bash scripts/package-app.sh
 ```
 
-This builds both Apple silicon and Intel architectures and creates
-`dist/Commander-0.1.0-macOS-universal.zip`, containing the app and first-launch
+This builds Debug for the current machine's architecture and creates
+`dist/Commander-0.1.0-macOS-<architecture>.zip`, containing the app and first-launch
 instructions. Recipients need macOS 13+, but do not need Xcode or Swift installed.
 The app is ad-hoc signed, not Developer ID signed or notarized. Trusted recipients
 may need System Settings > Privacy & Security > Open Anyway on first launch.
 For normal public distribution, add Developer ID signing and Apple notarization.
-The universal bundle is also available at `dist/universal/Commander.app`.
+Pass `arm64` or `x86_64` to select an architecture. Set `CONFIGURATION=release`
+to package a Release build instead.
 
 ## Controls
 

@@ -12,6 +12,7 @@ public final class ApplicationDelegate: NSObject, NSApplicationDelegate, @precon
 
     public override init() {
         super.init()
+        #if !DEBUG
         // Delay starting Sparkle until the main window exists so scheduled updates can
         // be represented by a quiet title-bar reminder rather than an alert.
         updaterController = SPUStandardUpdaterController(
@@ -19,6 +20,7 @@ public final class ApplicationDelegate: NSObject, NSApplicationDelegate, @precon
             updaterDelegate: nil,
             userDriverDelegate: self
         )
+        #endif
     }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
@@ -39,7 +41,9 @@ public final class ApplicationDelegate: NSObject, NSApplicationDelegate, @precon
         if CommandLine.arguments.contains("--smoke-test") {
             verifySmokeStartup(controller)
         } else {
+            #if !DEBUG
             updaterController.startUpdater()
+            #endif
         }
     }
 
@@ -116,12 +120,14 @@ public final class ApplicationDelegate: NSObject, NSApplicationDelegate, @precon
         let appItem = NSMenuItem()
         let appMenu = NSMenu(title: "Commander")
         appMenu.addItem(withTitle: "About Commander", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        #if !DEBUG
         let checkForUpdates = appMenu.addItem(
             withTitle: "Check for Updates…",
             action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)),
             keyEquivalent: ""
         )
         checkForUpdates.target = updaterController
+        #endif
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Hide Commander", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
         appMenu.addItem(withTitle: "Quit Commander", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")

@@ -5,6 +5,23 @@ cd "$(dirname "$0")/.."
 APP_VERSION="${APP_VERSION:-0.1.0}"
 APP_BUILD_NUMBER="${APP_BUILD_NUMBER:-2}"
 ARCH="${1:-$(uname -m)}"
+CONFIGURATION="${CONFIGURATION:-debug}"
+case "$CONFIGURATION" in
+    debug)
+        BUNDLE_ID="io.github.inikolaev.commander.debug"
+        DISPLAY_NAME="Commander [DEBUG]"
+        AUTOMATIC_UPDATE_CHECKS=false
+        ;;
+    release)
+        BUNDLE_ID="io.github.inikolaev.commander"
+        DISPLAY_NAME="Commander"
+        AUTOMATIC_UPDATE_CHECKS=true
+        ;;
+    *)
+        printf 'CONFIGURATION must be debug or release.\n' >&2
+        exit 2
+        ;;
+esac
 if [[ ! "$APP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || [[ ! "$APP_BUILD_NUMBER" =~ ^[0-9]+$ ]]; then
     printf 'APP_VERSION must contain three integers; APP_BUILD_NUMBER must be an integer.\n' >&2
     exit 2
@@ -14,7 +31,7 @@ if [[ "$ARCH" != arm64 && "$ARCH" != x86_64 ]]; then
     exit 2
 fi
 
-BUILD_ARGS=(-c release --arch "$ARCH")
+BUILD_ARGS=(-c "$CONFIGURATION" --arch "$ARCH")
 APP="dist/$ARCH/Commander.app"
 # SwiftPM can regenerate accessors during planning. Patch only at the compiler
 # boundary, after planning, so the compiled code always uses Contents/Resources.
@@ -43,9 +60,9 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
     <key>CFBundleExecutable</key><string>Commander</string>
-    <key>CFBundleIdentifier</key><string>local.commander.filemanager</string>
-    <key>CFBundleName</key><string>Commander</string>
-    <key>CFBundleDisplayName</key><string>Commander</string>
+    <key>CFBundleIdentifier</key><string>$BUNDLE_ID</string>
+    <key>CFBundleName</key><string>$DISPLAY_NAME</string>
+    <key>CFBundleDisplayName</key><string>$DISPLAY_NAME</string>
     <key>CFBundleIconFile</key><string>Commander.icns</string>
     <key>CFBundlePackageType</key><string>APPL</string>
     <key>CFBundleShortVersionString</key><string>$APP_VERSION</string>
@@ -54,7 +71,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>NSHighResolutionCapable</key><true/>
     <key>SUFeedURL</key><string>https://inikolaev.github.io/commander/appcast.xml</string>
     <key>SUPublicEDKey</key><string>XB/GxXy5jYTCKmNWcaEju+anDChdM3GfowpPI7Xa5FY=</string>
-    <key>SUEnableAutomaticChecks</key><true/>
+    <key>SUEnableAutomaticChecks</key><$AUTOMATIC_UPDATE_CHECKS/>
     <key>SUAllowsAutomaticUpdates</key><false/>
 </dict></plist>
 PLIST
@@ -78,4 +95,4 @@ fi
 if [[ "$ARCH" == "$(uname -m)" ]]; then
     "$APP/Contents/MacOS/Commander" --verify-bundled-resources
 fi
-printf 'Built %s for %s\n' "$APP" "$ARCH"
+printf 'Built %s for %s (%s)\n' "$APP" "$ARCH" "$CONFIGURATION"
