@@ -122,6 +122,7 @@ final class CommanderTabSession: NSObject {
             left.widthAnchor.constraint(equalTo: right.widthAnchor),
         ])
         for (index, pane) in panes.enumerated() {
+            pane.onSelectionChanged = { [weak self] in self?.updateCapabilities() }
             pane.onDirectoryChanged = { [weak self] in
                 guard let self else { return }
                 self.updateCapabilities()
@@ -351,8 +352,10 @@ final class CommanderTabSession: NSObject {
     private func updateCapabilities() {
         var disabled: Set<TerminalKeyBar.Command> = []
         if !activePane.state.session.fileSystem.supportsFileOperations {
-            disabled.formUnion([.viewFile, .editFile, .createFile, .createDirectory, .rename, .delete])
+            disabled.formUnion([.editFile, .createFile, .createDirectory, .rename, .delete])
         }
+        if let row = activePane.state.selectedRow,
+           !activePane.state.session.fileSystem.canViewFile(at: FileSystemPath(row.url)) { disabled.insert(.viewFile) }
         if !panes.allSatisfy({ $0.state.session.fileSystem.supportsFileOperations }) {
             disabled.formUnion([.copy, .move])
         }
@@ -423,9 +426,11 @@ final class CommanderTabSession: NSObject {
     }
 
     private func viewSelected() {
-        guard activePane.state.session.fileSystem.supportsFileOperations else { return }
         guard let window, !operationInProgress, !activePane.isLoading,
               case .entry(let entry) = activePane.state.selectedRow, !entry.isDirectory else { return }
+        let session = activePane.state.session
+        let path = FileSystemPath(entry.url)
+        guard session.fileSystem.canViewFile(at: path) else { return }
         let coordinator = FileViewerCoordinator()
         coordinator.onClose = { [weak self] in
             self?.viewer = nil
@@ -433,7 +438,9 @@ final class CommanderTabSession: NSObject {
             self?.panes.forEach { $0.refresh() }
         }
         viewer = coordinator
-        coordinator.present(url: entry.url, window: window)
+        coordinator.present(url: entry.url, displayPath: session.navigating(to: entry.url).displayPath, window: window) {
+            try await session.fileSystem.openFile(at: path)
+        }
     }
 
     private func createDirectory() {

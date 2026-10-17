@@ -154,7 +154,12 @@ public actor FileViewerDocument {
         var consumedBytes = 0
         var parser = Unicode.UTF8.ForwardParser()
         var iterator = bytes.makeIterator()
+        var nextCancellationCheck = 0
         decoding: while consumedBytes < bytes.count {
+            if consumedBytes >= nextCancellationCheck {
+                try Task.checkCancellation()
+                nextCancellationCheck = consumedBytes + 4096
+            }
             let scalar: Unicode.Scalar
             let byteCount: Int
             switch parser.parseScalar(from: &iterator) {
