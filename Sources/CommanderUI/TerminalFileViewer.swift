@@ -92,8 +92,8 @@ final class TerminalFileViewer: NSView {
         let footer = NSRect(x: 0, y: bounds.height - line, width: bounds.width, height: line)
         TerminalTheme.selection.setFill()
         header.fill()
-        let percent = page.map { $0.fileSize == 0 ? 100 : Int(Double($0.endOffset) / Double($0.fileSize) * 100) }
-        let position = page.map { "Byte \($0.offset.formatted())/\($0.fileSize.formatted())" } ?? "Opening…"
+        let percent = page.flatMap { page in page.fileSize.map { $0 == 0 ? 100 : Int(Double(page.endOffset) / Double($0) * 100) } }
+        let position = page.map { "Byte \($0.offset.formatted())/\($0.fileSize?.formatted() ?? "?")" } ?? "Opening…"
         let encoding = page?.mode == .hex ? "HEX / ASCII" : "UTF-8"
         let status = "\(encoding)   \(position)   Col \(horizontalOffset + 1)   \(percent.map { "\($0)%" } ?? "")"
         let statusWidth = min(bounds.width * 0.76, ceil((status as NSString).size(withAttributes: [.font: TerminalTheme.font]).width))

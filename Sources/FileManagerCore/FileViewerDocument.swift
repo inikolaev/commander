@@ -19,148 +19,132 @@ public struct ViewerPage: Sendable {
     public let lines: [ViewerLine]
     public let offset: Int64
     public let endOffset: Int64
-    public let fileSize: Int64
+    public let fileSize: Int64?
     public let mode: ViewerMode
 }
 
 public enum FileViewerError: LocalizedError {
     case notRegularFile
+    case lineTooLong
     case symbolicLinkUnavailable(path: String, target: String, reason: String)
     public var errorDescription: String? {
         switch self {
         case .notRegularFile: "The viewer can only open regular files."
+        case .lineTooLong: "This line exceeds the 16 MiB text limit. Use wrapped text or hex viewing."
         case let .symbolicLinkUnavailable(path, target, reason):
             "Cannot open symbolic link \(path) → \(target). \(reason)"
         }
     }
 }
 
-/// A UTF-8 text reader with a bounded read cache and no whole-file line index.
+/// A UTF-8 text reader over an asynchronous content source, with no whole-file line index.
 /// Wrapped mode advances in bounded chunks, while unwrapped mode preserves actual
 /// newline-delimited logical lines so disabling wrap never invents visible rows.
 public actor FileViewerDocument {
-    private let descriptor: Int32
+    private let source: any FileContentSource
     private static let blockSize: Int64 = 4096
-    private static let cacheSize = 65_536
-    private var cache: [UInt8] = []
-    private var cacheStart: Int64 = -1
     private var size: Int64 = 0
+    private var sizeKnown = true
     private var top: Int64 = 0
     private var mode: ViewerMode = .text
     private var savedTextTop: Int64 = 0
-    private var modified = timespec()
-    public private(set) var bytesRead: Int64 = 0
+    private var paging = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
 
-    public init(url: URL) throws {
-        let fd = Darwin.open(url.path, O_RDONLY | O_CLOEXEC | O_NONBLOCK)
-        // open resolves relative, absolute, and chained symlinks atomically in the
-        // filesystem; do not normalize their paths before opening.
-        guard fd >= 0 else {
-            let error = Self.posixError()
-            if let target = try? FileManager.default.destinationOfSymbolicLink(atPath: url.path) {
-                throw FileViewerError.symbolicLinkUnavailable(path: url.path, target: target,
-                    reason: error.localizedDescription)
-            }
-            throw error
-        }
-        var info = stat()
-        guard fstat(fd, &info) == 0 else { let error = Self.posixError(); Darwin.close(fd); throw error }
-        guard (info.st_mode & S_IFMT) == S_IFREG else { Darwin.close(fd); throw FileViewerError.notRegularFile }
-        descriptor = fd
-        size = info.st_size
-        modified = info.st_mtimespec
+    public init(url: URL) throws { source = try LocalFileContentSource(url: url) }
+    public init(source: any FileContentSource) { self.source = source }
+
+    private func acquirePage() async {
+        if paging { await withCheckedContinuation { waiters.append($0) } }
+        else { paging = true }
+    }
+    private func releasePage() {
+        if waiters.isEmpty { paging = false }
+        else { waiters.removeFirst().resume() }
     }
 
-    deinit { Darwin.close(descriptor) }
-
-    private static func posixError() -> NSError { NSError(domain: NSPOSIXErrorDomain, code: Int(errno)) }
-
-    private func refreshSize() throws {
-        var info = stat()
-        guard fstat(descriptor, &info) == 0 else { throw Self.posixError() }
-        if info.st_size != size || info.st_mtimespec.tv_sec != modified.tv_sec || info.st_mtimespec.tv_nsec != modified.tv_nsec {
-            cache = []
-            cacheStart = -1
-        }
-        size = info.st_size
-        modified = info.st_mtimespec
+    private func refreshSize() async throws {
+        let metadata = try await source.metadata()
+        sizeKnown = metadata.size != nil
+        size = metadata.size ?? Int64.max
         if top >= size {
-            top = mode == .hex ? (size > 0 ? ((size - 1) / 16) * 16 : 0) : try previousStart(before: size)
+            top = mode == .hex ? (size > 0 ? ((size - 1) / 16) * 16 : 0) : try await previousStart(before: size)
         }
     }
 
-    private func byte(at offset: Int64) throws -> UInt8? {
-        guard offset >= 0, offset < size else { return nil }
-        if cacheStart < 0 || offset < cacheStart || offset >= cacheStart + Int64(cache.count) {
-            let start = (offset / Int64(Self.cacheSize)) * Int64(Self.cacheSize)
-            var buffer = [UInt8](repeating: 0, count: Self.cacheSize)
-            var count: Int
-            repeat {
-                count = buffer.withUnsafeMutableBytes { pread(descriptor, $0.baseAddress, $0.count, off_t(start)) }
-            } while count < 0 && errno == EINTR
-            guard count >= 0 else { throw Self.posixError() }
-            bytesRead += Int64(count)
-            cache = Array(buffer.prefix(count))
-            cacheStart = start
-            // The file may shrink between fstat and pread. An early EOF is safe.
-            if count < Self.cacheSize { size = min(size, start + Int64(count)) }
-        }
-        let index = Int(offset - cacheStart)
-        return cache.indices.contains(index) ? cache[index] : nil
+    /// Only a parsing buffer: source implementations decide what to cache/reuse.
+    private func bytes(at offset: Int64, count: Int) async throws -> [UInt8] {
+        try Task.checkCancellation()
+        guard offset >= 0, offset < size, count > 0 else { return [] }
+        let amount = Int(min(Int64(count), size - offset))
+        let data = try await source.read(at: offset, count: amount)
+        if data.count < amount { size = try await source.length(); sizeKnown = true }
+        return Array(data)
     }
 
-    private func boundary(_ base: Int64) throws -> Int64 {
+    private func byte(at offset: Int64) async throws -> UInt8? {
+        try await bytes(at: offset, count: 1).first
+    }
+
+    private func boundary(_ base: Int64) async throws -> Int64 {
         guard base > 0 else { return 0 }
         var result = min(base, size)
         // Never split a valid UTF-8 scalar or a CRLF pair across artificial rows.
         for _ in 0..<3 {
-            guard let value = try byte(at: result), value & 0xC0 == 0x80 else { break }
+            guard let value = try await byte(at: result), value & 0xC0 == 0x80 else { break }
             result += 1
         }
         // Attach a following LF to this segment, avoiding a spurious empty row.
-        if try byte(at: result) == 10 { result += 1 }
+        if try await byte(at: result) == 10 { result += 1 }
         return min(result, size)
     }
 
-    private func nextBoundary(after offset: Int64) throws -> Int64 {
+    private func nextBoundary(after offset: Int64) async throws -> Int64 {
         var base = (offset / Self.blockSize) * Self.blockSize
-        var candidate = try boundary(base)
-        if candidate <= offset { base += Self.blockSize; candidate = try boundary(base) }
+        var candidate = try await boundary(base)
+        if candidate <= offset { base += Self.blockSize; candidate = try await boundary(base) }
         return candidate
     }
 
-    private func previousStart(before offset: Int64) throws -> Int64 {
+    private func previousStart(before offset: Int64) async throws -> Int64 {
         guard offset > 0 else { return 0 }
         let end = min(offset, size)
         var base = ((end - 1) / Self.blockSize) * Self.blockSize
-        var start = try boundary(base)
-        if start >= end { base = max(0, base - Self.blockSize); start = try boundary(base) }
+        var start = try await boundary(base)
+        if start >= end { base = max(0, base - Self.blockSize); start = try await boundary(base) }
         var cursor = end - 1
-        if try byte(at: cursor) == 10 { cursor -= 1 }
-        while cursor >= start {
-            if try byte(at: cursor) == 10 { return cursor + 1 }
-            cursor -= 1
+        if try await byte(at: cursor) == 10 { cursor -= 1 }
+        if cursor >= start {
+            let chunk = try await bytes(at: start, count: Int(cursor - start + 1))
+            if let newline = chunk.lastIndex(of: 10) { return start + Int64(newline + 1) }
         }
         return start
     }
 
-    private func readRow(at offset: Int64, columns: Int? = nil, includeSourceText: Bool = false) throws
+    private func readRow(at offset: Int64, columns: Int? = nil, includeSourceText: Bool = false) async throws
         -> (text: String, sourceText: String?, contentEnd: Int64, next: Int64) {
         // Wrapped rows never need to read beyond the next bounded chunk because
         // the visible terminal width is far smaller than blockSize. Unwrapped
         // rows, however, must continue until the real newline/EOF.
-        let limit = columns == nil ? size : try nextBoundary(after: offset)
+        let limit = columns == nil ? size : try await nextBoundary(after: offset)
         var cursor = offset
         var bytes: [UInt8] = []
         bytes.reserveCapacity(Int(Self.blockSize) + 4)
-        while cursor < limit, let value = try byte(at: cursor) {
-            cursor += 1
-            if value == 10 { break }
-            bytes.append(value)
+        while cursor < limit {
+            let chunk = try await self.bytes(at: cursor, count: Int(min(4096, limit - cursor)))
+            guard !chunk.isEmpty else { break }
+            if let newline = chunk.firstIndex(of: 10) {
+                guard bytes.count + newline <= 16 * 1024 * 1024 else { throw FileViewerError.lineTooLong }
+                bytes.append(contentsOf: chunk.prefix(newline))
+                cursor += Int64(newline + 1)
+                break
+            }
+            guard bytes.count + chunk.count <= 16 * 1024 * 1024 else { throw FileViewerError.lineTooLong }
+            bytes.append(contentsOf: chunk)
+            cursor += Int64(chunk.count)
         }
         if bytes.last == 13 { bytes.removeLast() }
 
-        let source = String(decoding: bytes, as: UTF8.self)
         let maximum = columns.map { max(1, $0) }
         var display = ""
         display.reserveCapacity(bytes.count)
@@ -168,7 +152,17 @@ public actor FileViewerDocument {
         if includeSourceText { sourceText?.reserveCapacity(bytes.count) }
         var column = 0
         var consumedBytes = 0
-        for scalar in source.unicodeScalars {
+        var parser = Unicode.UTF8.ForwardParser()
+        var iterator = bytes.makeIterator()
+        decoding: while consumedBytes < bytes.count {
+            let scalar: Unicode.Scalar
+            let byteCount: Int
+            switch parser.parseScalar(from: &iterator) {
+            case .valid(let encoded): scalar = Unicode.UTF8.decode(encoded); byteCount = encoded.count
+            case .error(let length): scalar = "�"; byteCount = length
+            case .emptyInput: break decoding
+            }
+
             let rendered: String
             let width: Int
             if scalar == "\t" {
@@ -182,7 +176,7 @@ public actor FileViewerDocument {
             display.append(contentsOf: rendered)
             if includeSourceText { sourceText?.append(contentsOf: String(scalar)) }
             column += width
-            consumedBytes += String(scalar).utf8.count
+            consumedBytes += byteCount
         }
 
         // If wrapping stopped before the artificial/logical row boundary, keep
@@ -192,24 +186,26 @@ public actor FileViewerDocument {
         return (display, sourceText, contentEnd, next)
     }
 
-    private func previousLogicalStart(before offset: Int64) throws -> Int64 {
+    private func previousLogicalStart(before offset: Int64) async throws -> Int64 {
         guard offset > 0 else { return 0 }
         var cursor = min(offset, size) - 1
-        if cursor >= 0, try byte(at: cursor) == 10 { cursor -= 1 }
+        if cursor >= 0, try await byte(at: cursor) == 10 { cursor -= 1 }
         while cursor >= 0 {
-            if try byte(at: cursor) == 10 { return cursor + 1 }
-            cursor -= 1
+            let start = max(0, cursor - 4095)
+            let chunk = try await bytes(at: start, count: Int(cursor - start + 1))
+            if let newline = chunk.lastIndex(of: 10) { return start + Int64(newline + 1) }
+            cursor = start - 1
         }
         return 0
     }
 
-    private func previousDisplayStart(before offset: Int64, columns: Int?) throws -> Int64 {
-        guard let columns else { return try previousLogicalStart(before: offset) }
-        let base = try previousStart(before: offset)
+    private func previousDisplayStart(before offset: Int64, columns: Int?) async throws -> Int64 {
+        guard let columns else { return try await previousLogicalStart(before: offset) }
+        let base = try await previousStart(before: offset)
         var cursor = base
         var previous = base
         while cursor < offset {
-            let next = try readRow(at: cursor, columns: columns).next
+            let next = try await readRow(at: cursor, columns: columns).next
             guard next > cursor else { break }
             if next >= offset { return cursor }
             previous = cursor
@@ -220,9 +216,20 @@ public actor FileViewerDocument {
 
     public func page(_ command: ViewerCommand = .stay, rows requestedRows: Int,
                      mode requestedMode: ViewerMode = .text, wrapColumns: Int? = nil,
-                     includeSourceText: Bool = false) throws -> ViewerPage {
+                     includeSourceText: Bool = false) async throws -> ViewerPage {
+        await acquirePage()
+        let previous = (top, mode, savedTextTop)
+        var succeeded = false
+        defer {
+            if !succeeded { (top, mode, savedTextTop) = previous }
+            releasePage()
+        }
         try Task.checkCancellation()
-        try refreshSize()
+        try await refreshSize()
+        if case .end = command, !sizeKnown {
+            size = try await source.length()
+            sizeKnown = true
+        }
         let count = min(200, max(1, requestedRows))
         if requestedMode != mode {
             if requestedMode == .hex {
@@ -231,23 +238,28 @@ public actor FileViewerDocument {
             } else if top == (savedTextTop / 16) * 16 && savedTextTop < size {
                 top = savedTextTop
             } else {
-                top = try previousStart(before: min(top + 1, size))
+                top = try await previousStart(before: min(top + 1, size))
             }
             mode = requestedMode
         }
-        if mode == .hex { return try hexPage(command, rows: count) }
+        if mode == .hex {
+            let page = try await hexPage(command, rows: count)
+            try Task.checkCancellation()
+            succeeded = true
+            return page
+        }
         let columns = wrapColumns.map { max(1, $0) }
         switch command {
         case .home: top = 0
         case .end:
             top = size
-            for _ in 0..<count { top = try previousDisplayStart(before: top, columns: columns) }
+            for _ in 0..<count { top = try await previousDisplayStart(before: top, columns: columns) }
         case .scroll(let delta):
             for _ in 0..<abs(max(-200, min(200, delta))) {
                 try Task.checkCancellation()
-                if delta < 0 { top = try previousDisplayStart(before: top, columns: columns) }
+                if delta < 0 { top = try await previousDisplayStart(before: top, columns: columns) }
                 else {
-                    let next = try readRow(at: top, columns: columns).next
+                    let next = try await readRow(at: top, columns: columns).next
                     if next > top && next < size { top = next } else { break }
                 }
             }
@@ -258,7 +270,7 @@ public actor FileViewerDocument {
         for _ in 0..<count {
             try Task.checkCancellation()
             guard cursor < size else { break }
-            let row = try readRow(at: cursor, columns: columns, includeSourceText: includeSourceText)
+            let row = try await readRow(at: cursor, columns: columns, includeSourceText: includeSourceText)
             guard row.next > cursor else { break }
             lines.append(ViewerLine(
                 offset: cursor,
@@ -268,9 +280,11 @@ public actor FileViewerDocument {
             ))
             cursor = row.next
         }
-        return ViewerPage(lines: lines, offset: top, endOffset: cursor, fileSize: size, mode: .text)
+        try Task.checkCancellation()
+        succeeded = true
+        return ViewerPage(lines: lines, offset: top, endOffset: cursor, fileSize: sizeKnown ? size : nil, mode: .text)
     }
-    private func hexPage(_ command: ViewerCommand, rows: Int) throws -> ViewerPage {
+    private func hexPage(_ command: ViewerCommand, rows: Int) async throws -> ViewerPage {
         let lastRow = size > 0 ? ((size - 1) / 16) * 16 : 0
         top = min(lastRow, (top / 16) * 16)
         switch command {
@@ -287,12 +301,8 @@ public actor FileViewerDocument {
             try Task.checkCancellation()
             guard cursor < size else { break }
             let start = cursor
-            var bytes: [UInt8] = []
-            for _ in 0..<16 {
-                guard let value = try byte(at: cursor) else { break }
-                bytes.append(value)
-                cursor += 1
-            }
+            let bytes = try await self.bytes(at: cursor, count: 16)
+            cursor += Int64(bytes.count)
             guard !bytes.isEmpty else { break }
             lines.append(ViewerLine(
                 offset: start,
@@ -301,7 +311,11 @@ public actor FileViewerDocument {
                 sourceText: nil
             ))
         }
-        return ViewerPage(lines: lines, offset: top, endOffset: cursor, fileSize: size, mode: .hex)
+        if lines.isEmpty, top > 0, top >= size {
+            top = size > 0 ? ((size - 1) / 16) * 16 : 0
+            return try await hexPage(.stay, rows: rows)
+        }
+        return ViewerPage(lines: lines, offset: top, endOffset: cursor, fileSize: sizeKnown ? size : nil, mode: .hex)
     }
 
 }

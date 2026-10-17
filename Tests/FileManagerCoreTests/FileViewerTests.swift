@@ -11,7 +11,8 @@ private func viewerFixture(_ data: Data) throws -> URL {
 @Test func viewerScrollsBothDirectionsAndHandlesLineEndings() async throws {
     let url = try viewerFixture(Data("one\r\n\ntwo\nlast".utf8))
     defer { try? FileManager.default.removeItem(at: url) }
-    let document = try FileViewerDocument(url: url)
+    let source = try LocalFileContentSource(url: url)
+    let document = FileViewerDocument(source: source)
     #expect(try await document.page(rows: 2).lines.map(\.text) == ["one", ""])
     #expect(try await document.page(.scroll(1), rows: 2).lines.map(\.text) == ["", "two"])
     #expect(try await document.page(.scroll(-1), rows: 1).lines.map(\.text) == ["one"])
@@ -22,7 +23,8 @@ private func viewerFixture(_ data: Data) throws -> URL {
 @Test func viewerWrapsLongLinesAtVisibleWidthAndScrollsByWrappedRows() async throws {
     let url = try viewerFixture(Data("abcdefghij\nnext".utf8))
     defer { try? FileManager.default.removeItem(at: url) }
-    let document = try FileViewerDocument(url: url)
+    let source = try LocalFileContentSource(url: url)
+    let document = FileViewerDocument(source: source)
 
     let first = try await document.page(rows: 3, wrapColumns: 4)
     #expect(first.lines.map(\.text) == ["abcd", "efgh", "ij"])
@@ -41,7 +43,8 @@ private func viewerFixture(_ data: Data) throws -> URL {
     let long = String(repeating: "x", count: 12_000)
     let url = try viewerFixture(Data((long + "\nnext").utf8))
     defer { try? FileManager.default.removeItem(at: url) }
-    let document = try FileViewerDocument(url: url)
+    let source = try LocalFileContentSource(url: url)
+    let document = FileViewerDocument(source: source)
 
     let page = try await document.page(rows: 2)
     #expect(page.lines.count == 2)
@@ -56,7 +59,8 @@ private func viewerFixture(_ data: Data) throws -> URL {
 @Test func viewerOnlyRetainsSourceTextWhenRequested() async throws {
     let url = try viewerFixture(Data("\t\"é\": 1\n".utf8))
     defer { try? FileManager.default.removeItem(at: url) }
-    let document = try FileViewerDocument(url: url)
+    let source = try LocalFileContentSource(url: url)
+    let document = FileViewerDocument(source: source)
 
     #expect(try await document.page(rows: 1).lines.first?.sourceText == nil)
     #expect(try await document.page(rows: 1, includeSourceText: true).lines.first?.sourceText == "\t\"é\": 1")
@@ -67,7 +71,8 @@ private func viewerFixture(_ data: Data) throws -> URL {
         let content = String(repeating: "a", count: 4095) + suffix
         let url = try viewerFixture(Data(content.utf8))
         defer { try? FileManager.default.removeItem(at: url) }
-        let document = try FileViewerDocument(url: url)
+        let source = try LocalFileContentSource(url: url)
+    let document = FileViewerDocument(source: source)
         let first = try await document.page(rows: 1)
         #expect(!first.lines[0].text.contains("�"))
         let second = try await document.page(.scroll(1), rows: 1)
@@ -88,13 +93,14 @@ private func viewerFixture(_ data: Data) throws -> URL {
     try handle.truncate(atOffset: size)
     try handle.seek(toOffset: size - UInt64(tail.count))
     try handle.write(contentsOf: tail)
-    let document = try FileViewerDocument(url: url)
+    let source = try LocalFileContentSource(url: url)
+    let document = FileViewerDocument(source: source)
     let first = try await document.page(rows: 1)
     #expect(first.lines[0].text == "header")
     let end = try await document.page(.end, rows: 4, wrapColumns: 80)
     #expect(end.fileSize == Int64(size))
     #expect(end.lines.last?.text == "last-line")
-    #expect(await document.bytesRead < 1_048_576)
+    #expect(await source.bytesRead < 1_048_576)
     #expect(end.lines.count <= 4)
     #expect(end.lines.allSatisfy { $0.text.utf8.count <= 4096 * 4 })
 }
@@ -102,7 +108,8 @@ private func viewerFixture(_ data: Data) throws -> URL {
 @Test func viewerHandlesEmptyInvalidUTF8AndTruncation() async throws {
     let url = try viewerFixture(Data())
     defer { try? FileManager.default.removeItem(at: url) }
-    let document = try FileViewerDocument(url: url)
+    let source = try LocalFileContentSource(url: url)
+    let document = FileViewerDocument(source: source)
     #expect(try await document.page(.end, rows: 20).lines.isEmpty)
     let handle = try FileHandle(forWritingTo: url)
     defer { try? handle.close() }
@@ -124,7 +131,8 @@ private func viewerFixture(_ data: Data) throws -> URL {
 @Test func viewerDoesNotInventEmptyRowsAtSegmentBoundary() async throws {
     let url = try viewerFixture(Data((String(repeating: "x", count: 4096) + "\nnext").utf8))
     defer { try? FileManager.default.removeItem(at: url) }
-    let document = try FileViewerDocument(url: url)
+    let source = try LocalFileContentSource(url: url)
+    let document = FileViewerDocument(source: source)
     let page = try await document.page(rows: 3)
     #expect(page.lines.count == 2)
     #expect(page.lines.last?.text == "next")
@@ -135,7 +143,8 @@ private func viewerFixture(_ data: Data) throws -> URL {
 @Test func hexShowsAllByteValuesAndAlignsPartialRows() async throws {
     let url = try viewerFixture(Data((0...255).map(UInt8.init)) + Data([0x41]))
     defer { try? FileManager.default.removeItem(at: url) }
-    let document = try FileViewerDocument(url: url)
+    let source = try LocalFileContentSource(url: url)
+    let document = FileViewerDocument(source: source)
     let first = try await document.page(rows: 2, mode: .hex)
     #expect(first.mode == .hex)
     #expect(first.lines[0].text.hasPrefix("0000000000000000: 00 01 02 03 04 05 06 07  08 09 0A 0B 0C 0D 0E 0F"))
@@ -153,7 +162,8 @@ private func viewerFixture(_ data: Data) throws -> URL {
 @Test func viewerTogglesModesNearSamePositionAndRestoresExactTextRow() async throws {
     let url = try viewerFixture(Data("first line\nsecond line\nthird line".utf8))
     defer { try? FileManager.default.removeItem(at: url) }
-    let document = try FileViewerDocument(url: url)
+    let source = try LocalFileContentSource(url: url)
+    let document = FileViewerDocument(source: source)
     let text = try await document.page(.scroll(1), rows: 1)
     #expect(text.offset == 11)
     let hex = try await document.page(rows: 1, mode: .hex)
@@ -169,7 +179,8 @@ private func viewerFixture(_ data: Data) throws -> URL {
 @Test func hexHandlesEmptyTruncatedAndLargeSparseFiles() async throws {
     let url = try viewerFixture(Data())
     defer { try? FileManager.default.removeItem(at: url) }
-    let document = try FileViewerDocument(url: url)
+    let source = try LocalFileContentSource(url: url)
+    let document = FileViewerDocument(source: source)
     #expect(try await document.page(.end, rows: 5, mode: .hex).lines.isEmpty)
     let handle = try FileHandle(forWritingTo: url)
     defer { try? handle.close() }
@@ -178,7 +189,7 @@ private func viewerFixture(_ data: Data) throws -> URL {
     let last = try await document.page(.end, rows: 2, mode: .hex)
     #expect(last.offset == Int64(size - 32))
     #expect(last.lines[0].text.hasPrefix("00000001FFFFFFE0:"))
-    #expect(await document.bytesRead <= 65_536)
+    #expect(await source.bytesRead <= 65_536)
     try handle.truncate(atOffset: 1)
     let truncated = try await document.page(rows: 2, mode: .hex)
     #expect(truncated.offset == 0)
