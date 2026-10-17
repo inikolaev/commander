@@ -14,7 +14,8 @@ selection. A new tab starts in the containing local directories. Home, Locations
 and Go to Folder leave archive browsing; relative Go to Folder paths resolve
 against the containing local folder.
 
-View, edit, new file, mkdir, rename, delete, and opening member files are disabled.
+F3 views regular member files in the built-in text/hex viewer. Edit, new file,
+mkdir, rename, delete, and opening members in external applications remain disabled.
 Copy and move are disabled whenever either participating pane is inside an archive.
 The shortcut bar hides unavailable labels and action handlers enforce the same
 rules. Nested archives and link targets cannot be entered. Terminal commands run
@@ -46,8 +47,9 @@ notices are included in `THIRD-PARTY-NOTICES.txt`, which app packaging already c
 
 ## Security and limits
 
-No member data is extracted or written to disk. Links are displayed but never
-followed. Absolute paths, `..`, Windows drive prefixes, backslashes, and control
+Browsing only indexes metadata. Viewing materializes the selected member in
+memory or a private, immediately unlinked temporary file; no member pathname is
+used as a host output path. Links are displayed but never followed. Absolute paths, `..`, Windows drive prefixes, backslashes, and control
 characters are rejected. Repeated slashes and `.` components normalize away.
 Conflicting file/directory entries and duplicate files are rejected; repeated
 directories are allowed. Names retain case and Unicode spelling.
@@ -71,5 +73,49 @@ Home or Locations can still leave it.
 
 Fixtures exercise ZIP, tar, gzip, bzip2, and xz with the released binary. Other
 recognized formats depend on bundled libarchive support; RAR is not certified by
-this test set. Extraction, archive mutation, nested archives, and member viewing
-are deferred.
+this test set. Named-file extraction, archive mutation, and nested archive
+navigation are deferred.
+
+## File content and F3
+
+`VirtualFileSystem.openFile` returns an asynchronous `FileContentSource`, with
+metadata, offset/count reads, and a possibly expensive `length()` operation.
+A short read means real EOF, never a cache boundary; unknown size is distinct
+from zero. Local and archive source actors perform I/O away from the main actor.
+The source owns reusable caching. `FileViewerDocument` holds chunks only while
+parsing and returns display lines with original byte offsets. Page requests are
+serialized, with navigation rolled back on error or cancellation.
+
+The local source retains the existing 64 KiB read cache and detects changes
+through its open descriptor. The archive source keeps one entry stream, initially
+retains decompressed bytes in memory, and spills after 4 MiB to a private 0600
+unlinked temporary file. Backward reads use retained bytes without repeating
+decompression. Reads prepare bounded chunks as needed; there is no speculative
+prefetching or cache shared between viewers. Closing the last source reference
+releases both archive and spill descriptors, including after cancellation.
+
+The default expanded-content limit is 1 GiB per open member. Large members can
+still be viewed near the beginning; requests requiring materialization beyond
+the limit fail clearly. End may require decompressing the entire member. ZIP
+and unfiltered tar can skip earlier members; sequential/solid compression may
+require processing earlier content. Cancellation is checked between C calls,
+not inside them. The cap bounds retained data, not work needed to locate a member.
+
+The viewer offers Cancel/Escape when a read takes longer than 150 ms. Text and
+hex navigation use the same source API. JSON syntax highlighting retains its
+existing 8 MiB limit and reads a whole eligible file; larger or unknown-size
+files use plain text. Unwrapped text lines are limited to 16 MiB to bound parser
+memory; wrapped text and hex remain available for such files.
+
+Opening content compares the newly opened descriptor against the index's
+fingerprint (device, inode, size, modification and change timestamps), then
+matches the original member metadata. Reads also check for mutation of the
+open archive. A changed archive reports an error and requires leaving/re-entering
+it; pathname replacement after opening does not redirect the retained descriptor.
+These checks detect ordinary filesystem changes, not adversarial modification
+that can evade OS metadata. Payload errors, checksum errors surfaced by libarchive,
+and size mismatches are reported. Declared sizes do not substitute for EOF checks.
+
+Future sources can choose their own buffering and implement the same byte-range
+contract. Prefetching, shared caches, native seek optimizations, and nested archives
+are separate future work; none is required by the viewer.

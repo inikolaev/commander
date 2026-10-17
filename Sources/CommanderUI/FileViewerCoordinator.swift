@@ -20,23 +20,43 @@ final class FileViewerCoordinator {
     private var closed = false
     private var showingError = false
     private let errors = OperationDialogPresenter()
+    private let loading = OperationDialogPresenter()
+    private var loadingTask: Task<Void, Never>?
+    private var loadingVisible = false
     var onClose: (() -> Void)?
 
     func present(url: URL, window: NSWindow) {
+        present(url: url, displayPath: url.path, window: window) {
+            try LocalFileContentSource(url: url)
+        }
+    }
+
+    func present(url: URL, displayPath: String, window: NSWindow,
+                 openSource: @escaping @Sendable () async throws -> any FileContentSource) {
         guard let content = window.contentView else { return }
         self.window = window
         previousResponder = window.firstResponder
+        beginLoading()
         task = Task { [weak self] in
             do {
-                let prepared = try await Task.detached(priority: .userInitiated) {
-                    let document = try FileViewerDocument(url: url)
-                    let syntaxHighlighter = SyntaxRegistry.viewer.highlighter(for: url)
-                    return (document, syntaxHighlighter)
-                }.value
+                let worker = Task.detached(priority: .userInitiated) {
+                    let source = try await openSource()
+                    try Task.checkCancellation()
+                    let document = FileViewerDocument(source: source)
+                    var highlighter: any SyntaxHighlighter = PlainTextSyntaxHighlighter.shared
+                    let registry = SyntaxRegistry.viewer
+                    if registry.supports(url), let size = try await source.metadata().size,
+                       size <= Int64(SyntaxRegistry.defaultMaximumFileSize) {
+                        let data = try await source.read(at: 0, count: Int(size))
+                        highlighter = registry.highlighter(for: url, data: data)
+                    }
+                    return (document, highlighter)
+                }
+                let prepared = try await withTaskCancellationHandler { try await worker.value } onCancel: { worker.cancel() }
                 guard let self, !self.closed, !Task.isCancelled else { return }
                 let (document, syntaxHighlighter) = prepared
                 // Prepare the first page offscreen: failed opens/reads leave the panes visible.
-                let viewer = TerminalFileViewer(path: url.path, syntaxHighlighter: syntaxHighlighter)
+                let viewer = TerminalFileViewer(path: displayPath, syntaxHighlighter: syntaxHighlighter)
                 viewer.frame = content.bounds
                 viewer.wrapsText = self.wrapsText
                 let page = try await document.page(
@@ -52,12 +72,14 @@ final class FileViewerCoordinator {
                 self.document = document
                 self.syntaxHighlighter = syntaxHighlighter
                 viewer.update(page, syntaxProjection: syntaxProjection)
+                self.finishLoading()
                 self.install(viewer, in: content, window: window)
                 self.task = nil
                 self.request(.stay)
             } catch {
                 guard let self, !self.closed, !Task.isCancelled else { return }
                 self.task = nil
+                self.finishLoading()
                 self.showError(error)
             }
         }
@@ -114,9 +136,10 @@ final class FileViewerCoordinator {
         case .stay: reload = true
         }
         guard task == nil, let document else { return }
+        beginLoading()
         task = Task { [weak self] in
             guard let self else { return }
-            defer { self.task = nil }
+            defer { self.task = nil; self.finishLoading() }
             do {
                 while !self.closed && (self.reload || self.pendingJump != nil || self.pendingScroll != 0) {
                     let command: ViewerCommand
@@ -151,7 +174,28 @@ final class FileViewerCoordinator {
         }
     }
 
+    private func beginLoading() {
+        loadingTask?.cancel()
+        loadingTask = Task { [weak self] in
+            do { try await Task.sleep(for: .milliseconds(150)) } catch { return }
+            guard let self, !self.closed, self.task != nil, let window = self.window else { return }
+            let dialog = TerminalOperationDialog(mode: .choice(title: "Reading file",
+                message: "Preparing file contents…", buttons: ["Cancel"]))
+            dialog.onCancel = { [weak self] in self?.close() }
+            dialog.onChoice = { [weak self] _ in self?.close() }
+            self.loadingVisible = true
+            self.loading.present(dialog, window: window)
+        }
+    }
+
+    private func finishLoading() {
+        loadingTask?.cancel(); loadingTask = nil
+        if loadingVisible, let window { loading.dismiss(window: window) }
+        loadingVisible = false
+    }
+
     private func showError(_ error: Error) {
+        finishLoading()
         guard let window else { return }
         showingError = true
         let dialog = TerminalOperationDialog(mode: .error(message: error.localizedDescription, title: "Viewer error"))
@@ -165,6 +209,8 @@ final class FileViewerCoordinator {
     func close() {
         guard !closed else { return }
         closed = true
+        finishLoading()
+        if showingError, let window { errors.dismiss(window: window) }
         task?.cancel()
         task = nil
         document = nil

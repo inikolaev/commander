@@ -24,6 +24,7 @@ final class PaneViewController: NSViewController {
     private var listingStatus = ""
     private var isError = false
     var showHidden = false
+    var onSelectionChanged: (() -> Void)?
     var onDirectoryChanged: (() -> Void)?
     var onAction: ((PaneAction) -> Void)?
 
@@ -124,6 +125,7 @@ final class PaneViewController: NSViewController {
     }
 
     private func render() {
+        onSelectionChanged?()
         let marks = state.markedURLs.count
         let displayStatus = !isError && !isLoading && marks > 0 ? "\(status) · \(marks) selected" : status
         terminalView.update(state: state, status: displayStatus, isError: isError)

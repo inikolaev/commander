@@ -26,11 +26,25 @@ public struct DirectorySnapshot: Sendable {
 public protocol VirtualFileSystem: Sendable {
     var supportsFileOperations: Bool { get }
     func snapshot(at path: FileSystemPath, showHidden: Bool) throws -> DirectorySnapshot
+    func canViewFile(at path: FileSystemPath) -> Bool
+    func openFile(at path: FileSystemPath) async throws -> any FileContentSource
+}
+
+public extension VirtualFileSystem {
+    func canViewFile(at path: FileSystemPath) -> Bool { false }
+    func openFile(at path: FileSystemPath) async throws -> any FileContentSource {
+        throw CocoaError(.fileReadUnsupportedScheme)
+    }
 }
 
 public struct LocalFileSystem: VirtualFileSystem {
     private let reader: any DirectoryReading
     public var supportsFileOperations: Bool { true }
+    public func canViewFile(at path: FileSystemPath) -> Bool { path.localURL != nil }
+    public func openFile(at path: FileSystemPath) async throws -> any FileContentSource {
+        guard let url = path.localURL else { throw CocoaError(.fileReadUnsupportedScheme) }
+        return try LocalFileContentSource(url: url)
+    }
     public init(reader: any DirectoryReading = LocalDirectoryReader()) { self.reader = reader }
     public func snapshot(at path: FileSystemPath, showHidden: Bool) throws -> DirectorySnapshot {
         guard let url = path.localURL else { throw CocoaError(.fileReadUnsupportedScheme) }

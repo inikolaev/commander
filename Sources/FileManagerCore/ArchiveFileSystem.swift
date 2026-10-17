@@ -6,15 +6,21 @@ public struct ArchiveFileSystem: VirtualFileSystem {
     public let archiveURL: URL
     public let root: FileSystemPath
     public var supportsFileOperations: Bool { false }
+    private let fingerprint: ArchiveFingerprint?
+    private let members: [String: ArchiveEntry]
     private let children: [String: [FileEntry]]
 
     public static func recognizes(_ url: URL) -> Bool {
         ["zip", "7z", "tar", "tgz", "tbz", "tbz2", "txz", "gz", "bz2", "xz", "zst", "tzst", "rar", "cpio", "iso", "cab"].contains(url.pathExtension.lowercased())
     }
 
-    public init(url: URL) throws { try self.init(url: url, entries: Archive.entries(at: url)) }
+    public init(url: URL) throws {
+        let snapshot = try Archive.snapshot(at: url)
+        try self.init(url: url, entries: snapshot.entries, fingerprint: snapshot.fingerprint)
+    }
 
-    public init(url: URL, entries: [ArchiveEntry]) throws {
+    public init(url: URL, entries: [ArchiveEntry], fingerprint: ArchiveFingerprint? = nil) throws {
+        self.fingerprint = fingerprint
         guard url.isFileURL else { throw ArchiveError("Archive must be a local file") }
         archiveURL = url.standardizedFileURL
         root = FileSystemPath(URL(string: "archive://\(UUID().uuidString.lowercased())/")!)
@@ -47,6 +53,7 @@ public struct ArchiveFileSystem: VirtualFileSystem {
             nodes[path] = entry
             guard nodes.count <= 200_000 else { throw ArchiveError("Archive directory index is too large") }
         }
+        members = nodes
         var index: [String: [FileEntry]] = ["": []]
         for (path, entry) in nodes {
             let parts = path.split(separator: "/")
@@ -85,6 +92,22 @@ public struct ArchiveFileSystem: VirtualFileSystem {
             throw ArchiveError("Archive directory does not exist")
         }
         return DirectorySnapshot(entries: showHidden ? entries : entries.filter { !$0.isHidden })
+    }
+
+    private func member(at path: FileSystemPath) -> ArchiveEntry? {
+        guard path.url.scheme == root.url.scheme, path.url.host == root.url.host else { return nil }
+        return members[String(path.url.path.dropFirst())]
+    }
+
+    public func canViewFile(at path: FileSystemPath) -> Bool {
+        fingerprint != nil && member(at: path)?.kind == .file
+    }
+
+    public func openFile(at path: FileSystemPath) async throws -> any FileContentSource {
+        guard let fingerprint, let entry = member(at: path), entry.kind == .file else {
+            throw ArchiveError("Only regular archive files can be viewed")
+        }
+        return try ArchiveFileContentSource(url: archiveURL, fingerprint: fingerprint, entry: entry)
     }
 
     public var session: FileSystemSession {

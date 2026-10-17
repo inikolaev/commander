@@ -59,6 +59,19 @@ public struct SyntaxRegistry: Sendable {
         self.languages = languages
     }
 
+    public func supports(_ url: URL) -> Bool {
+        languages.contains { $0.fileExtensions.contains(url.pathExtension.lowercased()) }
+    }
+
+    public func highlighter(for url: URL, data: Data,
+                            maximumFileSize: Int = Self.defaultMaximumFileSize) -> any SyntaxHighlighter {
+        guard data.count <= maximumFileSize,
+              let language = languages.first(where: { $0.fileExtensions.contains(url.pathExtension.lowercased()) }) else {
+            return PlainTextSyntaxHighlighter.shared
+        }
+        return (try? language.makeHighlighter(data)) ?? PlainTextSyntaxHighlighter.shared
+    }
+
     public func highlighter(
         for url: URL,
         maximumFileSize: Int = Self.defaultMaximumFileSize

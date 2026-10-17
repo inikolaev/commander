@@ -71,14 +71,14 @@ import ArchiveTestSupport
     let file = try #require(panes[0].state.rows.firstIndex { $0.name == "nested.zip" })
     (panes[0].view as? TerminalPaneView)?.onInput?(.select(file))
     let original = panes[0].state.directory
-    for action: PaneAction in [.open, .viewFile, .editFile, .createFile, .createDirectory, .copy, .move, .rename, .delete] {
+    for action: PaneAction in [.open, .editFile, .createFile, .createDirectory, .copy, .move, .rename, .delete] {
         panes[0].onAction?(action)
         #expect(!tab.fileOperationInProgress)
         #expect(window.attachedSheet == nil)
         #expect(panes[0].state.directory == original)
     }
     let bar = try #require(tab.root.view.subviews.compactMap { $0 as? TerminalKeyBar }.first)
-    #expect(bar.labels[3] == nil)
+    #expect(bar.labels[3] == "View")
     #expect(bar.labels[5] == nil)
     panes[1].onAction?(.activate)
     #expect(bar.labels[3] == "View")
