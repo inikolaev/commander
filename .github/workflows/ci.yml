@@ -123,6 +123,8 @@ jobs:
             swift-preview-${{ runner.os }}-${{ matrix.arch }}-xcode26.2-${{ hashFiles('Package.resolved') }}-
 
       - name: Build preview
+        env:
+          CONFIGURATION: debug
         run: |
           bash scripts/package-app.sh "${{ matrix.arch }}"
           file "dist/${{ matrix.arch }}/Commander.app/Contents/MacOS/Commander"

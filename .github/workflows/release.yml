@@ -139,6 +139,7 @@ jobs:
 
       - name: Build, sign, notarize, and package
         env:
+          CONFIGURATION: release
           NOTARIZE: '1'
         run: |
           bash scripts/package-app.sh "${{ matrix.arch }}"
