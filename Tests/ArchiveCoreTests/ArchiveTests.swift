@@ -33,3 +33,16 @@ func readsReleasedLibraryFormats(name: String) throws {
     #expect(throws: ArchiveError.self) { try Archive.entries(at: URL(fileURLWithPath: "/dev/null")) }
     #expect(throws: ArchiveError.self) { try Archive.entries(at: FileManager.default.temporaryDirectory) }
 }
+
+@Test(arguments: ["tree.zip", "tree.tar", "tree.tar.gz", "tree.tar.bz2", "tree.tar.xz"])
+func streamsReleasedLibraryFormats(name: String) throws {
+    let url = ArchiveFixtures.url(name)
+    let snapshot = try Archive.snapshot(at: url)
+    let entry = try #require(snapshot.entries.first { $0.path == "implicit/deep/hello.txt" })
+    let stream = try ArchiveEntryStream(url: url, fingerprint: snapshot.fingerprint, entry: entry)
+    #expect(try stream.read(maximumCount: 2) == Data("he".utf8))
+    #expect(try stream.read(maximumCount: 2) == Data("ll".utf8))
+    #expect(try stream.read(maximumCount: 2) == Data("o".utf8))
+    #expect(try stream.read(maximumCount: 2).isEmpty)
+    #expect(stream.isAtEnd)
+}

@@ -13,3 +13,8 @@ six-byte file named secret. Payloads in the other valid archives are "hello".
 - unsafe.zip: member ../escape, payload x. It must be rejected by the index.
 - empty.zip: empty ZIP directory.
 - corrupt.zip: plain text "not an archive".
+
+Viewer fixtures (Python zipfile): viewer.zip contains 340,000 bytes of repeating
+"0123456789abcdef\n" in large.txt, a small config.json, and empty.txt.
+corrupt-payload.zip is a stored file.txt whose first payload byte was flipped
+without updating the ZIP CRC, so listing succeeds but content validation fails.
