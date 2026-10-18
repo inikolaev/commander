@@ -28,6 +28,7 @@ chooses colors. Language definitions do not depend on the viewer or AppKit.
 | Bash / shell | `.sh`, `.bash` |
 | HTML / JavaScript / JSX | `.html`, `.htm` / `.js`, `.jsx`, `.mjs`, `.cjs` |
 | TypeScript / TSX | `.ts`, `.mts`, `.cts`, `.tsx` |
+| Yaml | `.yaml`, `.yml` |
 
 Extensions are case-insensitive. Exact filenames are case-sensitive and work
 for both local files and archive members. There is no shebang-based detection.

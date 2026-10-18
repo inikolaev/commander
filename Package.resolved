@@ -1,5 +1,5 @@
 {
-  "originHash" : "ff1e80c94551cc551d4d948a5d588f2a4528dbe700d772f61bd9e56236e12d29",
+  "originHash" : "75096f0e0fc01160bdfa4be529510b31e125f3ebca968cf79e4276bb6705b459",
   "pins" : [
     {
       "identity" : "displaylink",
@@ -140,6 +140,15 @@
       "state" : {
         "revision" : "f975a621f4e7f532fe322e13c4f79495e0a7b2e7",
         "version" : "0.23.2"
+      }
+    },
+    {
+      "identity" : "tree-sitter-yaml",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tree-sitter-grammars/tree-sitter-yaml",
+      "state" : {
+        "revision" : "b733d3f5f5005890f324333dd57e1f0badec5c87",
+        "version" : "0.7.0"
       }
     }
   ],
