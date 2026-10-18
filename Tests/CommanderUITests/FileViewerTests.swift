@@ -293,3 +293,24 @@ private struct TestSyntaxHighlighter: SyntaxHighlighter {
     let hexPage = try await document.page(rows: 2, mode: .hex, includeSourceText: true)
     #expect(ViewerSyntaxProjection.make(page: hexPage, highlighter: highlighter).lines.allSatisfy { $0.isEmpty })
 }
+
+@Test func viewerSyntaxProjectionClipsPythonMultilineStringAcrossWrappedPages() async throws {
+    let source = "\"\"\"hé\nworld\tinside\nend\"\"\""
+    let data = Data(source.utf8)
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".py")
+    try data.write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try FileViewerDocument(url: url)
+    let highlighter = SyntaxRegistry.viewer.highlighter(for: url)
+    #expect(highlighter.isActive)
+    var page = try await document.page(rows: 2, wrapColumns: 6, includeSourceText: true)
+    var seenOffsets = Set<Int64>()
+    while seenOffsets.insert(page.offset).inserted {
+        let projection = ViewerSyntaxProjection.make(page: page, highlighter: highlighter)
+        for (line, spans) in zip(page.lines, projection.lines) {
+            #expect(spans == [ViewerDisplayHighlight(range: 0..<line.text.count, kind: .string)])
+        }
+        page = try await document.page(.scroll(1), rows: 2, wrapColumns: 6, includeSourceText: true)
+    }
+    #expect(seenOffsets.count > 2)
+}

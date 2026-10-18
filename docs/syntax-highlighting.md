@@ -22,6 +22,7 @@ chooses colors. Language definitions do not depend on the viewer or AppKit.
 | Language | Extensions / filenames |
 | --- | --- |
 | JSON | `.json` |
+| Python | `.py`, `.pyi`, `.pyw` |
 
 Extensions are case-insensitive. Exact filenames are case-sensitive and work
 for both local files and archive members. There is no shebang-based detection.
