@@ -14,8 +14,19 @@ chooses colors. Language definitions do not depend on the viewer or AppKit.
   tree objects are local to initialization; the resulting highlighter is immutable.
 - `SyntaxSpanNormalizer` resolves overlaps; `SyntaxSpanIndex` stores the result
   and finds spans intersecting a requested byte range.
-- `JSONSyntaxDefinition` supplies only the grammar, query, capture styles, and
-  registry definition for JSON.
+- Language definitions supply the grammar, query, capture styles, and registry
+  metadata. `codeCaptures` provides common semantic roles for code languages.
+
+## Supported languages
+
+| Language | Extensions / filenames |
+| --- | --- |
+| JSON | `.json` |
+
+Extensions are case-insensitive. Exact filenames are case-sensitive and work
+for both local files and archive members. There is no shebang-based detection.
+Keywords use the constant color, functions the accent color, types the property
+color, and variables the normal text color in both themes. JSON colors are unchanged.
 
 ## Span contract and precedence
 
@@ -35,14 +46,14 @@ indexed lookup takes O(log n + k) for k returned spans.
 2. Create a definition file like `JSONSyntaxDefinition.swift`: supply the grammar,
    query, and a mapping from query capture names to `SyntaxCaptureStyle` values.
    Unmapped captures are ignored and can be used as predicate inputs.
-3. Create a `SyntaxLanguageDefinition` with lowercase file extensions and a
+3. Create a `SyntaxLanguageDefinition` with lowercase file extensions, optional exact filenames, and a
    factory using the shared engine, then register it in `SyntaxRegistry.viewer`.
 4. Add fixtures for token kinds, precedence, predicates, and multiline content.
    Use UTF-8 byte offsets in assertions.
 5. Add a `SyntaxKind` and theme mapping only when a new visual semantic is needed.
 
 The coordinator, projection, and renderer should not need language-specific edits.
-No additional languages are enabled by this refactor.
+
 
 ## Supported queries
 

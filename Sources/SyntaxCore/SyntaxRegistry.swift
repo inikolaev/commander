@@ -3,16 +3,23 @@ import Foundation
 public struct SyntaxLanguageDefinition: Sendable {
     public let id: String
     public let fileExtensions: Set<String>
+    public let fileNames: Set<String>
     fileprivate let makeHighlighter: @Sendable (Data) throws -> any SyntaxHighlighter
 
     public init(
         id: String,
         fileExtensions: Set<String>,
+        fileNames: Set<String> = [],
         makeHighlighter: @escaping @Sendable (Data) throws -> any SyntaxHighlighter
     ) {
         self.id = id
         self.fileExtensions = fileExtensions
+        self.fileNames = fileNames
         self.makeHighlighter = makeHighlighter
+    }
+
+    fileprivate func matches(_ url: URL) -> Bool {
+        fileNames.contains(url.lastPathComponent) || fileExtensions.contains(url.pathExtension.lowercased())
     }
 }
 
@@ -27,13 +34,13 @@ public struct SyntaxRegistry: Sendable {
     }
 
     public func supports(_ url: URL) -> Bool {
-        languages.contains { $0.fileExtensions.contains(url.pathExtension.lowercased()) }
+        languages.contains { $0.matches(url) }
     }
 
     public func highlighter(for url: URL, data: Data,
                             maximumFileSize: Int = Self.defaultMaximumFileSize) -> any SyntaxHighlighter {
         guard data.count <= maximumFileSize,
-              let language = languages.first(where: { $0.fileExtensions.contains(url.pathExtension.lowercased()) }) else {
+              let language = languages.first(where: { $0.matches(url) }) else {
             return PlainTextSyntaxHighlighter.shared
         }
         return (try? language.makeHighlighter(data)) ?? PlainTextSyntaxHighlighter.shared
@@ -43,8 +50,7 @@ public struct SyntaxRegistry: Sendable {
         for url: URL,
         maximumFileSize: Int = Self.defaultMaximumFileSize
     ) -> any SyntaxHighlighter {
-        let ext = url.pathExtension.lowercased()
-        guard let language = languages.first(where: { $0.fileExtensions.contains(ext) }) else {
+        guard let language = languages.first(where: { $0.matches(url) }) else {
             return PlainTextSyntaxHighlighter.shared
         }
 

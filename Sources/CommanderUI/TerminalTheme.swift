@@ -119,6 +119,10 @@ enum TerminalTheme {
         case .number: syntaxNumber
         case .constant: syntaxConstant
         case .comment: syntaxComment
+        case .keyword: syntaxConstant
+        case .function: accent
+        case .type: syntaxProperty
+        case .variable: primaryText
         }
     }
 
