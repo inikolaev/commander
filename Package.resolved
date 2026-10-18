@@ -1,5 +1,5 @@
 {
-  "originHash" : "e470826b485d73d5489afd1e24b6f4e760fa271e727a47e50aa7c80871291ce1",
+  "originHash" : "ff1e80c94551cc551d4d948a5d588f2a4528dbe700d772f61bd9e56236e12d29",
   "pins" : [
     {
       "identity" : "displaylink",
@@ -131,6 +131,15 @@
       "state" : {
         "revision" : "bffb65a8cfe4e46290331dfef0dbf0ef3679de11",
         "version" : "0.23.6"
+      }
+    },
+    {
+      "identity" : "tree-sitter-typescript",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tree-sitter/tree-sitter-typescript",
+      "state" : {
+        "revision" : "f975a621f4e7f532fe322e13c4f79495e0a7b2e7",
+        "version" : "0.23.2"
       }
     }
   ],

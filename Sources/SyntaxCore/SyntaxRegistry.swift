@@ -24,7 +24,7 @@ public struct SyntaxLanguageDefinition: Sendable {
 }
 
 public struct SyntaxRegistry: Sendable {
-    public static let viewer = SyntaxRegistry(languages: [.json, .python, .c, .cpp, .go, .bash, .javascript, .html])
+    public static let viewer = SyntaxRegistry(languages: [.json, .python, .c, .cpp, .go, .bash, .javascript, .html, .typescript, .tsx])
     public static let defaultMaximumFileSize = 8 * 1024 * 1024
 
     private let languages: [SyntaxLanguageDefinition]
