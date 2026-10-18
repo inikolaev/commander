@@ -268,3 +268,28 @@ private struct TestSyntaxHighlighter: SyntaxHighlighter {
     #expect(projection.lines[0].first?.range == 1..<5)
     #expect(projection.lines[0].last?.kind == .number)
 }
+
+@Test func viewerSyntaxProjectionClipsMultilineJSONCommentAcrossWrappedPages() async throws {
+    let source = "/*ab\ncafé\tXYZ and more*/"
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".json")
+    let data = Data(source.utf8)
+    try data.write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try FileViewerDocument(url: url)
+    let highlighter = SyntaxRegistry.viewer.highlighter(for: url, data: data)
+    #expect(highlighter.isActive)
+
+    var page = try await document.page(rows: 2, wrapColumns: 6, includeSourceText: true)
+    var seenOffsets = Set<Int64>()
+    while seenOffsets.insert(page.offset).inserted {
+        let projection = ViewerSyntaxProjection.make(page: page, highlighter: highlighter)
+        #expect(projection.lines.count == page.lines.count)
+        for (line, spans) in zip(page.lines, projection.lines) {
+            #expect(spans == [ViewerDisplayHighlight(range: 0..<line.text.count, kind: .comment)])
+        }
+        page = try await document.page(.scroll(1), rows: 2, wrapColumns: 6, includeSourceText: true)
+    }
+    #expect(seenOffsets.count > 2)
+    let hexPage = try await document.page(rows: 2, mode: .hex, includeSourceText: true)
+    #expect(ViewerSyntaxProjection.make(page: hexPage, highlighter: highlighter).lines.allSatisfy { $0.isEmpty })
+}
