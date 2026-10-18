@@ -15,6 +15,7 @@ let package = Package(
         .package(url: "https://github.com/tree-sitter/tree-sitter-python", exact: "0.23.6"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-c", exact: "0.24.2"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-cpp", exact: "0.23.4"),
+        .package(url: "https://github.com/tree-sitter/tree-sitter-go", exact: "0.25.0"),
         .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0"),
     ],
     targets: [
@@ -28,6 +29,7 @@ let package = Package(
             .product(name: "SwiftTreeSitter", package: "SwiftTreeSitter"),
             .product(name: "TreeSitter", package: "tree-sitter"),
             .product(name: "TreeSitterJSON", package: "tree-sitter-json"),
+            .product(name: "TreeSitterGo", package: "tree-sitter-go"),
             .product(name: "TreeSitterCPP", package: "tree-sitter-cpp"),
             .product(name: "TreeSitterC", package: "tree-sitter-c"),
             .product(name: "TreeSitterPython", package: "tree-sitter-python"),
