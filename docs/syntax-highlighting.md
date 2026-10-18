@@ -35,6 +35,7 @@ chooses colors. Language definitions do not depend on the viewer or AppKit.
 | Swift | `.swift` |
 | Rust | `.rs` |
 | Bazel / Starlark | `.bzl`, `.bazel`, `BUILD`, `WORKSPACE` |
+| CSS | `.css` |
 
 Extensions are case-insensitive. Exact filenames are case-sensitive and work
 for both local files and archive members. There is no shebang-based detection.
