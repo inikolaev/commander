@@ -1,5 +1,5 @@
 {
-  "originHash" : "3705138dedd43b0f3579f140f08d2a28b44ef320fe9d832da0644a3a65a9a26e",
+  "originHash" : "e8aa51c20a039ec059a6cc040601623afca6c250e7428c6e43377bacbed292fb",
   "pins" : [
     {
       "identity" : "displaylink",
@@ -105,6 +105,15 @@
       "state" : {
         "revision" : "5a5ca8551a179998360b4a4ca2c0f366a35acc03",
         "version" : "0.23.2"
+      }
+    },
+    {
+      "identity" : "tree-sitter-java",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tree-sitter/tree-sitter-java",
+      "state" : {
+        "revision" : "94703d5a6bed02b98e438d7cad1136c01a60ba2c",
+        "version" : "0.23.5"
       }
     },
     {
