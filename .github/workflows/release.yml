@@ -66,6 +66,9 @@ jobs:
             scripts/prepare-signing.sh
             scripts/notarize-app.sh
             scripts/notarize-dmg.sh
+            scripts/notarize-artifact.sh
+            scripts/apple-network-retry.sh
+            scripts/sign-app.sh
 
       - name: Determine next release version
         id: version
@@ -106,7 +109,7 @@ jobs:
       matrix:
         arch: [arm64, x86_64]
     runs-on: macos-15
-    timeout-minutes: 60
+    timeout-minutes: 90
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
       GH_TOKEN: ${{ github.token }}
@@ -118,8 +121,9 @@ jobs:
           persist-credentials: false
           ref: ${{ github.sha }}
 
-      - name: Cache Swift release build
-        uses: actions/cache@v6
+      - name: Restore Swift release build
+        id: build-cache
+        uses: actions/cache/restore@v6
         with:
           path: |
             ~/.swiftpm
@@ -137,16 +141,61 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
         run: bash scripts/prepare-signing.sh
 
-      - name: Build, sign, notarize, and package
+      - name: Build app
         env:
           CONFIGURATION: release
-          NOTARIZE: '1'
+          SIGN_APP: '0'
         run: |
-          bash scripts/package-app.sh "${{ matrix.arch }}"
+          bash scripts/build-app.sh "${{ matrix.arch }}"
           file "dist/${{ matrix.arch }}/Commander.app/Contents/MacOS/Commander"
           lipo "dist/${{ matrix.arch }}/Commander.app/Contents/MacOS/Commander" -verify_arch "${{ matrix.arch }}"
-          codesign --verify --deep --strict "dist/${{ matrix.arch }}/Commander.app"
-          bash scripts/package-dmg.sh "${{ matrix.arch }}"
+
+      # Preserve the expensive build even if Apple services fail later.
+      - name: Save Swift release build
+        if: steps.build-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.swiftpm
+            .build
+          key: ${{ steps.build-cache.outputs.cache-primary-key }}
+
+      - name: Sign app
+        run: |
+          bash scripts/sign-app.sh "dist/${{ matrix.arch }}/Commander.app"
+          if [[ "${{ matrix.arch }}" == "$(uname -m)" ]]; then
+            "dist/${{ matrix.arch }}/Commander.app/Contents/MacOS/Commander" --verify-bundled-resources
+          fi
+
+      - name: Archive signed app for recovery
+        run: ditto -c -k --sequesterRsrc --keepParent "dist/${{ matrix.arch }}/Commander.app" "$RUNNER_TEMP/Commander-signed-${{ matrix.arch }}.zip"
+
+      - name: Save signed app for recovery
+        uses: actions/upload-artifact@v7
+        with:
+          name: commander-signed-${{ matrix.arch }}
+          overwrite: true
+          path: ${{ runner.temp }}/Commander-signed-${{ matrix.arch }}.zip
+          retention-days: 3
+          if-no-files-found: error
+
+      - name: Notarize and validate app
+        run: bash scripts/notarize-app.sh "dist/${{ matrix.arch }}/Commander.app"
+
+      - name: Package ZIP
+        env:
+          PACKAGE_ONLY: '1'
+          NOTARIZE: '1'
+        run: bash scripts/package-app.sh "${{ matrix.arch }}"
+
+      - name: Package DMG
+        run: bash scripts/package-dmg.sh "${{ matrix.arch }}"
+
+      - name: Notarize and validate DMG
+        run: bash scripts/notarize-dmg.sh "dist/Commander-$APP_VERSION-macOS-${{ matrix.arch }}.dmg"
+
+      - name: Verify release checksums
+        run: |
           (cd dist && shasum -a 256 -c "Commander-$APP_VERSION-macOS-${{ matrix.arch }}.zip.sha256")
           (cd dist && shasum -a 256 -c "Commander-$APP_VERSION-macOS-${{ matrix.arch }}.dmg.sha256")
 
@@ -173,7 +222,7 @@ jobs:
 
       - uses: actions/upload-artifact@v7
         with:
-          name: commander-${{ matrix.arch }}
+          name: commander-release-${{ matrix.arch }}
           path: upload/
           if-no-files-found: error
           retention-days: 1
@@ -221,7 +270,7 @@ jobs:
 
       - uses: actions/download-artifact@v8
         with:
-          pattern: commander-*
+          pattern: commander-release-*
           path: dist
           merge-multiple: true
 

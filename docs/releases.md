@@ -58,7 +58,7 @@ cross-compilation tools for Intel. The release job uses these repository secrets
 
 The certificate is imported into a temporary keychain and selected by its signing
 identity hash. The workflow signs with Hardened Runtime and a secure timestamp,
-submits the app to Apple, waits up to 40 minutes for acceptance, staples the ticket,
+submits the app to Apple, waits up to three 10-minute attempts for acceptance, staples the ticket,
 and checks both the ticket and Gatekeeper assessment before creating the final ZIP.
 The checksum covers this final stapled archive. Missing credentials, failed signing,
 or unsuccessful notarization block publication. The keychain and exported certificate
@@ -70,3 +70,27 @@ submission remains in Apple's notarization history. A workflow retry submits aga
 Local builds remain ad-hoc signed by default. `SIGNING_IDENTITY` enables Developer ID
 signing; `NOTARIZE=1` additionally requires `NOTARY_KEYCHAIN` with the
 `commander-notary` credential profile. Never commit certificates or credentials.
+
+## Pipeline stages and recovery
+
+Release jobs show separate steps for building, signing, app notarization and
+validation, ZIP packaging, DMG packaging, DMG notarization and validation, and
+checksum verification. `SIGN_APP=0` defers signing in `build-app.sh`;
+`sign-app.sh` signs the existing bundle. `PACKAGE_ONLY=1` makes `package-app.sh`
+package the existing app without rebuilding or resubmitting it. With `NOTARIZE=1`,
+that packaging mode verifies the existing ticket before claiming notarization.
+Default local build and packaging commands keep their previous behavior.
+
+Signing timestamp requests, notarization waits, stapling, and ticket validation
+retry recognized network failures up to three attempts, with 15- and 30-second
+backoffs. Wait retries use the original submission ID. Submissions are not
+retried automatically because an interrupted response may still represent an
+accepted upload. Rejections and permanent signature/ticket errors fail immediately.
+DMG checksums are regenerated after stapling, which changes the image bytes.
+
+The workflow saves its build cache before notarization and retains the signed app
+in a `commander-signed-<architecture>` recovery artifact for three days. These are
+not published release artifacts and may not yet be notarized. They allow manual
+recovery without compiling again. GitHub's rerun button still reruns the job, not
+an individual step; the saved build cache reduces work in that case. Automatic
+network retries run in place and do not restart compilation.

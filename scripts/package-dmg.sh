@@ -22,19 +22,7 @@ ln -s /Applications "$STAGING/Applications"
 hdiutil create -volname "Commander" -srcfolder "$STAGING" -ov -format UDZO "$DMG"
 
 if [[ "${NOTARIZE:-0}" == 1 ]]; then
-    : "${NOTARY_KEYCHAIN:?Notarization credential keychain is required}"
-    result=$(xcrun notarytool submit "$DMG" --keychain-profile commander-notary \
-        --keychain "$NOTARY_KEYCHAIN" --wait --timeout 40m --output-format json)
-    submission=$(jq -er .id <<<"$result")
-    status=$(jq -r .status <<<"$result")
-    printf 'Apple DMG notarization submission: %s\n' "$submission"
-    if [[ "$status" != Accepted ]]; then
-        echo "DMG notarization was not accepted: $status" >&2
-        xcrun notarytool log "$submission" --keychain-profile commander-notary --keychain "$NOTARY_KEYCHAIN" || true
-        exit 1
-    fi
-    xcrun stapler staple "$DMG"
-    xcrun stapler validate "$DMG"
+    bash scripts/notarize-dmg.sh "$DMG"
 fi
 (cd dist && shasum -a 256 "$(basename "$DMG")" > "$(basename "$DMG").sha256")
 printf 'Packaged %s\n' "$DMG"

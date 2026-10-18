@@ -7,10 +7,17 @@ if [[ "$ARCH" != arm64 && "$ARCH" != x86_64 ]]; then
     printf 'Usage: %s [arm64|x86_64]\n' "$0" >&2
     exit 2
 fi
-bash scripts/build-app.sh "$ARCH"
+if [[ "${PACKAGE_ONLY:-0}" != 1 ]]; then
+    bash scripts/build-app.sh "$ARCH"
+fi
 APP="dist/$ARCH/Commander.app"
 if [[ "${NOTARIZE:-0}" == 1 ]]; then
-    bash scripts/notarize-app.sh "$APP"
+    if [[ "${PACKAGE_ONLY:-0}" != 1 ]]; then
+        bash scripts/notarize-app.sh "$APP"
+    fi
+    # Never label an existing app notarized without checking its ticket.
+    source scripts/apple-network-retry.sh
+    retry_apple_network xcrun stapler validate "$APP"
 fi
 VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Contents/Info.plist")
 NAME="Commander-$VERSION"
