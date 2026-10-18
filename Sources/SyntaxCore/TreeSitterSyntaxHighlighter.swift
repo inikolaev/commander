@@ -20,7 +20,7 @@ struct TreeSitterSyntaxHighlighter: SyntaxHighlighter {
     private let index: SyntaxSpanIndex
 
     init(source: Data, definition: TreeSitterSyntaxDefinition, injectionDepth: Int = 0,
-         includedRanges: [SwiftTreeSitter.TSRange]? = nil) throws {
+         includedRanges: [SwiftTreeSitter.TSRange]? = nil, registry: SyntaxRegistry = .viewer) throws {
         if includedRanges?.isEmpty == true {
             index = SyntaxSpanIndex(captures: [])
             return
@@ -56,7 +56,7 @@ struct TreeSitterSyntaxHighlighter: SyntaxHighlighter {
         }
         let composed = TreeSitterInjectionHighlighter.compose(
             captures: captures, source: source, tree: tree, language: definition.language,
-            injections: definition.injections, depth: injectionDepth, includedRanges: includedRanges)
+            injections: definition.injections, depth: injectionDepth, includedRanges: includedRanges, registry: registry)
         index = SyntaxSpanIndex(captures: includedRanges.map {
             SyntaxInjectionRanges.clip(composed, to: $0)
         } ?? composed)

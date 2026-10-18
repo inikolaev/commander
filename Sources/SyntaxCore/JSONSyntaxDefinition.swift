@@ -5,7 +5,7 @@ extension SyntaxLanguageDefinition {
     static let json = SyntaxLanguageDefinition(
         id: "json",
         fileExtensions: ["json"],
-        makeHighlighter: { try TreeSitterSyntaxHighlighter(source: $0, definition: .json) }
+        syntax: { .json }
     )
 }
 

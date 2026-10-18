@@ -4,7 +4,7 @@ import TreeSitterPython
 extension SyntaxLanguageDefinition {
     static let python = SyntaxLanguageDefinition(
         id: "python", fileExtensions: ["py", "pyi", "pyw"],
-        makeHighlighter: { try TreeSitterSyntaxHighlighter(source: $0, definition: .python) }
+        syntax: { .python }
     )
 }
 

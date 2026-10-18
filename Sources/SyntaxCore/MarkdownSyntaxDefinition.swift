@@ -5,7 +5,7 @@ import TreeSitterMarkdownInline
 extension SyntaxLanguageDefinition {
     static let markdown = SyntaxLanguageDefinition(
         id: "markdown", fileExtensions: ["md", "markdown", "mdown", "mkd", "mkdn"],
-        makeHighlighter: { try TreeSitterSyntaxHighlighter(source: $0, definition: .markdown) }
+        syntax: { .markdown }
     )
 }
 
@@ -36,7 +36,7 @@ extension TreeSitterSyntaxDefinition {
                                      language: { _, _ in .markdownInline },
                                      excludingChildTypes: ["block_continuation"]),
             TreeSitterSyntaxInjection(query: "(fenced_code_block (code_fence_content) @injection.content)",
-                                     language: MarkdownCodeFences.language,
+                                     languageAlias: MarkdownCodeFences.languageAlias,
                                      excludingChildTypes: ["block_continuation"], defaultKind: .variable),
             TreeSitterSyntaxInjection(query: "(html_block) @injection.content",
                                      language: { _, _ in .html },

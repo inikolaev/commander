@@ -4,7 +4,8 @@ import TreeSitterBash
 extension SyntaxLanguageDefinition {
     static let bash = SyntaxLanguageDefinition(
         id: "bash", fileExtensions: ["sh", "bash"],
-        makeHighlighter: { try TreeSitterSyntaxHighlighter(source: $0, definition: .bash) }
+        aliases: ["shell"],
+        syntax: { .bash }
     )
 }
 

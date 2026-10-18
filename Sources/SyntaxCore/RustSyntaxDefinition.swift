@@ -4,7 +4,7 @@ import TreeSitterRust
 extension SyntaxLanguageDefinition {
     static let rust = SyntaxLanguageDefinition(
         id: "rust", fileExtensions: ["rs"],
-        makeHighlighter: { try TreeSitterSyntaxHighlighter(source: $0, definition: .rust) }
+        syntax: { .rust }
     )
 }
 

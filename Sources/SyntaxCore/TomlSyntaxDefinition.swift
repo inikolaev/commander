@@ -4,7 +4,7 @@ import TreeSitterTOML
 extension SyntaxLanguageDefinition {
     static let toml = SyntaxLanguageDefinition(
         id: "toml", fileExtensions: ["toml"],
-        makeHighlighter: { try TreeSitterSyntaxHighlighter(source: $0, definition: .toml) }
+        syntax: { .toml }
     )
 }
 

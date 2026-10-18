@@ -4,7 +4,7 @@ import TreeSitterCSS
 extension SyntaxLanguageDefinition {
     static let css = SyntaxLanguageDefinition(
         id: "css", fileExtensions: ["css"],
-        makeHighlighter: { try TreeSitterSyntaxHighlighter(source: $0, definition: .css) }
+        syntax: { .css }
     )
 }
 

@@ -4,7 +4,7 @@ import TreeSitterJavaScript
 extension SyntaxLanguageDefinition {
     static let javascript = SyntaxLanguageDefinition(
         id: "javascript", fileExtensions: ["js", "jsx", "mjs", "cjs"],
-        makeHighlighter: { try TreeSitterSyntaxHighlighter(source: $0, definition: .javascript) }
+        syntax: { .javascript }
     )
 }
 

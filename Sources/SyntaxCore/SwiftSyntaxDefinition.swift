@@ -4,7 +4,7 @@ import TreeSitterSwift
 extension SyntaxLanguageDefinition {
     static let swift = SyntaxLanguageDefinition(
         id: "swift", fileExtensions: ["swift"],
-        makeHighlighter: { try TreeSitterSyntaxHighlighter(source: $0, definition: .swift) }
+        syntax: { .swift }
     )
 }
 

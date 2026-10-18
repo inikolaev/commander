@@ -76,7 +76,8 @@ indexed lookup takes O(log n + k) for k returned spans.
    query, and a mapping from query capture names to `SyntaxCaptureStyle` values.
    Unmapped captures are ignored and can be used as predicate inputs.
 3. Create a `SyntaxLanguageDefinition` with lowercase file extensions, optional exact filenames, and a
-   factory using the shared engine, then register it in `SyntaxRegistry.viewer`.
+   lazy `syntax` factory using the shared engine, then register it in `SyntaxRegistry.viewer`.
+   The ID and extensions also resolve fence labels; put additional names in `aliases`.
 4. Add fixtures for token kinds, precedence, predicates, and multiline content.
    Use UTF-8 byte offsets in assertions.
 5. Add a `SyntaxKind` and theme mapping only when a new visual semantic is needed.
@@ -147,9 +148,13 @@ Markdown fences use the same recursion limit as other injections.
 
 For inline content and nested fenced blocks, injection definitions exclude the
 block grammar's `block_continuation` children. Tree-sitter included ranges skip
-these host prefixes without changing byte offsets. Returned spans are clipped to
+these host prefixes without changing byte offsets. Ancestor ranges are intersected with each child region and its own exclusions
+before nested parsing; returned spans are clipped to
 those ranges, preserving blockquote/list marker colors even when an embedded
-token crosses a line. Fence language aliases are declared in `MarkdownCodeFences`.
+token crosses a line. Language IDs, extensions, and extra aliases live with their definitions in the
+shared registry. `MarkdownCodeFences` only extracts the label. The current registry
+is passed through nested injections, so registering a new grammar also enables
+its fences without changing Markdown or the engine.
 
 Markdown temporarily pins upstream revision `ec1a4f07a20cb5cf8e90653e4a492445e4646154`
 (the unreleased fix in tree-sitter-markdown PR #271). It recognizes closing

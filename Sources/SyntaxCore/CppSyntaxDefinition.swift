@@ -4,7 +4,7 @@ import TreeSitterCPP
 extension SyntaxLanguageDefinition {
     static let cpp = SyntaxLanguageDefinition(
         id: "cpp", fileExtensions: ["cc", "cpp", "cxx", "c++", "hh", "hpp", "hxx", "h++", "ipp", "tpp"],
-        makeHighlighter: { try TreeSitterSyntaxHighlighter(source: $0, definition: .cpp) }
+        syntax: { .cpp }
     )
 }
 

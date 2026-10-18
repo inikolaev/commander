@@ -4,7 +4,7 @@ import TreeSitterJava
 extension SyntaxLanguageDefinition {
     static let java = SyntaxLanguageDefinition(
         id: "java", fileExtensions: ["java"],
-        makeHighlighter: { try TreeSitterSyntaxHighlighter(source: $0, definition: .java) }
+        syntax: { .java }
     )
 }
 

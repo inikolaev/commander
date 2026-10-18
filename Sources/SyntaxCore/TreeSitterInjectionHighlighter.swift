@@ -5,16 +5,35 @@ import SwiftTreeSitter
 /// the host definition, so composition never needs to know about HTML or CSS.
 struct TreeSitterSyntaxInjection: Sendable {
     let query: String
-    let language: @Sendable (Node, Data) -> TreeSitterSyntaxDefinition?
+    let resolveLanguage: @Sendable (Node, Data, SyntaxRegistry) -> TreeSitterSyntaxDefinition?
     var excludingChildTypes: Set<String> = []
     var defaultKind: SyntaxKind? = nil
+
+    init(query: String, language: @escaping @Sendable (Node, Data) -> TreeSitterSyntaxDefinition?,
+         excludingChildTypes: Set<String> = [], defaultKind: SyntaxKind? = nil) {
+        self.query = query
+        self.resolveLanguage = { node, source, _ in language(node, source) }
+        self.excludingChildTypes = excludingChildTypes
+        self.defaultKind = defaultKind
+    }
+
+    init(query: String, languageAlias: @escaping @Sendable (Node, Data) -> String?,
+         excludingChildTypes: Set<String> = [], defaultKind: SyntaxKind? = nil) {
+        self.query = query
+        self.resolveLanguage = { node, source, registry in
+            languageAlias(node, source).flatMap { registry.syntaxDefinition(forAlias: $0) }
+        }
+        self.excludingChildTypes = excludingChildTypes
+        self.defaultKind = defaultKind
+    }
+
 }
 
 enum TreeSitterInjectionHighlighter {
     static let maximumDepth = 8
 
     static func compose(captures: [SyntaxCapture], source: Data, tree: MutableTree, language: Language,
-                        injections: [TreeSitterSyntaxInjection], depth: Int, includedRanges: [TSRange]? = nil) -> [SyntaxCapture] {
+                        injections: [TreeSitterSyntaxInjection], depth: Int, includedRanges: [TSRange]? = nil, registry: SyntaxRegistry = .viewer) -> [SyntaxCapture] {
         guard !injections.isEmpty, depth < maximumDepth else { return captures }
         // Normalize each layer independently. Embedded tokens win over host
         // tokens regardless of the host language's internal capture priorities.
@@ -34,11 +53,11 @@ enum TreeSitterInjectionHighlighter {
                     let range = Int(bytes.lowerBound)..<Int(bytes.upperBound)
                     guard !range.isEmpty, range.upperBound <= source.count,
                           !visited.contains(range),
-                          let definition = injection.language(capture.node, source) else { continue }
+                          let definition = injection.resolveLanguage(capture.node, source, registry) else { continue }
                     let included = SyntaxInjectionRanges.included(in: capture.node, excluding: injection.excludingChildTypes, inherited: includedRanges)
                     guard let child = try? TreeSitterSyntaxHighlighter(
                             source: source.subdata(in: range), definition: definition,
-                            injectionDepth: depth + 1, includedRanges: included) else { continue }
+                            injectionDepth: depth + 1, includedRanges: included, registry: registry) else { continue }
                     visited.insert(range)
                     if let kind = injection.defaultKind {
                         let regions = included?.map { Int($0.bytes.lowerBound)..<Int($0.bytes.upperBound) } ?? [0..<range.count]

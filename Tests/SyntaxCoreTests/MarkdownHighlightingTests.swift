@@ -146,6 +146,33 @@ import Testing
     }
 }
 
+@Test func registeredLanguageMetadataEnablesFencesWithoutMarkdownChanges() throws {
+    let custom = SyntaxLanguageDefinition(id: "novel", fileExtensions: ["nvl"], aliases: ["novel-label"], syntax: { .json })
+    let registry = SyntaxRegistry(languages: [.markdown, custom])
+    for alias in ["novel", "NVL", "NOVEL-LABEL"] {
+        for nested in [false, true] {
+            let fence = "```\(alias)\n{\"answer\":42}\n```"
+            let source = nested ? "````markdown\n\(fence)\n````" : fence
+            let data = Data(source.utf8)
+            let url = URL(fileURLWithPath: "/custom.md")
+            let highlighter = registry.highlighter(for: url, data: data)
+            #expect(highlighter.isActive)
+            let spans = highlighter.highlights(in: 0..<data.count)
+            #expect(spans.contains { $0.kind == .property && String(decoding: data[$0.byteRange], as: UTF8.self) == "\"answer\"" })
+            #expect(spans.contains { $0.kind == .number && String(decoding: data[$0.byteRange], as: UTF8.self) == "42" })
+            // The built-in catalog must not accidentally pick up custom entries.
+            #expect(SyntaxRegistry.viewer.syntaxDefinition(forAlias: alias) == nil)
+        }
+    }
+    // File-backed Markdown must use the same catalog as in-memory archive data.
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".md")
+    let data = Data("```novel\n{\"answer\":42}\n```".utf8)
+    try data.write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+    #expect(registry.highlighter(for: url).highlights(in: 0..<data.count).contains { $0.kind == .number })
+    #expect(registry.syntaxDefinition(forAlias: "python") == nil)
+}
+
 @Test func markdownClosingFencesAtEOFKeepTheirDelimiterStyle() {
     for (language, body) in [("python", "def greet(): pass"), ("html", "<script>const value = 1;</script>"), ("unknown", "plain text")] {
         for delimiter in ["```", "~~~"] {

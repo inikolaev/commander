@@ -4,7 +4,7 @@ import TreeSitterKotlin
 extension SyntaxLanguageDefinition {
     static let kotlin = SyntaxLanguageDefinition(
         id: "kotlin", fileExtensions: ["kt", "kts"],
-        makeHighlighter: { try TreeSitterSyntaxHighlighter(source: $0, definition: .kotlin) }
+        syntax: { .kotlin }
     )
 }
 

@@ -4,7 +4,7 @@ import TreeSitterHTML
 extension SyntaxLanguageDefinition {
     static let html = SyntaxLanguageDefinition(
         id: "html", fileExtensions: ["html", "htm"],
-        makeHighlighter: { try TreeSitterSyntaxHighlighter(source: $0, definition: .html) }
+        syntax: { .html }
     )
 }
 

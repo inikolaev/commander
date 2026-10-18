@@ -4,7 +4,9 @@ public struct SyntaxLanguageDefinition: Sendable {
     public let id: String
     public let fileExtensions: Set<String>
     public let fileNames: Set<String>
-    fileprivate let makeHighlighter: @Sendable (Data) throws -> any SyntaxHighlighter
+    public let aliases: Set<String>
+    fileprivate let makeSyntaxDefinition: (@Sendable () -> TreeSitterSyntaxDefinition)?
+    fileprivate let makeHighlighter: @Sendable (Data, SyntaxRegistry) throws -> any SyntaxHighlighter
 
     public init(
         id: String,
@@ -15,7 +17,23 @@ public struct SyntaxLanguageDefinition: Sendable {
         self.id = id
         self.fileExtensions = fileExtensions
         self.fileNames = fileNames
-        self.makeHighlighter = makeHighlighter
+        self.aliases = []
+        self.makeSyntaxDefinition = nil
+        self.makeHighlighter = { source, _ in try makeHighlighter(source) }
+    }
+
+    /// A single lazy grammar factory serves standalone files and named injections.
+    /// IDs/extensions are aliases automatically; only additional names need listing.
+    init(id: String, fileExtensions: Set<String>, fileNames: Set<String> = [],
+         aliases: Set<String> = [], syntax: @escaping @Sendable () -> TreeSitterSyntaxDefinition) {
+        self.id = id
+        self.fileExtensions = fileExtensions
+        self.fileNames = fileNames
+        self.aliases = Set(aliases.union(fileExtensions).union([id]).map { $0.lowercased() })
+        self.makeSyntaxDefinition = syntax
+        self.makeHighlighter = { source, registry in
+            try TreeSitterSyntaxHighlighter(source: source, definition: syntax(), registry: registry)
+        }
     }
 
     fileprivate func matches(_ url: URL) -> Bool {
@@ -33,6 +51,10 @@ public struct SyntaxRegistry: Sendable {
         self.languages = languages
     }
 
+    func syntaxDefinition(forAlias alias: String) -> TreeSitterSyntaxDefinition? {
+        languages.first { $0.aliases.contains(alias.lowercased()) }?.makeSyntaxDefinition?()
+    }
+
     public func supports(_ url: URL) -> Bool {
         languages.contains { $0.matches(url) }
     }
@@ -43,7 +65,7 @@ public struct SyntaxRegistry: Sendable {
               let language = languages.first(where: { $0.matches(url) }) else {
             return PlainTextSyntaxHighlighter.shared
         }
-        return (try? language.makeHighlighter(data)) ?? PlainTextSyntaxHighlighter.shared
+        return (try? language.makeHighlighter(data, self)) ?? PlainTextSyntaxHighlighter.shared
     }
 
     public func highlighter(
@@ -64,7 +86,7 @@ public struct SyntaxRegistry: Sendable {
             guard data.count <= maximumFileSize else {
                 return PlainTextSyntaxHighlighter.shared
             }
-            return try language.makeHighlighter(data)
+            return try language.makeHighlighter(data, self)
         } catch {
             // Syntax highlighting is optional. File viewing must never fail because
             // language detection, parsing, or query setup failed.

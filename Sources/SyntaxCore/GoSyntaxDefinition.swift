@@ -4,7 +4,8 @@ import TreeSitterGo
 extension SyntaxLanguageDefinition {
     static let go = SyntaxLanguageDefinition(
         id: "go", fileExtensions: ["go"],
-        makeHighlighter: { try TreeSitterSyntaxHighlighter(source: $0, definition: .go) }
+        aliases: ["golang"],
+        syntax: { .go }
     )
 }
 

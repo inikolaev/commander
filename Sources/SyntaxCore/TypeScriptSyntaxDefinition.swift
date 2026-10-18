@@ -5,11 +5,11 @@ import TreeSitterTSX
 extension SyntaxLanguageDefinition {
     static let typescript = SyntaxLanguageDefinition(
         id: "typescript", fileExtensions: ["ts", "mts", "cts"],
-        makeHighlighter: { try TreeSitterSyntaxHighlighter(source: $0, definition: .typescript) }
+        syntax: { .typescript }
     )
     static let tsx = SyntaxLanguageDefinition(
         id: "tsx", fileExtensions: ["tsx"],
-        makeHighlighter: { try TreeSitterSyntaxHighlighter(source: $0, definition: .tsx) }
+        syntax: { .tsx }
     )
 }
 

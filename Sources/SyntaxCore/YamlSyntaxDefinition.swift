@@ -4,7 +4,7 @@ import TreeSitterYAML
 extension SyntaxLanguageDefinition {
     static let yaml = SyntaxLanguageDefinition(
         id: "yaml", fileExtensions: ["yaml", "yml"],
-        makeHighlighter: { try TreeSitterSyntaxHighlighter(source: $0, definition: .yaml) }
+        syntax: { .yaml }
     )
 }
 

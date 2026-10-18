@@ -4,7 +4,7 @@ import TreeSitterStarlark
 extension SyntaxLanguageDefinition {
     static let starlark = SyntaxLanguageDefinition(
         id: "starlark", fileExtensions: ["bzl", "bazel"], fileNames: ["BUILD", "WORKSPACE"],
-        makeHighlighter: { try TreeSitterSyntaxHighlighter(source: $0, definition: .starlark) }
+        syntax: { .starlark }
     )
 }
 
