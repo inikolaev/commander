@@ -26,6 +26,7 @@ chooses colors. Language definitions do not depend on the viewer or AppKit.
 | C / C++ | `.c`, `.h` / `.cc`, `.cpp`, `.cxx`, `.c++`, `.hh`, `.hpp`, `.hxx`, `.h++`, `.ipp`, `.tpp` |
 | Go | `.go` |
 | Bash / shell | `.sh`, `.bash` |
+| HTML / JavaScript / JSX | `.html`, `.htm` / `.js`, `.jsx`, `.mjs`, `.cjs` |
 
 Extensions are case-insensitive. Exact filenames are case-sensitive and work
 for both local files and archive members. There is no shebang-based detection.
