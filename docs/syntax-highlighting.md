@@ -6,7 +6,7 @@ chooses colors. Language definitions do not depend on the viewer or AppKit.
 
 ## Responsibilities
 
-- `SyntaxRegistry` detects supported file extensions, enforces the 8 MiB default
+- `SyntaxRegistry` detects supported file extensions and exact filenames, enforces the 8 MiB default
   size limit, and falls back to plain text on errors. It accepts either a file URL
   or supplied data, including archive-member contents.
 - `TreeSitterSyntaxHighlighter` constructs a parser, evaluates a language's query,
@@ -28,17 +28,28 @@ chooses colors. Language definitions do not depend on the viewer or AppKit.
 | Bash / shell | `.sh`, `.bash` |
 | HTML / JavaScript / JSX | `.html`, `.htm` / `.js`, `.jsx`, `.mjs`, `.cjs` |
 | TypeScript / TSX | `.ts`, `.mts`, `.cts`, `.tsx` |
-| Yaml | `.yaml`, `.yml` |
-| Toml | `.toml` |
+| YAML | `.yaml`, `.yml` |
+| TOML | `.toml` |
 | Java | `.java` |
 | Kotlin | `.kt`, `.kts` |
 | Swift | `.swift` |
 | Rust | `.rs` |
+| Bazel / Starlark | `.bzl`, `.bazel`, `BUILD`, `WORKSPACE` |
 
 Extensions are case-insensitive. Exact filenames are case-sensitive and work
 for both local files and archive members. There is no shebang-based detection.
 Keywords use the constant color, functions the accent color, types the property
 color, and variables the normal text color in both themes. JSON colors are unchanged.
+
+HTML highlights markup; embedded JavaScript and CSS are not injected. `.h` files
+use the C grammar; C++ headers can use `.hpp`, `.hh`, or the other C++ extensions
+listed above. Shell support uses the Bash grammar. Bazel files use Starlark;
+`.bazelrc` is not a Starlark file and remains plain text.
+
+Grammar versions are pinned to releases with usable SwiftPM packages and generated
+parsers. Python, JavaScript, and YAML use releases that explicitly include their
+external scanners; Swift uses the `with-generated-files` release. When upgrading,
+verify linking as well as query compilation and the language fixtures.
 
 ## Span contract and precedence
 
