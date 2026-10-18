@@ -18,6 +18,7 @@ extension TreeSitterSyntaxDefinition {
         (doctype) @constant
         (comment) @comment
         """#,
-        captures: codeCaptures
+        captures: codeCaptures,
+        injections: [HTMLLanguageInjections.blocks]
     )
 }

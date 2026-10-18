@@ -12,13 +12,14 @@ struct TreeSitterSyntaxDefinition: Sendable {
     let language: Language
     let highlightQuery: String
     let captures: [String: SyntaxCaptureStyle]
+    var injections: [TreeSitterSyntaxInjection] = []
 }
 
 struct TreeSitterSyntaxHighlighter: SyntaxHighlighter {
     let isActive = true
     private let index: SyntaxSpanIndex
 
-    init(source: Data, definition: TreeSitterSyntaxDefinition) throws {
+    init(source: Data, definition: TreeSitterSyntaxDefinition, injectionDepth: Int = 0) throws {
         let parser = Parser()
         try parser.setLanguage(definition.language)
         let oldTree: Tree? = nil
@@ -47,7 +48,9 @@ struct TreeSitterSyntaxHighlighter: SyntaxHighlighter {
                 ))
             }
         }
-        index = SyntaxSpanIndex(captures: captures)
+        index = SyntaxSpanIndex(captures: TreeSitterInjectionHighlighter.compose(
+            captures: captures, source: source, tree: tree, language: definition.language,
+            injections: definition.injections, depth: injectionDepth))
     }
 
     func highlights(in byteRange: Range<Int>) -> [SyntaxHighlightSpan] {

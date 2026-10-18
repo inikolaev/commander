@@ -314,3 +314,32 @@ private struct TestSyntaxHighlighter: SyntaxHighlighter {
     }
     #expect(seenOffsets.count > 2)
 }
+
+@Test func viewerSyntaxProjectionClipsEmbeddedCommentsAcrossWrappedPages() async throws {
+    for tag in ["script", "style"] {
+        let prefix = "<p>hé😀</p>\n<\(tag)>\n"
+        let comment = "/*hé\nworld\tinside\nend*/"
+        let source = prefix + comment + "\n</\(tag)>"
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".html")
+        let data = Data(source.utf8)
+        try data.write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let document = try FileViewerDocument(url: url)
+        let highlighter = SyntaxRegistry.viewer.highlighter(for: url, data: data)
+        #expect(highlighter.isActive)
+        var page = try await document.page(rows: 2, wrapColumns: 6, includeSourceText: true)
+        var seenOffsets = Set<Int64>()
+        var commentRows = Set<Int64>()
+        while seenOffsets.insert(page.offset).inserted {
+            let projection = ViewerSyntaxProjection.make(page: page, highlighter: highlighter)
+            for (line, spans) in zip(page.lines, projection.lines) {
+                if line.offset >= prefix.utf8.count && line.offset < prefix.utf8.count + comment.utf8.count {
+                    commentRows.insert(line.offset)
+                    #expect(spans == [ViewerDisplayHighlight(range: 0..<line.text.count, kind: .comment)])
+                }
+            }
+            page = try await document.page(.scroll(1), rows: 2, wrapColumns: 6, includeSourceText: true)
+        }
+        #expect(commentRows.count >= 4)
+    }
+}

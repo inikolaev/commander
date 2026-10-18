@@ -42,7 +42,11 @@ for both local files and archive members. There is no shebang-based detection.
 Keywords use the constant color, functions the accent color, types the property
 color, and variables the normal text color in both themes. JSON colors are unchanged.
 
-HTML highlights markup; embedded JavaScript and CSS are not injected. `.h` files
+HTML highlights markup and embedded `<script>`/`<style>` blocks. Script types
+select JavaScript (including modules), JSON/JSON-LD, import maps, or speculation
+rules. Style blocks select CSS. Unsupported types and external-script bodies
+keep HTML-only highlighting. Inline `style` and event-handler attributes remain
+attribute strings. `.h` files
 use the C grammar; C++ headers can use `.hpp`, `.hh`, or the other C++ extensions
 listed above. Shell support uses the Bash grammar. Bazel files use Starlark;
 `.bazelrc` is not a Starlark file and remains plain text.
@@ -104,5 +108,25 @@ membership captures are rejected instead of silently changing query meaning.
 Unknown predicates, capture-to-capture equality, semantic-local predicates, and
 directives (including `#set!`) are rejected during query setup, causing the
 registry to return plain text. Priorities belong in the capture-style mapping.
-This avoids silently accepting semantics the engine cannot honor. Language
-injections and local-symbol analysis are not implemented.
+This avoids silently accepting semantics the engine cannot honor. Local-symbol analysis is not implemented.
+
+## Embedded languages
+
+`TreeSitterSyntaxDefinition.injections` contains structural queries capturing
+`injection.content` and typed language resolvers. `HTMLLanguageInjections` owns
+HTML attribute/type selection; the engine has no HTML-specific branches. This
+follows the [HTML script type distinctions](https://html.spec.whatwg.org/multipage/scripting.html#the-script-element).
+
+`TreeSitterInjectionHighlighter` parses each captured byte slice with the selected
+definition and offsets its spans back into the original document. Each layer is
+normalized independently; embedded spans take precedence over host spans. HTML's
+parse tree determines block boundaries, including closing tags inside JavaScript
+strings. Bodies are parsed as raw text, without decoding HTML entities.
+
+Invalid injection queries, unsupported types, or failed embedded highlighters
+leave host highlighting intact and do not prevent other blocks from highlighting.
+Repeated regions are processed once, and recursion stops after eight levels.
+The registry's size limit applies to the complete document, including archive
+members. Structural injection queries do not accept predicates or directives;
+selection belongs in the resolver. Existing highlight-query predicate support
+is unchanged.
