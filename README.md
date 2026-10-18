@@ -172,6 +172,10 @@ first page successfully; opening errors are displayed over the file panes.
 `FileViewerCoordinator` coalesces navigation requests; `TerminalFileViewer` draws
 the page and handles input independently of disk access.
 
+See [supported syntax-highlighting languages](docs/syntax-highlighting.md#supported-languages).
+Highlighting applies to files up to 8 MiB, including archive members; larger
+or unsupported files remain viewable as plain text.
+
 Logical lines crossing 4 KiB boundaries continue on another row, preserving UTF-8
 characters and CRLF pairs. This bounds both memory and the work needed for backward
 scrolling and End, even for files with no newlines. Use horizontal panning to see

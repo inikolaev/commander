@@ -6,6 +6,10 @@ public enum SyntaxKind: Sendable, Equatable, Hashable {
     case number
     case constant
     case comment
+    case keyword
+    case function
+    case type
+    case variable
 }
 
 public struct SyntaxHighlightSpan: Sendable, Equatable {

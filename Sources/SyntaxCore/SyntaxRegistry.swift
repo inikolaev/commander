@@ -3,21 +3,46 @@ import Foundation
 public struct SyntaxLanguageDefinition: Sendable {
     public let id: String
     public let fileExtensions: Set<String>
-    fileprivate let makeHighlighter: @Sendable (Data) throws -> any SyntaxHighlighter
+    public let fileNames: Set<String>
+    public let aliases: Set<String>
+    fileprivate let makeSyntaxDefinition: (@Sendable () -> TreeSitterSyntaxDefinition)?
+    fileprivate let makeHighlighter: @Sendable (Data, SyntaxRegistry) throws -> any SyntaxHighlighter
 
     public init(
         id: String,
         fileExtensions: Set<String>,
+        fileNames: Set<String> = [],
         makeHighlighter: @escaping @Sendable (Data) throws -> any SyntaxHighlighter
     ) {
         self.id = id
         self.fileExtensions = fileExtensions
-        self.makeHighlighter = makeHighlighter
+        self.fileNames = fileNames
+        self.aliases = []
+        self.makeSyntaxDefinition = nil
+        self.makeHighlighter = { source, _ in try makeHighlighter(source) }
+    }
+
+    /// A single lazy grammar factory serves standalone files and named injections.
+    /// IDs/extensions are aliases automatically; only additional names need listing.
+    init(id: String, fileExtensions: Set<String>, fileNames: Set<String> = [],
+         aliases: Set<String> = [], syntax: @escaping @Sendable () -> TreeSitterSyntaxDefinition) {
+        self.id = id
+        self.fileExtensions = fileExtensions
+        self.fileNames = fileNames
+        self.aliases = Set(aliases.union(fileExtensions).union([id]).map { $0.lowercased() })
+        self.makeSyntaxDefinition = syntax
+        self.makeHighlighter = { source, registry in
+            try TreeSitterSyntaxHighlighter(source: source, definition: syntax(), registry: registry)
+        }
+    }
+
+    fileprivate func matches(_ url: URL) -> Bool {
+        fileNames.contains(url.lastPathComponent) || fileExtensions.contains(url.pathExtension.lowercased())
     }
 }
 
 public struct SyntaxRegistry: Sendable {
-    public static let viewer = SyntaxRegistry(languages: [.json])
+    public static let viewer = SyntaxRegistry(languages: [.json, .python, .c, .cpp, .go, .bash, .javascript, .html, .typescript, .tsx, .yaml, .toml, .java, .kotlin, .swift, .rust, .starlark, .css, .markdown])
     public static let defaultMaximumFileSize = 8 * 1024 * 1024
 
     private let languages: [SyntaxLanguageDefinition]
@@ -26,25 +51,28 @@ public struct SyntaxRegistry: Sendable {
         self.languages = languages
     }
 
+    func syntaxDefinition(forAlias alias: String) -> TreeSitterSyntaxDefinition? {
+        languages.first { $0.aliases.contains(alias.lowercased()) }?.makeSyntaxDefinition?()
+    }
+
     public func supports(_ url: URL) -> Bool {
-        languages.contains { $0.fileExtensions.contains(url.pathExtension.lowercased()) }
+        languages.contains { $0.matches(url) }
     }
 
     public func highlighter(for url: URL, data: Data,
                             maximumFileSize: Int = Self.defaultMaximumFileSize) -> any SyntaxHighlighter {
         guard data.count <= maximumFileSize,
-              let language = languages.first(where: { $0.fileExtensions.contains(url.pathExtension.lowercased()) }) else {
+              let language = languages.first(where: { $0.matches(url) }) else {
             return PlainTextSyntaxHighlighter.shared
         }
-        return (try? language.makeHighlighter(data)) ?? PlainTextSyntaxHighlighter.shared
+        return (try? language.makeHighlighter(data, self)) ?? PlainTextSyntaxHighlighter.shared
     }
 
     public func highlighter(
         for url: URL,
         maximumFileSize: Int = Self.defaultMaximumFileSize
     ) -> any SyntaxHighlighter {
-        let ext = url.pathExtension.lowercased()
-        guard let language = languages.first(where: { $0.fileExtensions.contains(ext) }) else {
+        guard let language = languages.first(where: { $0.matches(url) }) else {
             return PlainTextSyntaxHighlighter.shared
         }
 
@@ -58,7 +86,7 @@ public struct SyntaxRegistry: Sendable {
             guard data.count <= maximumFileSize else {
                 return PlainTextSyntaxHighlighter.shared
             }
-            return try language.makeHighlighter(data)
+            return try language.makeHighlighter(data, self)
         } catch {
             // Syntax highlighting is optional. File viewing must never fail because
             // language detection, parsing, or query setup failed.

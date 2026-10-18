@@ -6,7 +6,7 @@ chooses colors. Language definitions do not depend on the viewer or AppKit.
 
 ## Responsibilities
 
-- `SyntaxRegistry` detects supported file extensions, enforces the 8 MiB default
+- `SyntaxRegistry` detects supported file extensions and exact filenames, enforces the 8 MiB default
   size limit, and falls back to plain text on errors. It accepts either a file URL
   or supplied data, including archive-member contents.
 - `TreeSitterSyntaxHighlighter` constructs a parser, evaluates a language's query,
@@ -14,8 +14,48 @@ chooses colors. Language definitions do not depend on the viewer or AppKit.
   tree objects are local to initialization; the resulting highlighter is immutable.
 - `SyntaxSpanNormalizer` resolves overlaps; `SyntaxSpanIndex` stores the result
   and finds spans intersecting a requested byte range.
-- `JSONSyntaxDefinition` supplies only the grammar, query, capture styles, and
-  registry definition for JSON.
+- Language definitions supply the grammar, query, capture styles, and registry
+  metadata. `codeCaptures` provides common semantic roles for code languages.
+
+## Supported languages
+
+| Language | Extensions / filenames |
+| --- | --- |
+| JSON | `.json` |
+| Python | `.py`, `.pyi`, `.pyw` |
+| C / C++ | `.c`, `.h` / `.cc`, `.cpp`, `.cxx`, `.c++`, `.hh`, `.hpp`, `.hxx`, `.h++`, `.ipp`, `.tpp` |
+| Go | `.go` |
+| Bash / shell | `.sh`, `.bash` |
+| HTML / JavaScript / JSX | `.html`, `.htm` / `.js`, `.jsx`, `.mjs`, `.cjs` |
+| TypeScript / TSX | `.ts`, `.mts`, `.cts`, `.tsx` |
+| YAML | `.yaml`, `.yml` |
+| TOML | `.toml` |
+| Java | `.java` |
+| Kotlin | `.kt`, `.kts` |
+| Swift | `.swift` |
+| Rust | `.rs` |
+| Bazel / Starlark | `.bzl`, `.bazel`, `BUILD`, `WORKSPACE` |
+| CSS | `.css` |
+| Markdown | `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn` |
+
+Extensions are case-insensitive. Exact filenames are case-sensitive and work
+for both local files and archive members. There is no shebang-based detection.
+Keywords use the constant color, functions the accent color, types the property
+color, and variables the normal text color in both themes. JSON colors are unchanged.
+
+HTML highlights markup and embedded `<script>`/`<style>` blocks. Script types
+select JavaScript (including modules), JSON/JSON-LD, import maps, or speculation
+rules. Style blocks select CSS. Unsupported types and external-script bodies
+keep HTML-only highlighting. Inline `style` and event-handler attributes remain
+attribute strings. `.h` files
+use the C grammar; C++ headers can use `.hpp`, `.hh`, or the other C++ extensions
+listed above. Shell support uses the Bash grammar. Bazel files use Starlark;
+`.bazelrc` is not a Starlark file and remains plain text.
+
+Grammar versions are pinned to releases with usable SwiftPM packages and generated
+parsers. Python, JavaScript, and YAML use releases that explicitly include their
+external scanners; Swift uses the `with-generated-files` release. When upgrading,
+verify linking as well as query compilation and the language fixtures.
 
 ## Span contract and precedence
 
@@ -35,14 +75,15 @@ indexed lookup takes O(log n + k) for k returned spans.
 2. Create a definition file like `JSONSyntaxDefinition.swift`: supply the grammar,
    query, and a mapping from query capture names to `SyntaxCaptureStyle` values.
    Unmapped captures are ignored and can be used as predicate inputs.
-3. Create a `SyntaxLanguageDefinition` with lowercase file extensions and a
-   factory using the shared engine, then register it in `SyntaxRegistry.viewer`.
+3. Create a `SyntaxLanguageDefinition` with lowercase file extensions, optional exact filenames, and a
+   lazy `syntax` factory using the shared engine, then register it in `SyntaxRegistry.viewer`.
+   The ID and extensions also resolve fence labels; put additional names in `aliases`.
 4. Add fixtures for token kinds, precedence, predicates, and multiline content.
    Use UTF-8 byte offsets in assertions.
 5. Add a `SyntaxKind` and theme mapping only when a new visual semantic is needed.
 
 The coordinator, projection, and renderer should not need language-specific edits.
-No additional languages are enabled by this refactor.
+
 
 ## Supported queries
 
@@ -69,5 +110,53 @@ membership captures are rejected instead of silently changing query meaning.
 Unknown predicates, capture-to-capture equality, semantic-local predicates, and
 directives (including `#set!`) are rejected during query setup, causing the
 registry to return plain text. Priorities belong in the capture-style mapping.
-This avoids silently accepting semantics the engine cannot honor. Language
-injections and local-symbol analysis are not implemented.
+This avoids silently accepting semantics the engine cannot honor. Local-symbol analysis is not implemented.
+
+## Embedded languages
+
+`TreeSitterSyntaxDefinition.injections` contains structural queries capturing
+`injection.content` and typed language resolvers. `HTMLLanguageInjections` owns
+HTML attribute/type selection; the engine has no HTML-specific branches. This
+follows the [HTML script type distinctions](https://html.spec.whatwg.org/multipage/scripting.html#the-script-element).
+
+`TreeSitterInjectionHighlighter` parses each captured byte slice with the selected
+definition and offsets its spans back into the original document. Each layer is
+normalized independently; embedded spans take precedence over host spans. HTML's
+parse tree determines block boundaries, including closing tags inside JavaScript
+strings. Bodies are parsed as raw text, without decoding HTML entities.
+
+Invalid injection queries, unsupported types, or failed embedded highlighters
+leave host highlighting intact and do not prevent other blocks from highlighting.
+Repeated regions are processed once, and recursion stops after eight levels.
+The registry's size limit applies to the complete document, including archive
+members. Structural injection queries do not accept predicates or directives;
+selection belongs in the resolver. Existing highlight-query predicate support
+is unchanged.
+
+## Markdown
+
+Markdown source highlighting combines the grammar's block and inline parsers.
+It colors headings, list/task markers, blockquotes, tables, links/images, emphasis,
+strikethrough, and code spans. This colors the source; it does not render Markdown.
+Metadata/front-matter blocks use the comment color.
+
+Labelled code fences reuse the installed language definitions, including common
+aliases such as `py`, `js`, `ts`, `sh`, `c++`, and `yml`. Unknown and unlabelled
+fences retain literal-code coloring. Supported fences use normal text for gaps
+between tokens. HTML blocks reuse HTML's JavaScript/CSS injections, and nested
+Markdown fences use the same recursion limit as other injections.
+
+For inline content and nested fenced blocks, injection definitions exclude the
+block grammar's `block_continuation` children. Tree-sitter included ranges skip
+these host prefixes without changing byte offsets. Ancestor ranges are intersected with each child region and its own exclusions
+before nested parsing; returned spans are clipped to
+those ranges, preserving blockquote/list marker colors even when an embedded
+token crosses a line. Language IDs, extensions, and extra aliases live with their definitions in the
+shared registry. `MarkdownCodeFences` only extracts the label. The current registry
+is passed through nested injections, so registering a new grammar also enables
+its fences without changing Markdown or the engine.
+
+Markdown temporarily pins upstream revision `ec1a4f07a20cb5cf8e90653e4a492445e4646154`
+(the unreleased fix in tree-sitter-markdown PR #271). It recognizes closing
+backtick and tilde fences at EOF, including trailing whitespace, without requiring
+a final newline. Move back to a release pin once that fix is released.
