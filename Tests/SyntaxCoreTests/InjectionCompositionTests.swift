@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+import SwiftTreeSitter
 @testable import SyntaxCore
 
 private func injectingJSON(_ query: String, child: @escaping @Sendable () -> TreeSitterSyntaxDefinition) -> TreeSitterSyntaxDefinition {
@@ -62,4 +63,22 @@ private func recursiveInjectionDefinition() -> TreeSitterSyntaxDefinition {
     let spans = try TreeSitterSyntaxHighlighter(source: source, definition: definition).highlights(in: 0..<source.count)
     #expect(spans.contains { $0.kind == .number && String(decoding: source[$0.byteRange], as: UTF8.self) == "42" })
     #expect(spans.contains { $0.kind == .string && String(decoding: source[$0.byteRange], as: UTF8.self).contains("bad") })
+}
+
+@Test func includedRangesClipTokensAcrossExcludedSourceBytes() throws {
+    let ranges = [
+        TSRange(points: Point(row: 0, column: 0)..<Point(row: 0, column: 2), bytes: 0..<2),
+        TSRange(points: Point(row: 0, column: 4)..<Point(row: 0, column: 6), bytes: 4..<6)
+    ]
+    let definition = TreeSitterSyntaxDefinition(language: TreeSitterSyntaxDefinition.json.language,
+        highlightQuery: "(document) @string", captures: TreeSitterSyntaxDefinition.codeCaptures)
+    let highlighter = try TreeSitterSyntaxHighlighter(source: Data("12xx34".utf8), definition: definition,
+                                                    includedRanges: ranges)
+    #expect(highlighter.highlights(in: 0..<6) == [
+        SyntaxHighlightSpan(byteRange: 0..<2, kind: .string),
+        SyntaxHighlightSpan(byteRange: 4..<6, kind: .string)
+    ])
+    #expect(highlighter.highlights(in: 2..<4).isEmpty)
+    let empty = try TreeSitterSyntaxHighlighter(source: Data("42".utf8), definition: .json, includedRanges: [])
+    #expect(empty.highlights(in: 0..<2).isEmpty)
 }

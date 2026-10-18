@@ -36,6 +36,7 @@ chooses colors. Language definitions do not depend on the viewer or AppKit.
 | Rust | `.rs` |
 | Bazel / Starlark | `.bzl`, `.bazel`, `BUILD`, `WORKSPACE` |
 | CSS | `.css` |
+| Markdown | `.md`, `.markdown`, `.mdown`, `.mkd`, `.mkdn` |
 
 Extensions are case-insensitive. Exact filenames are case-sensitive and work
 for both local files and archive members. There is no shebang-based detection.
@@ -130,3 +131,27 @@ The registry's size limit applies to the complete document, including archive
 members. Structural injection queries do not accept predicates or directives;
 selection belongs in the resolver. Existing highlight-query predicate support
 is unchanged.
+
+## Markdown
+
+Markdown source highlighting combines the grammar's block and inline parsers.
+It colors headings, list/task markers, blockquotes, tables, links/images, emphasis,
+strikethrough, and code spans. This colors the source; it does not render Markdown.
+Metadata/front-matter blocks use the comment color.
+
+Labelled code fences reuse the installed language definitions, including common
+aliases such as `py`, `js`, `ts`, `sh`, `c++`, and `yml`. Unknown and unlabelled
+fences retain literal-code coloring. Supported fences use normal text for gaps
+between tokens. HTML blocks reuse HTML's JavaScript/CSS injections, and nested
+Markdown fences use the same recursion limit as other injections.
+
+For inline content and nested fenced blocks, injection definitions exclude the
+block grammar's `block_continuation` children. Tree-sitter included ranges skip
+these host prefixes without changing byte offsets. Returned spans are clipped to
+those ranges, preserving blockquote/list marker colors even when an embedded
+token crosses a line. Fence language aliases are declared in `MarkdownCodeFences`.
+
+Markdown temporarily pins upstream revision `ec1a4f07a20cb5cf8e90653e4a492445e4646154`
+(the unreleased fix in tree-sitter-markdown PR #271). It recognizes closing
+backtick and tilde fences at EOF, including trailing whitespace, without requiring
+a final newline. Move back to a release pin once that fix is released.

@@ -6,6 +6,8 @@ import SwiftTreeSitter
 struct TreeSitterSyntaxInjection: Sendable {
     let query: String
     let language: @Sendable (Node, Data) -> TreeSitterSyntaxDefinition?
+    var excludingChildTypes: Set<String> = []
+    var defaultKind: SyntaxKind? = nil
 }
 
 enum TreeSitterInjectionHighlighter {
@@ -32,15 +34,24 @@ enum TreeSitterInjectionHighlighter {
                     let range = Int(bytes.lowerBound)..<Int(bytes.upperBound)
                     guard !range.isEmpty, range.upperBound <= source.count,
                           !visited.contains(range),
-                          let definition = injection.language(capture.node, source),
-                          let child = try? TreeSitterSyntaxHighlighter(
+                          let definition = injection.language(capture.node, source) else { continue }
+                    let included = SyntaxInjectionRanges.included(in: capture.node, excluding: injection.excludingChildTypes)
+                    guard let child = try? TreeSitterSyntaxHighlighter(
                             source: source.subdata(in: range), definition: definition,
-                            injectionDepth: depth + 1) else { continue }
+                            injectionDepth: depth + 1, includedRanges: included) else { continue }
                     visited.insert(range)
+                    if let kind = injection.defaultKind {
+                        let regions = included?.map { Int($0.bytes.lowerBound)..<Int($0.bytes.upperBound) } ?? [0..<range.count]
+                        for region in regions {
+                            result.append(SyntaxCapture(span: SyntaxHighlightSpan(
+                                byteRange: (range.lowerBound + region.lowerBound)..<(range.lowerBound + region.upperBound),
+                                kind: kind), priority: 1))
+                        }
+                    }
                     for span in child.highlights(in: 0..<range.count) {
                         result.append(SyntaxCapture(span: SyntaxHighlightSpan(
                             byteRange: (range.lowerBound + span.byteRange.lowerBound)..<(range.lowerBound + span.byteRange.upperBound),
-                            kind: span.kind), priority: 1))
+                            kind: span.kind), priority: 2))
                     }
                 }
             }
