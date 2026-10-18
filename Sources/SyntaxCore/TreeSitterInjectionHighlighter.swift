@@ -14,7 +14,7 @@ enum TreeSitterInjectionHighlighter {
     static let maximumDepth = 8
 
     static func compose(captures: [SyntaxCapture], source: Data, tree: MutableTree, language: Language,
-                        injections: [TreeSitterSyntaxInjection], depth: Int) -> [SyntaxCapture] {
+                        injections: [TreeSitterSyntaxInjection], depth: Int, includedRanges: [TSRange]? = nil) -> [SyntaxCapture] {
         guard !injections.isEmpty, depth < maximumDepth else { return captures }
         // Normalize each layer independently. Embedded tokens win over host
         // tokens regardless of the host language's internal capture priorities.
@@ -35,7 +35,7 @@ enum TreeSitterInjectionHighlighter {
                     guard !range.isEmpty, range.upperBound <= source.count,
                           !visited.contains(range),
                           let definition = injection.language(capture.node, source) else { continue }
-                    let included = SyntaxInjectionRanges.included(in: capture.node, excluding: injection.excludingChildTypes)
+                    let included = SyntaxInjectionRanges.included(in: capture.node, excluding: injection.excludingChildTypes, inherited: includedRanges)
                     guard let child = try? TreeSitterSyntaxHighlighter(
                             source: source.subdata(in: range), definition: definition,
                             injectionDepth: depth + 1, includedRanges: included) else { continue }

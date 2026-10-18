@@ -122,6 +122,30 @@ import Testing
     #expect(highlighter.highlights(in: 0..<1).isEmpty)
 }
 
+@Test func markdownNestedHTMLInheritsExcludedPrefixes() {
+    for body in ["let value = 1\n/ 2 / 3;", "const x = <span\nclassName='hé😀'\n/>;", "const value = `hé ${\nfoo()\n}`;"] {
+        let html = "<script>\n" + body + "\n</script>"
+        let quoted = html.split(separator: "\n", omittingEmptySubsequences: false).map { "> " + $0 }.joined(separator: "\n")
+        func kinds(_ source: String, filename: String) -> [SyntaxKind?] {
+            let data = Data(source.utf8)
+            let highlighter = SyntaxRegistry.viewer.highlighter(for: URL(fileURLWithPath: filename), data: data)
+            #expect(highlighter.isActive)
+            var result = [SyntaxKind?](repeating: nil, count: data.count)
+            for span in highlighter.highlights(in: 0..<data.count) {
+                for byte in span.byteRange { result[byte] = span.kind }
+            }
+            return result
+        }
+        let expected = kinds(html, filename: "standalone.html")
+        let actual = kinds(quoted, filename: "nested.md")
+        var quotedOffset = 2
+        for (offset, byte) in html.utf8.enumerated() {
+            #expect(actual[quotedOffset] == expected[offset], "Different style at byte \(offset) for \(body)")
+            quotedOffset += byte == 10 ? 3 : 1
+        }
+    }
+}
+
 @Test func markdownClosingFencesAtEOFKeepTheirDelimiterStyle() {
     for (language, body) in [("python", "def greet(): pass"), ("html", "<script>const value = 1;</script>"), ("unknown", "plain text")] {
         for delimiter in ["```", "~~~"] {

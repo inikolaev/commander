@@ -56,7 +56,7 @@ struct TreeSitterSyntaxHighlighter: SyntaxHighlighter {
         }
         let composed = TreeSitterInjectionHighlighter.compose(
             captures: captures, source: source, tree: tree, language: definition.language,
-            injections: definition.injections, depth: injectionDepth)
+            injections: definition.injections, depth: injectionDepth, includedRanges: includedRanges)
         index = SyntaxSpanIndex(captures: includedRanges.map {
             SyntaxInjectionRanges.clip(composed, to: $0)
         } ?? composed)
