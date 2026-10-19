@@ -1,5 +1,6 @@
 import AppKit
 import EditorCore
+import SyntaxCore
 
 /// Custom terminal rendering; AppKit is used only for keyboard/IME interpretation.
 @MainActor
@@ -14,6 +15,8 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
     private var scrollRemainder: CGFloat = 0
     private var marked = NSRange(location: NSNotFound, length: 0)
     private var dragging = false
+    private var syntaxController: EditorSyntaxController?
+    private var syntaxProjection = EditorSyntaxProjection.empty
     private var cell: CGFloat { ceil(("M" as NSString).size(withAttributes: [.font: TerminalTheme.font]).width) }
     var visibleRows: Int { textGeometry.visibleRows }
     private var rows: Int { visibleRows }
@@ -30,6 +33,24 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         setAccessibilityLabel("File editor: \(path)")
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    func startSyntax(initialText: String) {
+        syntaxController?.close()
+        syntaxProjection = .empty
+        syntaxController = EditorSyntaxController(document: document, url: URL(fileURLWithPath: path),
+                                                 initialText: initialText) { [weak self] projection in
+            self?.syntaxProjection = projection
+            self?.needsDisplay = true
+        }
+    }
+    func stopSyntax() {
+        syntaxController?.close()
+        syntaxController = nil
+        syntaxProjection = .empty
+    }
+    func foregroundColor(for glyphOffset: Int, selected: Bool) -> NSColor {
+        if selected { return TerminalTheme.contrastText }
+        return syntaxProjection.kind(at: glyphOffset).map { TerminalTheme.syntaxColor(for: $0) } ?? TerminalTheme.accent
+    }
     override var isFlipped: Bool { true }
     override var isOpaque: Bool { true }
     override var acceptsFirstResponder: Bool { true }
@@ -117,7 +138,8 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
                 NSGraphicsContext.saveGraphicsState()
                 rect.clip()
                 (glyph.text as NSString).draw(in: rect, withAttributes: [
-                    .font: TerminalTheme.font, .foregroundColor: selected ? TerminalTheme.contrastText : TerminalTheme.accent,
+                    .font: TerminalTheme.font,
+                    .foregroundColor: foregroundColor(for: glyph.offset, selected: selected),
                 ])
                 NSGraphicsContext.restoreGraphicsState()
                 if marked.location != NSNotFound && NSIntersectionRange(marked, NSRange(location: glyph.offset, length: glyph.length)).length > 0 {

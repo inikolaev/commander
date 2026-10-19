@@ -68,6 +68,7 @@ final class FileEditorCoordinator {
     private func install(_ file: EditorFile, window: NSWindow) {
         guard let content = window.contentView else { finish(); return }
         let editor = TerminalFileEditor(document: EditorDocuments.make(file: file), path: file.url.path)
+        editor.startSyntax(initialText: file.text)
         view = editor
         editor.onSave = { [weak self] in self?.save() }
         editor.onClose = { [weak self] in self?.requestClose() }
@@ -147,6 +148,7 @@ final class FileEditorCoordinator {
     private func finish() {
         if let window { presenter.dismiss(window: window) }
         isBusy = false
+        view?.stopSyntax()
         view?.removeFromSuperview()
         view = nil
         window?.makeFirstResponder(previousResponder)

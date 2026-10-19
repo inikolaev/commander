@@ -1,8 +1,37 @@
-# Viewer syntax highlighting
+# Syntax highlighting
+
+# Viewer
 
 The viewer consumes semantic UTF-8 byte spans through `SyntaxHighlighter`.
 `ViewerSyntaxProjection` translates them to display positions, and `TerminalTheme`
 chooses colors. Language definitions do not depend on the viewer or AppKit.
+
+## Editor
+
+`FileEditorCoordinator` starts `EditorSyntaxController` with the opened `EditorFile.text`.
+That text is already BOM-free and LF-normalized; highlighting therefore uses the
+same bytes as the editable document, including for CRLF files and new files.
+Only supported files of at most 512 KiB of normalized UTF-8 text get an initial
+editing session. Larger or unsupported files stay responsive with plain text.
+The viewer's separate 8 MiB limit is unchanged.
+
+Session construction and its synchronous first parse run on a detached executor.
+The controller observes `EditorDocument` content changes, retaining every ordered
+UTF-16 delta from typing, undo, redo, and IME composition. It waits about 100 ms
+after the latest edit, then applies the batch through one retained
+`SyntaxEditingSession`. Updates are serialized; edits received during an update
+form the next batch. The session discards its parser when content grows beyond
+512 KiB and can resume highlighting if later edits shrink it. Closing the editor
+removes the observer, cancels pending work, and drops the session.
+
+`EditorSyntaxProjection` converts the session's UTF-8 byte spans into immutable
+UTF-16 ranges for a source snapshot at the same content version. Projection runs
+off the main actor. It snaps colors to complete Swift `Character` boundaries, so
+combining sequences and emoji are drawn as whole glyphs. The renderer uses a
+binary search per visible glyph; it does no parsing, full-document reads, or
+whole-file scans in `draw`. Selected text keeps the selection contrast color,
+and marked IME text keeps its underline. Results from older content versions are
+discarded before reaching the renderer.
 
 ## Responsibilities
 
