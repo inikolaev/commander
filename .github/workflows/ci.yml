@@ -36,12 +36,13 @@ jobs:
             swift-test-${{ runner.os }}-xcode26.2-${{ hashFiles('Package.resolved') }}-
 
       - name: Test
-        env:
-          SWIFT_BACKTRACE: enable=yes,interactive=no
         run: |
           swift --version
           # AppKit and Ghostty share process-wide UI state.
           swift test --no-parallel
+          for attempt in {1..5}; do
+            swift test --skip-build --no-parallel --filter terminalFillsWindowAfterVerticalResizing
+          done
           python3 scripts/test-app-swiftc.py
           python3 scripts/test-release-scripts.py
 
