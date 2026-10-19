@@ -66,6 +66,144 @@ import EditorCore
     #expect(doc.text(in: NSRange(location: 0, length: doc.length)) == "beforeé")
 }
 
+@Test func contentChangesUsePreEditUTF16RangesAndNormalizedText() {
+    let doc = EditorDocuments.make(text: "a😀b")
+    var events: [EditorContentChange] = []
+    var observedTexts: [String] = []
+    let id = doc.addContentChangeObserver { change in
+        events.append(change)
+        observedTexts.append(doc.text(in: NSRange(location: 0, length: doc.length)))
+        #expect(doc.contentVersion == change.version)
+    }
+
+    #expect(doc.contentVersion == 0)
+    doc.replace(NSRange(location: 1, length: 2), with: "x\r\ny\rz")
+    #expect(events == [EditorContentChange(changes: [
+        EditorContentDelta(range: NSRange(location: 1, length: 2), insertedText: "x\ny\nz"),
+    ], version: 1)])
+    #expect(observedTexts == ["ax\ny\nzb"])
+
+    // Equality is checked after newline normalization.
+    doc.replace(NSRange(location: 1, length: 5), with: "x\r\ny\rz")
+    #expect(doc.contentVersion == 1)
+    #expect(events.count == 1)
+
+    doc.markSaved()
+    #expect(!doc.isModified)
+    doc.undo()
+    #expect(doc.isModified)
+    #expect(doc.contentVersion == 2)
+    #expect(events[1] == EditorContentChange(changes: [
+        EditorContentDelta(range: NSRange(location: 1, length: 5), insertedText: "😀"),
+    ], version: 2))
+    doc.redo()
+    #expect(!doc.isModified)
+    #expect(doc.contentVersion == 3)
+    #expect(events[2] == EditorContentChange(changes: [
+        EditorContentDelta(range: NSRange(location: 1, length: 2), insertedText: "x\ny\nz"),
+    ], version: 3))
+
+    doc.removeContentChangeObserver(id)
+    doc.replace(NSRange(location: 0, length: 1), with: "A")
+    #expect(doc.contentVersion == 4)
+    #expect(events.count == 3)
+}
+
+@Test func groupedCompositionPublishesOrderedUndoRedoDeltas() {
+    let doc = EditorDocuments.make(text: "before")
+    var changes: [EditorContentChange] = []
+    doc.addContentChangeObserver { changes.append($0) }
+
+    doc.beginUndoGroup()
+    doc.replace(NSRange(location: 6, length: 0), with: "e")
+    doc.replace(NSRange(location: 6, length: 1), with: "é")
+    doc.replace(NSRange(location: 6, length: 1), with: "é") // No mutation.
+    doc.endUndoGroup()
+    #expect(changes == [
+        EditorContentChange(changes: [
+            EditorContentDelta(range: NSRange(location: 6, length: 0), insertedText: "e"),
+        ], version: 1),
+        EditorContentChange(changes: [
+            EditorContentDelta(range: NSRange(location: 6, length: 1), insertedText: "é"),
+        ], version: 2),
+    ])
+    #expect(doc.contentVersion == 2)
+
+    doc.undo()
+    #expect(changes[2] == EditorContentChange(changes: [
+        EditorContentDelta(range: NSRange(location: 6, length: 1), insertedText: "e"),
+        EditorContentDelta(range: NSRange(location: 6, length: 1), insertedText: ""),
+    ], version: 4))
+    #expect(doc.text(in: NSRange(location: 0, length: doc.length)) == "before")
+    #expect(doc.contentVersion == 4)
+
+    doc.redo()
+    #expect(changes[3] == EditorContentChange(changes: [
+        EditorContentDelta(range: NSRange(location: 6, length: 0), insertedText: "e"),
+        EditorContentDelta(range: NSRange(location: 6, length: 1), insertedText: "é"),
+    ], version: 6))
+    #expect(doc.text(in: NSRange(location: 0, length: doc.length)) == "beforeé")
+    #expect(doc.contentVersion == 6)
+}
+
+@Test func undoRedoObserversSeeFinalRevisionAndHistory() {
+    let doc = EditorDocuments.make(text: "")
+    doc.replace(NSRange(location: 0, length: 0), with: "a")
+    doc.markSaved()
+    doc.replace(NSRange(location: 1, length: 0), with: "b")
+
+    var states: [(version: Int, modified: Bool, canUndo: Bool, canRedo: Bool)] = []
+    doc.addContentChangeObserver { event in
+        states.append((event.version, doc.isModified, doc.canUndo, doc.canRedo))
+    }
+    doc.undo()
+    doc.redo()
+
+    #expect(states.count == 2)
+    #expect(states[0].version == 3)
+    #expect(!states[0].modified)
+    #expect(states[0].canUndo)
+    #expect(states[0].canRedo)
+    #expect(states[1].version == 4)
+    #expect(states[1].modified)
+    #expect(states[1].canUndo)
+    #expect(!states[1].canRedo)
+}
+
+@Test func nestedObserverEditPreservesHistoryAndEventOrder() {
+    let doc = EditorDocuments.make(text: "")
+    doc.replace(NSRange(location: 0, length: 0), with: "a")
+    doc.markSaved()
+    doc.replace(NSRange(location: 1, length: 0), with: "b")
+
+    var firstObserverVersions: [Int] = []
+    var secondObserverVersions: [Int] = []
+    doc.addContentChangeObserver { event in
+        firstObserverVersions.append(event.version)
+        if event.version == 3 {
+            #expect(!doc.isModified)
+            #expect(doc.canRedo)
+            doc.replace(NSRange(location: doc.length, length: 0), with: "c")
+            #expect(doc.isModified)
+            #expect(!doc.canRedo)
+        }
+    }
+    doc.addContentChangeObserver { event in
+        secondObserverVersions.append(event.version)
+    }
+
+    doc.undo()
+    #expect(firstObserverVersions == [3, 4])
+    #expect(secondObserverVersions == [3, 4])
+    #expect(doc.text(in: NSRange(location: 0, length: doc.length)) == "ac")
+    #expect(doc.contentVersion == 4)
+    #expect(doc.isModified)
+    #expect(!doc.canRedo)
+    doc.undo()
+    #expect(doc.text(in: NSRange(location: 0, length: doc.length)) == "a")
+    #expect(!doc.isModified)
+}
+
 @Test func lineIndexMatchesReferenceAfterManyEdits() {
     let doc = EditorDocuments.make(text: "")
     var reference = ""

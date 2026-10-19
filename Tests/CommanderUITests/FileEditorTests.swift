@@ -1,6 +1,7 @@
 import AppKit
 import Testing
 import EditorCore
+import FileManagerCore
 @testable import CommanderUI
 
 @Test @MainActor func f4OpensEditorAndShiftF4CreatesFile() throws {
@@ -174,6 +175,175 @@ import EditorCore
     viewer.setFrameSize(NSSize(width: 800, height: height - 1))
     #expect(editor.visibleRows == 9)
     #expect(viewer.visibleRows == 9)
+}
+
+@Test @MainActor func editorLetterSpacingMatchesViewerAndCaret() async throws {
+    _ = NSApplication.shared
+    let line = "i" + String(repeating: " ", count: 20) + "i"
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try line.write(to: url, atomically: false, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    let editor = TerminalFileEditor(document: EditorDocuments.make(text: line), path: url.path)
+    let viewer = TerminalFileViewer(path: url.path)
+    let size = NSSize(width: 300, height: 100)
+    editor.frame = NSRect(origin: .zero, size: size)
+    viewer.frame = NSRect(origin: .zero, size: size)
+    viewer.update(try await FileViewerDocument(url: url).page(rows: 1))
+
+    func letterDistance(in view: NSView) throws -> CGFloat {
+        let bitmap = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+        view.cacheDisplay(in: view.bounds, to: bitmap)
+        let scale = CGFloat(bitmap.pixelsWide) / view.bounds.width
+        let background = try #require(bitmap.colorAt(x: bitmap.pixelsWide - 4,
+            y: Int(1.5 * TerminalTheme.lineHeight * scale))?.usingColorSpace(.deviceRGB))
+        func center(in range: Range<Int>) throws -> CGFloat {
+            let pixels = range.filter { x in
+                (Int(TerminalTheme.lineHeight * scale)..<Int(2 * TerminalTheme.lineHeight * scale)).contains { y in
+                    guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { return false }
+                    return abs(color.redComponent - background.redComponent)
+                        + abs(color.greenComponent - background.greenComponent)
+                        + abs(color.blueComponent - background.blueComponent) > 0.3
+                }
+            }
+            return CGFloat(try #require(pixels.first) + #require(pixels.last)) / (2 * scale)
+        }
+        return try center(in: Int(130 * scale)..<Int(190 * scale))
+            - center(in: 0..<Int(20 * scale))
+    }
+
+    let editorDistance = try letterDistance(in: editor)
+    let viewerDistance = try letterDistance(in: viewer)
+    #expect(abs(editorDistance - viewerDistance) < 1.5)
+
+    let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled],
+        backing: .buffered, defer: false)
+    window.contentView = editor
+    editor.selection.set(line.utf16.count)
+    editor.changed()
+    let caret = editor.convert(window.convertPoint(fromScreen: editor.firstRect(
+        forCharacterRange: NSRange(location: line.utf16.count, length: 0), actualRange: nil).origin), from: nil)
+    #expect(abs(caret.x - (2 + viewerDistance + TerminalTheme.cellAdvance)) < 1.5)
+    let beforeLast = editor.convert(NSPoint(x: caret.x - TerminalTheme.cellAdvance, y: TerminalTheme.lineHeight + 4), to: nil)
+    let screenPoint = window.convertPoint(toScreen: beforeLast)
+    #expect(editor.characterIndex(for: screenPoint) == line.utf16.count - 1)
+}
+
+@Test @MainActor func editorKeepsWideGraphemeInkAndCaretAligned() async throws {
+    _ = NSApplication.shared
+    let size = NSSize(width: 120, height: 90)
+    for grapheme in ["🟥", "🔴", "🅰️"] {
+        let measured = (grapheme as NSString).size(withAttributes: [.font: TerminalTheme.font]).width
+        #expect(measured > 2 * TerminalTheme.cellAdvance)
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try grapheme.write(to: url, atomically: false, encoding: .utf8)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let editor = TerminalFileEditor(document: EditorDocuments.make(text: grapheme), path: url.path)
+        let viewer = TerminalFileViewer(path: url.path)
+        editor.frame = NSRect(origin: .zero, size: size)
+        viewer.frame = NSRect(origin: .zero, size: size)
+        viewer.update(try await FileViewerDocument(url: url).page(rows: 1))
+
+        func rightmostInk(in view: NSView) throws -> CGFloat {
+            let bitmap = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+            view.cacheDisplay(in: view.bounds, to: bitmap)
+            let scale = CGFloat(bitmap.pixelsWide) / view.bounds.width
+            let background = try #require(bitmap.colorAt(x: bitmap.pixelsWide - 4,
+                y: Int(1.5 * TerminalTheme.lineHeight * scale))?.usingColorSpace(.deviceRGB))
+            let ink = (0..<Int(35 * scale)).filter { x in
+                (Int(TerminalTheme.lineHeight * scale)..<Int(2 * TerminalTheme.lineHeight * scale)).contains { y in
+                    guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { return false }
+                    return abs(color.redComponent - background.redComponent)
+                        + abs(color.greenComponent - background.greenComponent)
+                        + abs(color.blueComponent - background.blueComponent) > 0.3
+                }
+            }
+            return CGFloat(try #require(ink.last)) / scale
+        }
+
+        #expect(abs(try rightmostInk(in: editor) - rightmostInk(in: viewer)) < 2)
+
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled],
+            backing: .buffered, defer: false)
+        window.contentView = editor
+        editor.selection.set(grapheme.utf16.count)
+        editor.changed()
+        let caret = editor.convert(window.convertPoint(fromScreen: editor.firstRect(
+            forCharacterRange: NSRange(location: grapheme.utf16.count, length: 0), actualRange: nil).origin), from: nil)
+        #expect(abs(caret.x - (2 + measured)) < 0.5)
+        let before = window.convertPoint(toScreen: editor.convert(
+            NSPoint(x: 2 + measured / 3, y: TerminalTheme.lineHeight + 4), to: nil))
+        let after = window.convertPoint(toScreen: editor.convert(
+            NSPoint(x: 2 + measured * 2 / 3, y: TerminalTheme.lineHeight + 4), to: nil))
+        #expect(editor.characterIndex(for: before) == 0)
+        #expect(editor.characterIndex(for: after) == grapheme.utf16.count)
+    }
+}
+
+@Test @MainActor func editorTabsFollowMeasuredGlyphPositions() {
+    _ = NSApplication.shared
+    let size = NSSize(width: 220, height: 90)
+    let tabStop = 4 * TerminalTheme.cellAdvance
+    for prefix in ["aa", "🟥", "👩‍💻", "界", "aaaa"] {
+        let line = prefix + "\t\tz"
+        let editor = TerminalFileEditor(document: EditorDocuments.make(text: line), path: "/tmp/tabs.txt")
+        editor.frame = NSRect(origin: .zero, size: size)
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled],
+            backing: .buffered, defer: false)
+        window.contentView = editor
+
+        func caretX(at offset: Int) -> CGFloat {
+            editor.selection.set(offset)
+            editor.changed()
+            let screenRect = editor.firstRect(forCharacterRange: editor.selection.range, actualRange: nil)
+            return editor.convert(window.convertPoint(fromScreen: screenRect.origin), from: nil).x
+        }
+        let start = prefix.utf16.count
+        let before = caretX(at: start)
+        let firstStop = caretX(at: start + 1)
+        let secondStop = caretX(at: start + 2)
+        let expectedFirstStop = prefix == "aaaa" ? 2 * tabStop : tabStop
+        #expect(abs(firstStop - (2 + expectedFirstStop)) < 0.5)
+        #expect(abs(secondStop - (2 + expectedFirstStop + tabStop)) < 0.5)
+
+        let left = window.convertPoint(toScreen: editor.convert(
+            NSPoint(x: before + (firstStop - before) / 3, y: TerminalTheme.lineHeight + 4), to: nil))
+        let right = window.convertPoint(toScreen: editor.convert(
+            NSPoint(x: before + 2 * (firstStop - before) / 3, y: TerminalTheme.lineHeight + 4), to: nil))
+        #expect(editor.characterIndex(for: left) == start)
+        #expect(editor.characterIndex(for: right) == start + 1)
+    }
+}
+
+@Test @MainActor func editorScrollAndIMEFollowMeasuredWideGlyphPositions() throws {
+    _ = NSApplication.shared
+    let line = "🟥" + String(repeating: "x", count: 18)
+    let document = EditorDocuments.make(text: line)
+    let editor = TerminalFileEditor(document: document, path: "/tmp/wide.txt")
+    let size = NSSize(width: 62, height: 90)
+    editor.frame = NSRect(origin: .zero, size: size)
+    let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled],
+        backing: .buffered, defer: false)
+    window.contentView = editor
+    editor.selection.set(document.length)
+    editor.changed()
+
+    func caretX() -> CGFloat {
+        editor.convert(window.convertPoint(fromScreen: editor.firstRect(
+            forCharacterRange: editor.selection.range, actualRange: nil).origin), from: nil).x
+    }
+    #expect(caretX() >= 2 && caretX() <= size.width - 2)
+    editor.setMarkedText("🔴", selectedRange: NSRange(location: "🔴".utf16.count, length: 0),
+        replacementRange: NSRange(location: NSNotFound, length: 0))
+    #expect(editor.hasMarkedText())
+    #expect(caretX() >= 2 && caretX() <= size.width - 2)
+    let beforeCaret = window.convertPoint(toScreen: editor.convert(
+        NSPoint(x: caretX() - 3 * TerminalTheme.cellAdvance, y: TerminalTheme.lineHeight + 4), to: nil))
+    #expect(editor.characterIndex(for: beforeCaret) < editor.selection.caret)
+    editor.unmarkText()
+    editor.selection.set(0)
+    editor.changed()
+    #expect(abs(caretX() - 2) < 0.5)
 }
 
 @Test @MainActor func newFilePromptCancelRetryAndEmptySave() async throws {

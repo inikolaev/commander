@@ -1,11 +1,37 @@
 import Foundation
 internal import TextBuffer
 
+/// One replacement within an edit operation. `range` uses UTF-16 coordinates
+/// in the document immediately before this particular replacement.
+public struct EditorContentDelta: Equatable {
+    public let range: NSRange
+    public let insertedText: String
+
+    public init(range: NSRange, insertedText: String) {
+        self.range = range
+        self.insertedText = insertedText
+    }
+}
+
+/// An applied replace, undo, or redo. Deltas are in application order;
+/// `version` identifies the content after the entire operation.
+public struct EditorContentChange: Equatable {
+    public let changes: [EditorContentDelta]
+    public let version: Int
+
+    public init(changes: [EditorContentDelta], version: Int) {
+        self.changes = changes
+        self.version = version
+    }
+}
+
 /// Editor coordinates are UTF-16 offsets. Ranges must end on grapheme boundaries.
 /// No storage-library types cross this boundary.
 public protocol EditorDocument: AnyObject {
     var length: Int { get }
     var lineCount: Int { get }
+    /// Increases once per actual content mutation, including undo and redo.
+    var contentVersion: Int { get }
     var isModified: Bool { get }
     var canUndo: Bool { get }
     var canRedo: Bool { get }
@@ -13,6 +39,11 @@ public protocol EditorDocument: AnyObject {
     func lineRange(_ index: Int) -> NSRange
     func lineIndex(at offset: Int) -> Int
     func replace(_ range: NSRange, with text: String)
+    /// Calls observers after each replace, undo, or redo has finished updating
+    /// content and history. Nested edits are delivered after the current event.
+    /// Remove the returned ID when observation is no longer needed.
+    @discardableResult func addContentChangeObserver(_ observer: @escaping (EditorContentChange) -> Void) -> UUID
+    func removeContentChangeObserver(_ id: UUID)
     func beginUndoGroup()
     func endUndoGroup()
     @discardableResult func undo() -> NSRange?
@@ -61,6 +92,10 @@ private final class RopeDocument: EditorDocument {
     private var revision = 0
     private var savedRevision = 0
     private var nextRevision = 1
+    private(set) var contentVersion = 0
+    private var contentChangeObservers: [(id: UUID, callback: (EditorContentChange) -> Void)] = []
+    private var queuedContentChanges: [EditorContentChange] = []
+    private var isDispatchingContentChanges = false
 
     init(text: String, lineStarts: [Int]? = nil) {
         let trace = EditorLoadTrace()
@@ -74,6 +109,15 @@ private final class RopeDocument: EditorDocument {
     var isModified: Bool { revision != savedRevision }
     var canUndo: Bool { !undoStack.isEmpty || pending != nil }
     var canRedo: Bool { !redoStack.isEmpty }
+
+    func addContentChangeObserver(_ observer: @escaping (EditorContentChange) -> Void) -> UUID {
+        let id = UUID()
+        contentChangeObservers.append((id, observer))
+        return id
+    }
+    func removeContentChangeObserver(_ id: UUID) {
+        contentChangeObservers.removeAll { $0.id == id }
+    }
 
     func text(in range: NSRange) -> String {
         precondition(range.location >= 0 && range.length >= 0 && NSMaxRange(range) <= length)
@@ -112,6 +156,18 @@ private final class RopeDocument: EditorDocument {
         } else {
             undoStack.append(Edit(changes: [change], beforeRevision: oldRevision, afterRevision: revision))
         }
+        publishChange([EditorContentDelta(range: range, insertedText: text)])
+    }
+    private func publishChange(_ changes: [EditorContentDelta]) {
+        queuedContentChanges.append(EditorContentChange(changes: changes, version: contentVersion))
+        guard !isDispatchingContentChanges else { return }
+        isDispatchingContentChanges = true
+        defer { isDispatchingContentChanges = false }
+        while !queuedContentChanges.isEmpty {
+            let change = queuedContentChanges.removeFirst()
+            let observers = contentChangeObservers
+            for observer in observers { observer.callback(change) }
+        }
     }
     private func apply(_ range: NSRange, _ text: String) {
         let first = lineIndex(at: range.location) + 1
@@ -121,6 +177,7 @@ private final class RopeDocument: EditorDocument {
         starts.replaceSubrange(first..<last, with: inserted)
         for index in (first + inserted.count)..<starts.count { starts[index] += delta }
         try! buffer.replace(range: range, with: text)
+        contentVersion += 1
     }
     func beginUndoGroup() {
         guard !grouping else { return }
@@ -134,24 +191,34 @@ private final class RopeDocument: EditorDocument {
     func undo() -> NSRange? {
         endUndoGroup()
         guard let edit = undoStack.popLast() else { return nil }
+        var deltas: [EditorContentDelta] = []
         for change in edit.changes.reversed() {
-            apply(NSRange(location: change.offset, length: change.after.utf16.count), change.before)
+            let range = NSRange(location: change.offset, length: change.after.utf16.count)
+            apply(range, change.before)
+            deltas.append(EditorContentDelta(range: range, insertedText: change.before))
         }
         revision = edit.beforeRevision
         redoStack.append(edit)
         let first = edit.changes[0]
-        return NSRange(location: first.offset + first.before.utf16.count, length: 0)
+        let selection = NSRange(location: first.offset + first.before.utf16.count, length: 0)
+        publishChange(deltas)
+        return selection
     }
     func redo() -> NSRange? {
         endUndoGroup()
         guard let edit = redoStack.popLast() else { return nil }
+        var deltas: [EditorContentDelta] = []
         for change in edit.changes {
-            apply(NSRange(location: change.offset, length: change.before.utf16.count), change.after)
+            let range = NSRange(location: change.offset, length: change.before.utf16.count)
+            apply(range, change.after)
+            deltas.append(EditorContentDelta(range: range, insertedText: change.after))
         }
         revision = edit.afterRevision
         undoStack.append(edit)
         let last = edit.changes.last!
-        return NSRange(location: last.offset + last.after.utf16.count, length: 0)
+        let selection = NSRange(location: last.offset + last.after.utf16.count, length: 0)
+        publishChange(deltas)
+        return selection
     }
     func markSaved() { endUndoGroup(); savedRevision = revision }
 }

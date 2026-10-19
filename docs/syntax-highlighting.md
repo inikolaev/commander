@@ -1,8 +1,48 @@
-# Viewer syntax highlighting
+# Syntax highlighting
+
+# Viewer
 
 The viewer consumes semantic UTF-8 byte spans through `SyntaxHighlighter`.
 `ViewerSyntaxProjection` translates them to display positions, and `TerminalTheme`
 chooses colors. Language definitions do not depend on the viewer or AppKit.
+
+## Editor
+
+`FileEditorCoordinator` starts `EditorSyntaxController` with the opened `EditorFile.text`.
+That text is already BOM-free and LF-normalized; highlighting therefore uses the
+same bytes as the editable document, including for CRLF files and new files.
+Only supported files of at most 512 KiB of normalized UTF-8 text get an initial
+editing session. Larger or unsupported files stay responsive with plain text.
+The viewer's separate 8 MiB limit is unchanged.
+
+Session construction and its synchronous first parse run on a detached executor.
+The controller observes `EditorDocument` content changes, retaining every ordered
+UTF-16 delta from typing, undo, redo, and IME composition. It queues a parser
+update for the next main-actor turn, combining edits made in the current turn.
+The batch goes through one retained `SyntaxEditingSession`. Updates are serialized;
+edits received during an update form the next batch. This limits worker jobs to
+one in flight without adding a fixed delay to ordinary typing. Full capture-index
+rebuilding still makes large documents more costly; the 512 KiB limit bounds that
+work. If content grows beyond 512 KiB of UTF-8, the controller
+cancels pending work and drops the entire session immediately. Edits while the
+document remains oversized do not reach the parser. Once it shrinks, the
+controller builds a fresh session from the current text and content version.
+Closing the editor removes the observer, cancels pending work, and drops the session.
+
+A local JSON timing probe (five incremental insertions after warmup, including
+the full capture-index rebuild) measured a median of 16.9 ms at 16 KiB and
+275 ms at 256 KiB. These are workload-specific timings, not scheduling
+thresholds. The single in-flight update prevents large-file edits from piling
+up parser jobs while letting the latest batch run when the worker finishes.
+
+`EditorSyntaxProjection` converts the session's UTF-8 byte spans into immutable
+UTF-16 ranges for a source snapshot at the same content version. Projection runs
+off the main actor. It snaps colors to complete Swift `Character` boundaries, so
+combining sequences and emoji are drawn as whole glyphs. The renderer uses a
+binary search per visible glyph; it does no parsing, full-document reads, or
+whole-file scans in `draw`. Selected text keeps the selection contrast color,
+and marked IME text keeps its underline. Results from older content versions are
+discarded before reaching the renderer.
 
 ## Responsibilities
 
