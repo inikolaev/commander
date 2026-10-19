@@ -280,6 +280,41 @@ import FileManagerCore
     }
 }
 
+@Test @MainActor func editorTabsFollowMeasuredGlyphPositions() {
+    _ = NSApplication.shared
+    let size = NSSize(width: 220, height: 90)
+    let tabStop = 4 * TerminalTheme.cellAdvance
+    for prefix in ["aa", "🟥", "👩‍💻", "界", "aaaa"] {
+        let line = prefix + "\t\tz"
+        let editor = TerminalFileEditor(document: EditorDocuments.make(text: line), path: "/tmp/tabs.txt")
+        editor.frame = NSRect(origin: .zero, size: size)
+        let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled],
+            backing: .buffered, defer: false)
+        window.contentView = editor
+
+        func caretX(at offset: Int) -> CGFloat {
+            editor.selection.set(offset)
+            editor.changed()
+            let screenRect = editor.firstRect(forCharacterRange: editor.selection.range, actualRange: nil)
+            return editor.convert(window.convertPoint(fromScreen: screenRect.origin), from: nil).x
+        }
+        let start = prefix.utf16.count
+        let before = caretX(at: start)
+        let firstStop = caretX(at: start + 1)
+        let secondStop = caretX(at: start + 2)
+        let expectedFirstStop = prefix == "aaaa" ? 2 * tabStop : tabStop
+        #expect(abs(firstStop - (2 + expectedFirstStop)) < 0.5)
+        #expect(abs(secondStop - (2 + expectedFirstStop + tabStop)) < 0.5)
+
+        let left = window.convertPoint(toScreen: editor.convert(
+            NSPoint(x: before + (firstStop - before) / 3, y: TerminalTheme.lineHeight + 4), to: nil))
+        let right = window.convertPoint(toScreen: editor.convert(
+            NSPoint(x: before + 2 * (firstStop - before) / 3, y: TerminalTheme.lineHeight + 4), to: nil))
+        #expect(editor.characterIndex(for: left) == start)
+        #expect(editor.characterIndex(for: right) == start + 1)
+    }
+}
+
 @Test @MainActor func editorScrollAndIMEFollowMeasuredWideGlyphPositions() throws {
     _ = NSApplication.shared
     let line = "🟥" + String(repeating: "x", count: 18)

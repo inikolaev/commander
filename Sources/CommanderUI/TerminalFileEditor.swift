@@ -62,19 +62,21 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         let x: CGFloat
         let width: CGFloat
     }
-    private func characterWidth(_ text: String, at column: Int) -> CGFloat {
-        if text == "\t" { return CGFloat(4 - column % 4) * cell }
+    private func characterWidth(_ text: String, at x: CGFloat) -> CGFloat {
+        if text == "\t" {
+            let tabStop = 4 * cell
+            return tabStop - x.truncatingRemainder(dividingBy: tabStop)
+        }
         return max(cell, (text as NSString).size(withAttributes: [.font: TerminalTheme.font]).width)
     }
     private func glyphs(_ line: Int) -> [Glyph] {
         let range = document.lineRange(line)
         var offset = range.location
-        var column = 0
         var x: CGFloat = 0
         var result: [Glyph] = []
         for character in document.text(in: range) {
             let string = String(character)
-            let width = characterWidth(string, at: column)
+            let width = characterWidth(string, at: x)
             if x + width > leftOffset {
                 // Keep a bounded list of visible glyphs, including for a huge single line.
                 let display = character == "\t" ? "" :
@@ -83,7 +85,6 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
             }
             offset += string.utf16.count
             x += width
-            column += max(1, Int((width / cell).rounded()))
             if x > leftOffset + textWidth { break }
         }
         return result
@@ -91,12 +92,10 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
     private func cursorX() -> CGFloat {
         let start = document.lineRange(selection.line).location
         let prefix = document.text(in: NSRange(location: start, length: selection.caret - start))
-        var column = 0
         var x: CGFloat = 0
         for character in prefix {
-            let width = characterWidth(String(character), at: column)
+            let width = characterWidth(String(character), at: x)
             x += width
-            column += max(1, Int((width / cell).rounded()))
         }
         return x
     }
