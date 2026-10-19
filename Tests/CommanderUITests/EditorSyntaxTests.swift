@@ -110,6 +110,55 @@ private struct TestHighlighter: SyntaxHighlighter {
     try await waitForSyntax { projection.kind(at: 1) == .property }
 }
 
+@Test @MainActor func editorSyntaxDropsOversizedSessionAndRebuildsAfterShrink() async throws {
+    let document = EditorDocuments.make(text: "{\"key\": 1}")
+    var projection = EditorSyntaxProjection.empty
+    let controller = EditorSyntaxController(document: document, url: URL(fileURLWithPath: "/tmp/growing.json"),
+                                            initialText: "{\"key\": 1}") { projection = $0 }
+    defer { controller.close() }
+    try await waitForSyntax { controller.hasEditingSession && projection.kind(at: 1) == .property }
+
+    // UTF-16 length stays under the cap while UTF-8 bytes exceed it.
+    let oversized = String(repeating: "😀", count: EditorSyntaxController.maximumFileSize / 4 + 1)
+    document.replace(NSRange(location: 0, length: document.length), with: oversized)
+    #expect(document.length < EditorSyntaxController.maximumFileSize)
+    #expect(!controller.hasEditingSession)
+    #expect(!controller.hasPendingSyntaxWork)
+    #expect(projection.highlights.isEmpty)
+    for _ in 0..<20 {
+        document.replace(NSRange(location: document.length, length: 0), with: "x")
+        #expect(!controller.hasEditingSession)
+        #expect(!controller.hasPendingSyntaxWork)
+    }
+
+    document.replace(NSRange(location: 0, length: document.length), with: "{\"after\": 2}")
+    try await waitForSyntax { controller.hasEditingSession && projection.kind(at: 1) == .property }
+    #expect(projection.kind(at: 8) == nil)
+}
+
+@Test @MainActor func editorSyntaxRecoveryUsesCurrentVersionAfterNestedObserverEdit() async throws {
+    let oversized = String(repeating: " ", count: EditorSyntaxController.maximumFileSize + 1)
+    let document = EditorDocuments.make(text: oversized)
+    let observer = document.addContentChangeObserver { change in
+        if change.version == 1 {
+            document.replace(NSRange(location: 2, length: 0), with: "😀")
+        }
+    }
+    defer { document.removeContentChangeObserver(observer) }
+    var projection = EditorSyntaxProjection.empty
+    let controller = EditorSyntaxController(document: document, url: URL(fileURLWithPath: "/tmp/nested.json"),
+                                            initialText: oversized) { projection = $0 }
+    defer { controller.close() }
+
+    document.replace(NSRange(location: 0, length: document.length), with: "{\"key\": 1}")
+    #expect(document.text(in: NSRange(location: 0, length: document.length)) == "{\"😀key\": 1}")
+    try await waitForSyntax { controller.hasEditingSession && projection.kind(at: 4) == .property }
+    // The colon follows the property at UTF-16 offset 8. A duplicated emoji
+    // delta would move the parser's property span over that colon.
+    #expect(projection.kind(at: 8) == nil)
+    #expect(!controller.hasPendingSyntaxWork)
+}
+
 @Test @MainActor func terminalEditorDrawUsesSyntaxColorsWithSelectionPrecedence() async throws {
     _ = NSApplication.shared
     let source = "{\"key\": 1}"

@@ -12,14 +12,20 @@ final class EditorSyntaxController {
     private var observerID: UUID?
     private var timer: Timer?
     private var initialTask: Task<Void, Never>?
-    private var initialBuildTask: Task<(SyntaxEditingSession, EditorSyntaxProjection), Never>?
+    private var initialBuildTask: Task<(SyntaxEditingSession, EditorSyntaxProjection)?, Never>?
     private var updateTask: Task<Void, Never>?
     private var updateBuildTask: Task<EditorSyntaxProjection, Never>?
     private var session: SyntaxEditingSession?
     private var pending: [SyntaxEditingDelta] = []
     private var latestVersion: Int
+    private var generation = 0
     private var closed = false
     private(set) var projection = EditorSyntaxProjection.empty
+    var hasEditingSession: Bool { session != nil }
+    var hasPendingSyntaxWork: Bool {
+        timer != nil || initialTask != nil || initialBuildTask != nil ||
+            updateTask != nil || updateBuildTask != nil || !pending.isEmpty
+    }
 
     init(document: any EditorDocument, url: URL, initialText: String,
          onProjection: @escaping (EditorSyntaxProjection) -> Void) {
@@ -36,22 +42,26 @@ final class EditorSyntaxController {
 
     private func startInitial(source initialText: String) {
         let version = latestVersion
+        let generation = self.generation
         let url = self.url
         // The actor initializer parses synchronously, so construct it on a
         // detached executor rather than on the main actor.
         let build = Task.detached(priority: .utility) {
+            if Task.isCancelled { return nil as (SyntaxEditingSession, EditorSyntaxProjection)? }
             let session = SyntaxRegistry.viewer.editingSession(
                 for: url, data: Data(initialText.utf8), maximumFileSize: Self.maximumFileSize)
             let highlighter = await session.highlighter()
+            if Task.isCancelled { return nil }
             let projected = EditorSyntaxProjection.make(source: initialText, highlighter: highlighter)
             return (session, projected)
         }
         initialBuildTask = build
         initialTask = Task { [weak self] in
             let built = await build.value
-            guard let self, !self.closed else { return }
+            guard let self, !self.closed, self.generation == generation else { return }
             self.initialTask = nil
             self.initialBuildTask = nil
+            guard let built else { return }
             self.session = built.0
             if self.document.contentVersion == version { self.publish(built.1) }
             if !self.pending.isEmpty { self.schedule() }
@@ -59,13 +69,22 @@ final class EditorSyntaxController {
     }
 
     private func record(_ change: EditorContentChange) {
-        guard !closed else { return }
+        guard !closed, change.version > latestVersion else { return }
+        guard SyntaxRegistry.viewer.supports(url) else { return }
+        // The document can already contain a nested edit whose notification is
+        // still queued. A recovery snapshot must use that newer version.
+        let currentVersion = document.contentVersion
+        guard currentDocumentIsWithinLimit() else {
+            invalidateWork()
+            latestVersion = currentVersion
+            publish(.empty)
+            return
+        }
         latestVersion = change.version
         publish(.empty)
         if session == nil && initialTask == nil {
-            guard SyntaxRegistry.viewer.supports(url), document.length <= Self.maximumFileSize else { return }
             let source = document.text(in: NSRange(location: 0, length: document.length))
-            guard source.utf8.count <= Self.maximumFileSize else { return }
+            latestVersion = currentVersion
             startInitial(source: source)
             return
         }
@@ -73,6 +92,36 @@ final class EditorSyntaxController {
         // One timer and at most one parser update are active. Repeated edits
         // move the deadline without creating worker jobs for each keystroke.
         schedule()
+    }
+
+    private func currentDocumentIsWithinLimit() -> Bool {
+        guard document.length <= Self.maximumFileSize else { return false }
+        // A UTF-16 code unit expands to at most three UTF-8 bytes. Small
+        // documents need no whole-document read on the normal edit path.
+        if document.length <= Self.maximumFileSize / 3 { return true }
+        return currentSourceWithinLimit() != nil
+    }
+
+    private func currentSourceWithinLimit() -> String? {
+        guard document.length <= Self.maximumFileSize else { return nil }
+        let source = document.text(in: NSRange(location: 0, length: document.length))
+        return source.utf8.count <= Self.maximumFileSize ? source : nil
+    }
+
+    private func invalidateWork() {
+        generation += 1
+        timer?.invalidate()
+        timer = nil
+        initialTask?.cancel()
+        initialBuildTask?.cancel()
+        updateTask?.cancel()
+        updateBuildTask?.cancel()
+        initialTask = nil
+        initialBuildTask = nil
+        updateTask = nil
+        updateBuildTask = nil
+        session = nil
+        pending.removeAll()
     }
 
     private func schedule() {
@@ -89,9 +138,9 @@ final class EditorSyntaxController {
         let batch = pending
         pending.removeAll(keepingCapacity: true)
         let version = latestVersion
+        let generation = self.generation
         // Only materialize a source snapshot when projection is possible.
-        let source: String? = document.length <= Self.maximumFileSize
-            ? document.text(in: NSRange(location: 0, length: document.length)) : nil
+        let source = currentSourceWithinLimit()
         let build = Task.detached(priority: .utility) { () -> EditorSyntaxProjection in
             let highlighter = (try? await session.apply(batch)) ?? PlainTextSyntaxHighlighter.shared
             guard !Task.isCancelled, let source, source.utf8.count <= Self.maximumFileSize else { return .empty }
@@ -100,7 +149,7 @@ final class EditorSyntaxController {
         updateBuildTask = build
         updateTask = Task { [weak self] in
             let projected = await build.value
-            guard let self, !self.closed else { return }
+            guard let self, !self.closed, self.generation == generation else { return }
             self.updateTask = nil
             self.updateBuildTask = nil
             if self.document.contentVersion == version { self.publish(projected) }
@@ -115,20 +164,9 @@ final class EditorSyntaxController {
 
     func close() {
         closed = true
-        timer?.invalidate()
-        timer = nil
         if let observerID { document.removeContentChangeObserver(observerID) }
         observerID = nil
-        initialTask?.cancel()
-        initialBuildTask?.cancel()
-        updateTask?.cancel()
-        updateBuildTask?.cancel()
-        initialTask = nil
-        initialBuildTask = nil
-        updateTask = nil
-        updateBuildTask = nil
-        session = nil
-        pending.removeAll()
+        invalidateWork()
         projection = .empty
     }
 }

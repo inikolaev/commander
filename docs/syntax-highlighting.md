@@ -20,9 +20,11 @@ The controller observes `EditorDocument` content changes, retaining every ordere
 UTF-16 delta from typing, undo, redo, and IME composition. It waits about 100 ms
 after the latest edit, then applies the batch through one retained
 `SyntaxEditingSession`. Updates are serialized; edits received during an update
-form the next batch. The session discards its parser when content grows beyond
-512 KiB and can resume highlighting if later edits shrink it. Closing the editor
-removes the observer, cancels pending work, and drops the session.
+form the next batch. If content grows beyond 512 KiB of UTF-8, the controller
+cancels pending work and drops the entire session immediately. Edits while the
+document remains oversized do not reach the parser. Once it shrinks, the
+controller builds a fresh session from the current text and content version.
+Closing the editor removes the observer, cancels pending work, and drops the session.
 
 `EditorSyntaxProjection` converts the session's UTF-8 byte spans into immutable
 UTF-16 ranges for a source snapshot at the same content version. Projection runs
