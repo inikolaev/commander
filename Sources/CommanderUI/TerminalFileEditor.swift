@@ -17,7 +17,7 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
     private var dragging = false
     private var syntaxController: EditorSyntaxController?
     private var syntaxProjection = EditorSyntaxProjection.empty
-    private var cell: CGFloat { ceil(("M" as NSString).size(withAttributes: [.font: TerminalTheme.font]).width) }
+    private var cell: CGFloat { TerminalTheme.cellAdvance }
     var visibleRows: Int { textGeometry.visibleRows }
     private var rows: Int { visibleRows }
     private var textGeometry: TerminalTextGeometry { TerminalTextGeometry(bounds: bounds) }

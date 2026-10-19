@@ -1,6 +1,7 @@
 import AppKit
 import Testing
 import EditorCore
+import FileManagerCore
 @testable import CommanderUI
 
 @Test @MainActor func f4OpensEditorAndShiftF4CreatesFile() throws {
@@ -174,6 +175,58 @@ import EditorCore
     viewer.setFrameSize(NSSize(width: 800, height: height - 1))
     #expect(editor.visibleRows == 9)
     #expect(viewer.visibleRows == 9)
+}
+
+@Test @MainActor func editorLetterSpacingMatchesViewerAndCaret() async throws {
+    _ = NSApplication.shared
+    let line = "i" + String(repeating: " ", count: 20) + "i"
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try line.write(to: url, atomically: false, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: url) }
+
+    let editor = TerminalFileEditor(document: EditorDocuments.make(text: line), path: url.path)
+    let viewer = TerminalFileViewer(path: url.path)
+    let size = NSSize(width: 300, height: 100)
+    editor.frame = NSRect(origin: .zero, size: size)
+    viewer.frame = NSRect(origin: .zero, size: size)
+    viewer.update(try await FileViewerDocument(url: url).page(rows: 1))
+
+    func letterDistance(in view: NSView) throws -> CGFloat {
+        let bitmap = try #require(view.bitmapImageRepForCachingDisplay(in: view.bounds))
+        view.cacheDisplay(in: view.bounds, to: bitmap)
+        let scale = CGFloat(bitmap.pixelsWide) / view.bounds.width
+        let background = try #require(bitmap.colorAt(x: bitmap.pixelsWide - 4,
+            y: Int(1.5 * TerminalTheme.lineHeight * scale))?.usingColorSpace(.deviceRGB))
+        func center(in range: Range<Int>) throws -> CGFloat {
+            let pixels = range.filter { x in
+                (Int(TerminalTheme.lineHeight * scale)..<Int(2 * TerminalTheme.lineHeight * scale)).contains { y in
+                    guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB) else { return false }
+                    return abs(color.redComponent - background.redComponent)
+                        + abs(color.greenComponent - background.greenComponent)
+                        + abs(color.blueComponent - background.blueComponent) > 0.3
+                }
+            }
+            return CGFloat(try #require(pixels.first) + #require(pixels.last)) / (2 * scale)
+        }
+        return try center(in: Int(130 * scale)..<Int(190 * scale))
+            - center(in: 0..<Int(20 * scale))
+    }
+
+    let editorDistance = try letterDistance(in: editor)
+    let viewerDistance = try letterDistance(in: viewer)
+    #expect(abs(editorDistance - viewerDistance) < 1.5)
+
+    let window = NSWindow(contentRect: NSRect(origin: .zero, size: size), styleMask: [.titled],
+        backing: .buffered, defer: false)
+    window.contentView = editor
+    editor.selection.set(line.utf16.count)
+    editor.changed()
+    let caret = editor.convert(window.convertPoint(fromScreen: editor.firstRect(
+        forCharacterRange: NSRange(location: line.utf16.count, length: 0), actualRange: nil).origin), from: nil)
+    #expect(abs(caret.x - (2 + viewerDistance + TerminalTheme.cellAdvance)) < 1.5)
+    let beforeLast = editor.convert(NSPoint(x: caret.x - TerminalTheme.cellAdvance, y: TerminalTheme.lineHeight + 4), to: nil)
+    let screenPoint = window.convertPoint(toScreen: beforeLast)
+    #expect(editor.characterIndex(for: screenPoint) == line.utf16.count - 1)
 }
 
 @Test @MainActor func newFilePromptCancelRetryAndEmptySave() async throws {
