@@ -59,6 +59,17 @@ public struct SyntaxRegistry: Sendable {
         languages.contains { $0.matches(url) }
     }
 
+    /// Creates a serialized editing session for already-normalized UTF-8 content.
+    /// Unsupported formats and oversized content yield plain-text snapshots.
+    public func editingSession(for url: URL, data: Data,
+                               maximumFileSize: Int = Self.defaultMaximumFileSize) -> SyntaxEditingSession {
+        let language = languages.first(where: { $0.matches(url) })
+        let definition = language?.makeSyntaxDefinition?()
+        return SyntaxEditingSession(source: data, definition: definition, registry: self,
+                                    maximumFileSize: maximumFileSize,
+                                    fallbackHighlighter: definition == nil ? language?.makeHighlighter : nil)
+    }
+
     public func highlighter(for url: URL, data: Data,
                             maximumFileSize: Int = Self.defaultMaximumFileSize) -> any SyntaxHighlighter {
         guard data.count <= maximumFileSize,

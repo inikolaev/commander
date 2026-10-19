@@ -34,6 +34,17 @@ struct TreeSitterSyntaxHighlighter: SyntaxHighlighter {
             return source.subdata(in: offset..<min(source.count, offset + 64 * 1024))
         }) else { throw SyntaxHighlightingError.parseFailed }
 
+        index = try Self.makeIndex(source: source, tree: tree, definition: definition,
+                                   injectionDepth: injectionDepth, includedRanges: includedRanges, registry: registry)
+    }
+
+    init(index: SyntaxSpanIndex) {
+        self.index = index
+    }
+
+    static func makeIndex(source: Data, tree: MutableTree, definition: TreeSitterSyntaxDefinition,
+                          injectionDepth: Int = 0, includedRanges: [SwiftTreeSitter.TSRange]? = nil,
+                          registry: SyntaxRegistry = .viewer) throws -> SyntaxSpanIndex {
         let query = try Query(language: definition.language, data: Data(definition.highlightQuery.utf8))
         if query.hasPredicates { try SyntaxPredicateValidator.validate(definition) }
         let text = query.hasPredicates ? UTF8PredicateText(source: source) : nil
@@ -57,7 +68,7 @@ struct TreeSitterSyntaxHighlighter: SyntaxHighlighter {
         let composed = TreeSitterInjectionHighlighter.compose(
             captures: captures, source: source, tree: tree, language: definition.language,
             injections: definition.injections, depth: injectionDepth, includedRanges: includedRanges, registry: registry)
-        index = SyntaxSpanIndex(captures: includedRanges.map {
+        return SyntaxSpanIndex(captures: includedRanges.map {
             SyntaxInjectionRanges.clip(composed, to: $0)
         } ?? composed)
     }
