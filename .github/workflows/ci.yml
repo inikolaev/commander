@@ -46,6 +46,15 @@ jobs:
           python3 scripts/test-app-swiftc.py
           python3 scripts/test-release-scripts.py
 
+      - name: Diagnose terminal test crash
+        if: failure()
+        timeout-minutes: 5
+        run: |
+          test_binary="$(swift build --show-bin-path)/CommanderPackageTests.xctest/Contents/MacOS/CommanderPackageTests"
+          test_helper="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/libexec/swift/pm/swiftpm-testing-helper"
+          xcrun lldb --batch -o run -k 'thread backtrace all' -- "$test_helper" \
+            --test-bundle-path "$test_binary" --testing-library swift-testing --no-parallel
+
       - name: Upload test crash reports
         if: failure()
         uses: actions/upload-artifact@v7
