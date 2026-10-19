@@ -11,7 +11,7 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
     var onSave: (() -> Void)?
     var onClose: (() -> Void)?
     private(set) var topLine = 0
-    private var leftColumn = 0
+    private var leftOffset: CGFloat = 0
     private var scrollRemainder: CGFloat = 0
     private var marked = NSRange(location: NSNotFound, length: 0)
     private var dragging = false
@@ -21,7 +21,7 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
     var visibleRows: Int { textGeometry.visibleRows }
     private var rows: Int { visibleRows }
     private var textGeometry: TerminalTextGeometry { TerminalTextGeometry(bounds: bounds) }
-    private var columns: Int { max(1, Int((bounds.width - 4) / cell)) }
+    private var textWidth: CGFloat { max(cell, bounds.width - 4) }
 
     init(document: any EditorDocument, path: String) {
         self.document = document
@@ -59,47 +59,54 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         let text: String
         let offset: Int
         let length: Int
-        let column: Int
-        let width: Int
+        let x: CGFloat
+        let width: CGFloat
     }
-    private func characterWidth(_ text: String, at column: Int) -> Int {
-        if text == "\t" { return 4 - column % 4 }
-        return max(1, Int(((text as NSString).size(withAttributes: [.font: TerminalTheme.font]).width / cell).rounded()))
+    private func characterWidth(_ text: String, at column: Int) -> CGFloat {
+        if text == "\t" { return CGFloat(4 - column % 4) * cell }
+        return max(cell, (text as NSString).size(withAttributes: [.font: TerminalTheme.font]).width)
     }
     private func glyphs(_ line: Int) -> [Glyph] {
         let range = document.lineRange(line)
         var offset = range.location
         var column = 0
+        var x: CGFloat = 0
         var result: [Glyph] = []
         for character in document.text(in: range) {
             let string = String(character)
             let width = characterWidth(string, at: column)
-            if column + width > leftColumn {
-                // Keep a bounded list of visible cells, including for a huge single line.
+            if x + width > leftOffset {
+                // Keep a bounded list of visible glyphs, including for a huge single line.
                 let display = character == "\t" ? "" :
                     string.unicodeScalars.contains(where: { $0.value < 32 || $0.value == 127 }) ? "·" : string
-                result.append(Glyph(text: display, offset: offset, length: string.utf16.count, column: column, width: width))
+                result.append(Glyph(text: display, offset: offset, length: string.utf16.count, x: x, width: width))
             }
             offset += string.utf16.count
-            column += width
-            if column > leftColumn + columns { break }
+            x += width
+            column += max(1, Int((width / cell).rounded()))
+            if x > leftOffset + textWidth { break }
         }
         return result
     }
-    private func cursorColumn() -> Int {
+    private func cursorX() -> CGFloat {
         let start = document.lineRange(selection.line).location
         let prefix = document.text(in: NSRange(location: start, length: selection.caret - start))
         var column = 0
-        for character in prefix { column += characterWidth(String(character), at: column) }
-        return column
+        var x: CGFloat = 0
+        for character in prefix {
+            let width = characterWidth(String(character), at: column)
+            x += width
+            column += max(1, Int((width / cell).rounded()))
+        }
+        return x
     }
     func changed(ensureVisible: Bool = true) {
         if ensureVisible {
             topLine = min(topLine, selection.line)
             topLine = max(topLine, selection.line - rows + 1)
-            let column = cursorColumn()
-            leftColumn = min(leftColumn, column)
-            leftColumn = max(leftColumn, column - columns + 1)
+            let x = cursorX()
+            leftOffset = min(leftOffset, x)
+            leftOffset = max(leftOffset, x - textWidth + cell)
         }
         topLine = min(max(0, topLine), max(0, document.lineCount - 1))
         needsDisplay = true
@@ -128,10 +135,10 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
             let y = CGFloat(row + 1) * height
             let range = document.lineRange(line)
             for glyph in glyphs(line) {
-                guard glyph.column + glyph.width > leftColumn else { continue }
-                if glyph.column >= leftColumn + columns { break }
-                let rect = NSRect(x: 2 + CGFloat(glyph.column - leftColumn) * cell, y: y,
-                    width: CGFloat(glyph.width) * cell, height: height)
+                guard glyph.x + glyph.width > leftOffset else { continue }
+                if glyph.x >= leftOffset + textWidth { break }
+                let rect = NSRect(x: 2 + glyph.x - leftOffset, y: y,
+                    width: glyph.width, height: height)
                 let selected = NSIntersectionRange(selection.range, NSRange(location: glyph.offset, length: glyph.length)).length > 0
                 if selected { TerminalTheme.selection.setFill(); rect.fill() }
                 // Draw composed graphemes intact (including emoji ZWJ sequences).
@@ -150,8 +157,8 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
             // Make a selected newline visible even on an otherwise empty line.
             if selection.range.location <= NSMaxRange(range) && NSMaxRange(selection.range) > NSMaxRange(range) {
                 let visible = glyphs(line)
-                let end = visible.last.map { $0.column + $0.width } ?? 0
-                let x = 2 + CGFloat(end - leftColumn) * cell
+                let end = visible.last.map { $0.x + $0.width } ?? 0
+                let x = 2 + end - leftOffset
                 if (visible.last.map { $0.offset + $0.length } ?? range.location) == NSMaxRange(range), x >= 2 && x < bounds.width {
                     TerminalTheme.selection.setFill()
                     NSRect(x: x, y: y, width: cell, height: height).fill()
@@ -160,7 +167,7 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         }
         if window?.firstResponder === self && selection.line >= topLine && selection.line < topLine + rows {
             TerminalTheme.primaryText.setFill()
-            NSRect(x: 2 + CGFloat(cursorColumn() - leftColumn) * cell,
+            NSRect(x: 2 + cursorX() - leftOffset,
                 y: CGFloat(selection.line - topLine + 1) * height + 1, width: 2, height: height - 2).fill()
         }
         NSGraphicsContext.restoreGraphicsState()
@@ -269,7 +276,7 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
     }
     func firstRect(forCharacterRange range: NSRange, actualRange: NSRangePointer?) -> NSRect {
         actualRange?.pointee = selection.range
-        let rect = NSRect(x: 2 + CGFloat(cursorColumn() - leftColumn) * cell,
+        let rect = NSRect(x: 2 + cursorX() - leftOffset,
             y: CGFloat(selection.line - topLine + 1) * TerminalTheme.lineHeight, width: cell, height: TerminalTheme.lineHeight)
         return window?.convertToScreen(convert(rect, to: nil)) ?? .zero
     }
@@ -283,9 +290,9 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
     }
     private func offset(at point: NSPoint) -> Int {
         let line = min(max(0, topLine + Int(point.y / TerminalTheme.lineHeight) - 1), document.lineCount - 1)
-        let column = max(0, CGFloat(leftColumn) + (point.x - 2) / cell)
+        let x = max(0, leftOffset + point.x - 2)
         let visible = glyphs(line)
-        return visible.first(where: { column < CGFloat($0.column) + CGFloat($0.width) / 2 })?.offset ??
+        return visible.first(where: { x < $0.x + $0.width / 2 })?.offset ??
             visible.last.map { $0.offset + $0.length } ?? NSMaxRange(document.lineRange(line))
     }
     override func mouseDown(with event: NSEvent) {
