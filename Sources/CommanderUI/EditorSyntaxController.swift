@@ -2,7 +2,7 @@ import EditorCore
 import Foundation
 import SyntaxCore
 
-/// Owns the parser lifetime and serial, debounced updates for one editor.
+/// Owns the parser lifetime and serial updates for one editor.
 @MainActor
 final class EditorSyntaxController {
     nonisolated static let maximumFileSize = 512 * 1024
@@ -10,7 +10,7 @@ final class EditorSyntaxController {
     private let url: URL
     private let onProjection: (EditorSyntaxProjection) -> Void
     private var observerID: UUID?
-    private var timer: Timer?
+    private var flushTask: Task<Void, Never>?
     private var initialTask: Task<Void, Never>?
     private var initialBuildTask: Task<(SyntaxEditingSession, EditorSyntaxProjection)?, Never>?
     private var updateTask: Task<Void, Never>?
@@ -24,7 +24,7 @@ final class EditorSyntaxController {
     private(set) var projection = EditorSyntaxProjection.empty
     var hasEditingSession: Bool { session != nil }
     var hasPendingSyntaxWork: Bool {
-        timer != nil || initialTask != nil || initialBuildTask != nil ||
+        flushTask != nil || initialTask != nil || initialBuildTask != nil ||
             updateTask != nil || updateBuildTask != nil || !pending.isEmpty
     }
 
@@ -106,8 +106,8 @@ final class EditorSyntaxController {
             publish(provisional)
         }
         pending.append(contentsOf: change.changes.map { SyntaxEditingDelta(range: $0.range, insertedText: $0.insertedText) })
-        // One timer and at most one parser update are active. Repeated edits
-        // move the deadline without creating worker jobs for each keystroke.
+        // Coalesce edits in this main-actor turn. While a parser update is in
+        // flight, subsequent edits form the next batch.
         schedule()
     }
 
@@ -127,8 +127,8 @@ final class EditorSyntaxController {
 
     private func invalidateWork() {
         generation += 1
-        timer?.invalidate()
-        timer = nil
+        flushTask?.cancel()
+        flushTask = nil
         initialTask?.cancel()
         initialBuildTask?.cancel()
         updateTask?.cancel()
@@ -143,15 +143,15 @@ final class EditorSyntaxController {
     }
 
     private func schedule() {
-        guard session != nil, updateTask == nil else { return }
-        if let timer { timer.fireDate = Date().addingTimeInterval(0.1) }
-        else { timer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: false) { [weak self] _ in
-            MainActor.assumeIsolated { self?.flush() }
-        } }
+        guard session != nil, updateTask == nil, flushTask == nil else { return }
+        flushTask = Task { [weak self] in
+            guard !Task.isCancelled else { return }
+            self?.flush()
+        }
     }
 
     private func flush() {
-        timer = nil
+        flushTask = nil
         guard !closed, let session, !pending.isEmpty else { return }
         let batch = pending
         pending.removeAll(keepingCapacity: true)

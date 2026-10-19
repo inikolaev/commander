@@ -255,6 +255,35 @@ private struct TestHighlighter: SyntaxHighlighter {
     #expect(projection.kind(at: 2) == .property)
 }
 
+@Test @MainActor func editorSyntaxRapidEditsFinishWithCurrentDocumentProjection() async throws {
+    let url = URL(fileURLWithPath: "/tmp/rapid.json")
+    let document = EditorDocuments.make(text: "{\"key\": 1}")
+    var delivered: [EditorSyntaxProjection] = []
+    let controller = EditorSyntaxController(document: document, url: url, initialText: "{\"key\": 1}") {
+        delivered.append($0)
+    }
+    defer { controller.close() }
+    try await waitForSyntax { controller.hasEditingSession && !controller.hasPendingSyntaxWork }
+
+    // Multiple edits in one actor turn must reach the parser in document order.
+    document.replace(NSRange(location: 2, length: 3), with: "first")
+    document.replace(NSRange(location: 7, length: 0), with: "😀")
+    document.replace(NSRange(location: 12, length: 1), with: "2")
+    #expect(controller.hasPendingSyntaxWork)
+    // A second burst may arrive while the first update is still running.
+    await Task.yield()
+    document.replace(NSRange(location: 2, length: 5), with: "final")
+    document.replace(NSRange(location: 7, length: 2), with: "")
+    try await waitForSyntax { !controller.hasPendingSyntaxWork }
+
+    let source = document.text(in: NSRange(location: 0, length: document.length))
+    #expect(source == "{\"final\": 2}")
+    let expected = EditorSyntaxProjection.make(
+        source: source, highlighter: SyntaxRegistry.viewer.highlighter(for: url, data: Data(source.utf8)))
+    #expect(controller.projection.highlights == expected.highlights)
+    #expect(delivered.last?.highlights == expected.highlights)
+}
+
 @Test @MainActor func editorSyntaxContinuesQuotedStringsImmediatelyInOtherLanguages() async throws {
     for (source, ext) in [("value = \"abc\"", "py"), ("const value = \"abc\";", "js")] {
         let document = EditorDocuments.make(text: source)

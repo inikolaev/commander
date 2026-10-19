@@ -17,14 +17,23 @@ The viewer's separate 8 MiB limit is unchanged.
 
 Session construction and its synchronous first parse run on a detached executor.
 The controller observes `EditorDocument` content changes, retaining every ordered
-UTF-16 delta from typing, undo, redo, and IME composition. It waits about 100 ms
-after the latest edit, then applies the batch through one retained
-`SyntaxEditingSession`. Updates are serialized; edits received during an update
-form the next batch. If content grows beyond 512 KiB of UTF-8, the controller
+UTF-16 delta from typing, undo, redo, and IME composition. It queues a parser
+update for the next main-actor turn, combining edits made in the current turn.
+The batch goes through one retained `SyntaxEditingSession`. Updates are serialized;
+edits received during an update form the next batch. This limits worker jobs to
+one in flight without adding a fixed delay to ordinary typing. Full capture-index
+rebuilding still makes large documents more costly; the 512 KiB limit bounds that
+work. If content grows beyond 512 KiB of UTF-8, the controller
 cancels pending work and drops the entire session immediately. Edits while the
 document remains oversized do not reach the parser. Once it shrinks, the
 controller builds a fresh session from the current text and content version.
 Closing the editor removes the observer, cancels pending work, and drops the session.
+
+A local JSON timing probe (five incremental insertions after warmup, including
+the full capture-index rebuild) measured a median of 16.9 ms at 16 KiB and
+275 ms at 256 KiB. These are workload-specific timings, not scheduling
+thresholds. The single in-flight update prevents large-file edits from piling
+up parser jobs while letting the latest batch run when the worker finishes.
 
 `EditorSyntaxProjection` converts the session's UTF-8 byte spans into immutable
 UTF-16 ranges for a source snapshot at the same content version. Projection runs
