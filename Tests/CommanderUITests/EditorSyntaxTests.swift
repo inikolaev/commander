@@ -83,12 +83,178 @@ private struct TestHighlighter: SyntaxHighlighter {
     #expect(projection.kind(at: 0) == nil)
 
     document.replace(NSRange(location: 4, length: 5), with: "name")
-    #expect(projection.kind(at: 4) == nil) // changed property has no stale color
+    #expect(projection.kind(at: 4) == nil) // replacement waits for the parser
     #expect(projection.kind(at: 15) == .property) // following property shifted left
     document.undo()
     #expect(projection.kind(at: 16) == .property)
     try await waitForSyntax { projection.kind(at: 4) == .property && projection.kind(at: 16) == .property }
     #expect(document.text(in: NSRange(location: 0, length: document.length)) == "  {\"first\": 1, \"second\": 2}")
+}
+
+@Test func editorProjectionColorsOnlySafeTokenContinuations() {
+    let property = EditorSyntaxProjection.make(source: "{\"name\":1}", highlighter: TestHighlighter(spans: [
+        SyntaxHighlightSpan(byteRange: 1..<7, kind: .property),
+    ]))
+    let typed = property.applying([
+        EditorContentDelta(range: NSRange(location: 3, length: 0), insertedText: "a"),
+        EditorContentDelta(range: NSRange(location: 4, length: 0), insertedText: "b"),
+    ])
+    #expect(typed.highlights == [EditorSyntaxHighlight(range: 1..<9, kind: .property)])
+    #expect(property.applying([EditorContentDelta(range: NSRange(location: 2, length: 3), insertedText: "new")])
+        .kind(at: 2) == nil)
+    #expect(property.applying([EditorContentDelta(range: NSRange(location: 3, length: 0), insertedText: "\\")])
+        .kind(at: 3) == nil)
+    #expect(property.applying([EditorContentDelta(range: NSRange(location: 1, length: 0), insertedText: "a")])
+        .kind(at: 1) == nil)
+    #expect(property.applying([EditorContentDelta(range: NSRange(location: 3, length: 3), insertedText: "a")])
+        .kind(at: 3) == nil)
+
+    let number = EditorSyntaxProjection(highlights: [EditorSyntaxHighlight(range: 0..<2, kind: .number)])
+    #expect(number.applying([EditorContentDelta(range: NSRange(location: 1, length: 0), insertedText: "3")])
+        .kind(at: 1) == nil)
+    #expect(number.applying([EditorContentDelta(range: NSRange(location: 1, length: 0), insertedText: "x")])
+        .kind(at: 1) == nil)
+    let constant = EditorSyntaxProjection(highlights: [EditorSyntaxHighlight(range: 0..<4, kind: .constant)])
+    #expect(constant.applying([EditorContentDelta(range: NSRange(location: 2, length: 0), insertedText: "x")])
+        .kind(at: 2) == nil)
+}
+
+@Test func editorProjectionContinuesSimpleQuotedTokensAcrossLanguages() {
+    func parsed(_ source: String, _ ext: String) -> EditorSyntaxProjection {
+        let url = URL(fileURLWithPath: "/tmp/provisional.\(ext)")
+        let highlighter = SyntaxRegistry.viewer.highlighter(for: url, data: Data(source.utf8))
+        return EditorSyntaxProjection.make(source: source, highlighter: highlighter)
+    }
+
+    let key = parsed("{\"key\": 1}", "json")
+    #expect(key.applying([EditorContentDelta(range: NSRange(location: 3, length: 0), insertedText: "x")])
+        .kind(at: 3) == .property)
+    #expect(key.applying([EditorContentDelta(range: NSRange(location: 3, length: 1), insertedText: "x")])
+        .kind(at: 3) == nil)
+    #expect(key.applying([EditorContentDelta(range: NSRange(location: 1, length: 0), insertedText: "x")])
+        .kind(at: 1) == nil)
+
+    // The JSON highlighter can return one display span for adjacent strings.
+    // Such a span is not one quoted token, even when its endpoints are quotes.
+    for source in ["[\"a\"\"b\"]", "[\"a\"\u{301}\"\u{301}b\"]"] {
+        let projection = parsed(source, "json")
+        #expect(projection.inheritableTokens.isEmpty)
+        #expect(projection.applying([EditorContentDelta(range: NSRange(location: 2, length: 0), insertedText: "x")])
+            .kind(at: 2) == nil)
+    }
+
+    let escaped = "{\"a\\\\\":1}"
+    let escapedProjection = parsed(escaped, "json")
+    #expect(escapedProjection.inheritableTokens.isEmpty)
+    #expect(escapedProjection.applying([EditorContentDelta(range: NSRange(location: 4, length: 0), insertedText: "x")])
+        .kind(at: 4) == nil)
+    let changedEscaped = (escaped as NSString).replacingCharacters(in: NSRange(location: 4, length: 0), with: "x")
+    #expect(parsed(changedEscaped, "json").kind(at: 4) != .property)
+    #expect(escapedProjection.applying([EditorContentDelta(range: NSRange(location: 3, length: 1), insertedText: "x")])
+        .kind(at: 3) == nil)
+
+    let afterEscape = key.applying([
+        EditorContentDelta(range: NSRange(location: 3, length: 0), insertedText: "\\"),
+        EditorContentDelta(range: NSRange(location: 4, length: 0), insertedText: "x"),
+    ])
+    #expect(afterEscape.kind(at: 4) == nil)
+    #expect(afterEscape.inheritableTokens.isEmpty)
+
+    let afterColonDeletion = key.applying([
+        EditorContentDelta(range: NSRange(location: 6, length: 1), insertedText: ""),
+        EditorContentDelta(range: NSRange(location: 3, length: 0), insertedText: "x"),
+    ])
+    #expect(afterColonDeletion.inheritableTokens.isEmpty)
+    #expect(afterColonDeletion.kind(at: 3) == nil)
+    #expect(afterColonDeletion.kind(at: 2) == .property) // untouched visible text remains colored
+
+    let afterPrefixQuote = key.applying([
+        EditorContentDelta(range: NSRange(location: 1, length: 0), insertedText: "\""),
+        EditorContentDelta(range: NSRange(location: 4, length: 0), insertedText: "x"),
+    ])
+    #expect(afterPrefixQuote.inheritableTokens.isEmpty)
+    #expect(afterPrefixQuote.kind(at: 4) == nil)
+
+    let repeatedKey = key.applying([
+        EditorContentDelta(range: NSRange(location: 3, length: 0), insertedText: "x"),
+        EditorContentDelta(range: NSRange(location: 4, length: 0), insertedText: "y"),
+    ])
+    #expect(repeatedKey.kind(at: 3) == .property && repeatedKey.kind(at: 4) == .property)
+    #expect(repeatedKey.inheritableTokens == [1..<8])
+    #expect(parsed("{\"kxyey\": 1}", "json").kind(at: 4) == .property)
+
+    for (source, ext, offset) in [("value = \"abc\"", "py", 10),
+                                  ("const value = \"abc\";", "js", 17)] {
+        let projection = parsed(source, ext)
+        #expect(projection.kind(at: offset) == .string)
+        #expect(projection.applying([EditorContentDelta(range: NSRange(location: offset, length: 0),
+                                                        insertedText: "x")]).kind(at: offset) == .string)
+    }
+
+    let python = parsed("r\"abc\"", "py")
+    #expect(python.inheritableTokens.isEmpty)
+    #expect(python.applying([EditorContentDelta(range: NSRange(location: 1, length: 0), insertedText: "x")])
+        .kind(at: 1) == nil)
+    #expect(parsed("rx\"abc\"", "py").kind(at: 1) != .string)
+    let cpp = parsed("R\"tag(abc)tag\"", "cpp")
+    #expect(cpp.inheritableTokens.isEmpty)
+    #expect(cpp.applying([EditorContentDelta(range: NSRange(location: 3, length: 0), insertedText: "x")])
+        .kind(at: 3) == nil)
+    #expect(parsed("R\"txag(abc)tag\"", "cpp").kind(at: 3) != .string)
+}
+
+@Test @MainActor func editorSyntaxColorsJSONKeyImmediatelyThroughEditsAndUndo() async throws {
+    let document = EditorDocuments.make(text: "{\"\": 12, \"value\": \"text\"}")
+    var projection = EditorSyntaxProjection.empty
+    let controller = EditorSyntaxController(document: document, url: URL(fileURLWithPath: "/tmp/immediate.json"),
+                                            initialText: document.text(in: NSRange(location: 0, length: document.length))) {
+        projection = $0
+    }
+    defer { controller.close() }
+    try await waitForSyntax { projection.kind(at: 1) == .property && projection.kind(at: 21) == .string }
+
+    document.replace(NSRange(location: 2, length: 0), with: "a")
+    #expect(projection.kind(at: 2) == .property)
+    document.replace(NSRange(location: 3, length: 0), with: "b")
+    #expect(projection.kind(at: 2) == .property && projection.kind(at: 3) == .property)
+    #expect(projection.highlights.filter { $0.kind == .property && $0.range.contains(2) }.count == 1)
+    document.undo()
+    #expect(projection.kind(at: 2) == .property)
+    document.redo()
+    #expect(projection.kind(at: 3) == nil) // undo invalidates the guess until parsing catches up
+    try await waitForSyntax { !controller.hasPendingSyntaxWork }
+    #expect(projection.kind(at: 3) == .property)
+
+    // Replacements and escapes wait for the parser to confirm the new token.
+    let source = document.text(in: NSRange(location: 0, length: document.length)) as NSString
+    let value = source.range(of: "text")
+    document.replace(value, with: "word")
+    #expect(projection.kind(at: value.location) == nil)
+    document.replace(NSRange(location: value.location + 1, length: 0), with: "\\")
+    #expect(projection.kind(at: value.location + 1) == nil)
+    try await waitForSyntax { !controller.hasPendingSyntaxWork }
+    let current = document.text(in: NSRange(location: 0, length: document.length))
+    let highlighter = SyntaxRegistry.viewer.highlighter(
+        for: URL(fileURLWithPath: "/tmp/immediate.json"), data: Data(current.utf8))
+    #expect(projection.highlights == EditorSyntaxProjection.make(source: current, highlighter: highlighter).highlights)
+    #expect(projection.kind(at: 2) == .property)
+}
+
+@Test @MainActor func editorSyntaxContinuesQuotedStringsImmediatelyInOtherLanguages() async throws {
+    for (source, ext) in [("value = \"abc\"", "py"), ("const value = \"abc\";", "js")] {
+        let document = EditorDocuments.make(text: source)
+        let offset = (source as NSString).range(of: "abc").location + 1
+        var projection = EditorSyntaxProjection.empty
+        let controller = EditorSyntaxController(
+            document: document, url: URL(fileURLWithPath: "/tmp/immediate.\(ext)"), initialText: source
+        ) { projection = $0 }
+        try await waitForSyntax { projection.kind(at: offset) == .string }
+        document.replace(NSRange(location: offset, length: 0), with: "x")
+        #expect(projection.kind(at: offset) == .string)
+        try await waitForSyntax { !controller.hasPendingSyntaxWork }
+        #expect(projection.kind(at: offset) == .string)
+        controller.close()
+    }
 }
 
 @Test @MainActor func editorSyntaxWaitsForNestedNotificationBeforePublishing() async throws {
@@ -261,6 +427,9 @@ private struct TestHighlighter: SyntaxHighlighter {
     #expect(editor.foregroundColor(for: 0, selected: false) == TerminalTheme.accent)
     #expect(editor.foregroundColor(for: 1, selected: true) == TerminalTheme.contrastText)
     #expect(try textAreaPixels() != plainPixels)
+    editor.document.replace(NSRange(location: 2, length: 0), with: "a")
+    #expect(editor.foregroundColor(for: 2, selected: false) == TerminalTheme.syntaxColor(for: .property))
+    #expect(editor.foregroundColor(for: 2, selected: true) == TerminalTheme.contrastText)
     // Composition retains its marked range, which draw() underlines separately
     // from the foreground-color decision.
     editor.selection.set(editor.document.length)
