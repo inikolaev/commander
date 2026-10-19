@@ -36,6 +36,8 @@ jobs:
             swift-test-${{ runner.os }}-xcode26.2-${{ hashFiles('Package.resolved') }}-
 
       - name: Test
+        env:
+          SWIFT_BACKTRACE: enable=yes,interactive=no
         run: |
           swift --version
           # AppKit and Ghostty share process-wide UI state.
@@ -43,6 +45,13 @@ jobs:
           python3 scripts/test-app-swiftc.py
           python3 scripts/test-release-scripts.py
 
+      - name: Upload test crash reports
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-crash-reports
+          path: ~/Library/Logs/DiagnosticReports/
+          retention-days: 3
 
   smoke-build:
     runs-on: macos-15
