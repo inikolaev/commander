@@ -42,6 +42,59 @@ _commander_redraw() {
         _commander_event "input $state"
     fi
 }
+_commander_winch() {
+    emulate -L zsh
+    # SIGWINCH bypasses line-pre-redraw. Reposition ZLE's display without
+    # accepting the old prompt into scrollback, preserving buffer and cursor.
+    # A foreground program owns the display while ZLE is inactive.
+    if zle; then
+        # Keep the old frame visible until the prompt and editing buffer have
+        # both been painted at their new position (DEC synchronized output).
+        printf '\e[?2026h'
+        local saved_prompt=$PROMPT
+        {
+            # Let ZLE erase its previous display before moving. Its terminal
+            # output is buffered separately from printf, so the move must be
+            # part of the prompt redraw itself to preserve that ordering.
+            PROMPT=$'%{\e[9999;1H\e]133;A\a%}'$saved_prompt
+            zle .reset-prompt
+            zle -R
+        } always {
+            # Drop the temporary anchor from ZLE's expanded prompt as well as
+            # PROMPT so normal edits do not move or scroll the command line.
+            PROMPT=$saved_prompt
+            zle .reset-prompt
+            zle -R
+            printf '\e[?2026l'
+        }
+    fi
+}
+_commander_install_winch() {
+    emulate -L zsh
+    unsetopt localtraps
+    # Retain resize hooks installed by the user's startup files, in either
+    # function or `trap '...' WINCH` form.
+    if (( ${+functions[TRAPWINCH]} )); then
+        functions -c TRAPWINCH _commander_user_winch
+        TRAPWINCH() { _commander_winch; _commander_user_winch "$@"; }
+    else
+        # Command substitution resets signal traps, so capture in this shell.
+        builtin trap > "$_commander_mailbox/traps"
+        local -a saved_traps
+        saved_traps=(${(z)"$(<"$_commander_mailbox/traps")"})
+        local existing='' i
+        for (( i=1; i+3 <= ${#saved_traps}; ++i )); do
+            if [[ $saved_traps[i] == trap && $saved_traps[i+1] == -- &&
+                  $saved_traps[i+3] == (SIGWINCH|WINCH) ]]; then
+                existing=${(Q)saved_traps[i+2]}
+                break
+            fi
+        done
+        builtin trap "_commander_winch; $existing" WINCH
+    fi
+}
+_commander_install_winch
+unfunction _commander_install_winch
 _commander_accept_line() {
     emulate -L zsh
     local mode=$(<"$_commander_mailbox/mode")

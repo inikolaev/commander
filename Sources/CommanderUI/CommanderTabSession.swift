@@ -20,10 +20,9 @@ final class CommanderTabSession: NSObject {
     // True means expanded; the compact prompt stays visible beside the panes.
     private(set) var isTerminalVisible = false
     private var automaticallyExpanded = false
-    private let terminalHost = NSView()
+    private let terminalHost = TerminalHostView()
     private let paneCover = NSView()
     private var paneBottom: NSLayoutConstraint!
-    private var terminalTop: NSLayoutConstraint!
     private var editingPrompt = false
     func restoreFocus() {
         guard root.view.window === window else { return }
@@ -98,9 +97,8 @@ final class CommanderTabSession: NSObject {
         let keyBarInset: CGFloat = 0
         let keyBarGap: CGFloat = 0
         paneBottom = left.bottomAnchor.constraint(equalTo: shortcuts.topAnchor, constant: -keyBarGap)
-        terminalTop = terminalHost.topAnchor.constraint(equalTo: root.view.topAnchor)
         NSLayoutConstraint.activate([
-            terminalTop,
+            terminalHost.topAnchor.constraint(equalTo: root.view.topAnchor),
             terminalHost.bottomAnchor.constraint(equalTo: shortcuts.topAnchor),
             paneCover.leadingAnchor.constraint(equalTo: root.view.leadingAnchor),
             paneCover.trailingAnchor.constraint(equalTo: root.view.trailingAnchor),
@@ -216,14 +214,8 @@ final class CommanderTabSession: NSObject {
             }
             terminal.onCellHeightChanged = { [weak self] in self?.updatePromptHeight() }
             let view = terminal.view
-            view.translatesAutoresizingMaskIntoConstraints = false
             terminalHost.addSubview(view)
-            NSLayoutConstraint.activate([
-                view.leadingAnchor.constraint(equalTo: terminalHost.leadingAnchor),
-                view.trailingAnchor.constraint(equalTo: terminalHost.trailingAnchor),
-                view.topAnchor.constraint(equalTo: terminalHost.topAnchor),
-                view.bottomAnchor.constraint(equalTo: terminalHost.bottomAnchor),
-            ])
+            terminalHost.needsLayout = true
             updatePromptHeight()
             return true
         } catch {
@@ -235,13 +227,9 @@ final class CommanderTabSession: NSObject {
     private func updatePromptHeight() {
         guard let terminal else {
             paneBottom.constant = 0
-            terminalTop.constant = 0
             return
         }
-        // Ghostty uses whole cell rows. Put the leftover fraction above the
-        // terminal instead of leaving an apparent blank line below its prompt.
-        let available = max(0, root.view.bounds.height - TerminalTheme.lineHeight)
-        terminalTop.constant = available.truncatingRemainder(dividingBy: terminal.cellHeight)
+        terminalHost.cellHeight = terminal.cellHeight
         paneBottom.constant = -ceil(terminal.cellHeight * CGFloat(terminal.inputRows))
     }
 
@@ -603,4 +591,3 @@ final class CommanderTabSession: NSObject {
         }
     }
 }
-
