@@ -17,6 +17,7 @@ final class EditorSyntaxController {
     private var updateBuildTask: Task<EditorSyntaxProjection, Never>?
     private var session: SyntaxEditingSession?
     private var pending: [SyntaxEditingDelta] = []
+    private var unprojected: [EditorContentDelta] = []
     private var latestVersion: Int
     private var generation = 0
     private var closed = false
@@ -80,13 +81,29 @@ final class EditorSyntaxController {
             publish(.empty)
             return
         }
-        latestVersion = change.version
-        publish(.empty)
         if session == nil && initialTask == nil {
             let source = document.text(in: NSRange(location: 0, length: document.length))
             latestVersion = currentVersion
+            unprojected.removeAll()
+            publish(.empty)
             startInitial(source: source)
             return
+        }
+        latestVersion = change.version
+        unprojected.append(contentsOf: change.changes)
+        // A preceding observer may have made a nested edit. Its notification
+        // follows this one, so only publish after all deltas reach the current
+        // document version.
+        if currentVersion == change.version {
+            var provisional = projection.applying(unprojected)
+            if unprojected.contains(where: { $0.range.length != 0 ||
+                !$0.insertedText.unicodeScalars.allSatisfy { (0x20...0x7e).contains($0.value) }
+            }) {
+                let source = document.text(in: NSRange(location: 0, length: document.length))
+                provisional = provisional.clippingToGraphemes(in: source)
+            }
+            unprojected.removeAll(keepingCapacity: true)
+            publish(provisional)
         }
         pending.append(contentsOf: change.changes.map { SyntaxEditingDelta(range: $0.range, insertedText: $0.insertedText) })
         // One timer and at most one parser update are active. Repeated edits
@@ -122,6 +139,7 @@ final class EditorSyntaxController {
         updateBuildTask = nil
         session = nil
         pending.removeAll()
+        unprojected.removeAll()
     }
 
     private func schedule() {

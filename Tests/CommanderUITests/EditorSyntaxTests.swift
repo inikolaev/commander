@@ -41,6 +41,82 @@ private struct TestHighlighter: SyntaxHighlighter {
     #expect(projection.kind(at: 12) == nil)
 }
 
+@Test func editorProjectionTransformsOrderedUTF16DeltasAndClipsJoinedGraphemes() {
+    let original = EditorSyntaxProjection(highlights: [
+        EditorSyntaxHighlight(range: 0..<2, kind: .string),
+        EditorSyntaxHighlight(range: 2..<8, kind: .property),
+        EditorSyntaxHighlight(range: 10..<12, kind: .number),
+    ])
+    let transformed = original.applying([
+        EditorContentDelta(range: NSRange(location: 4, length: 2), insertedText: "😀"),
+        EditorContentDelta(range: NSRange(location: 0, length: 0), insertedText: "é"),
+    ])
+    #expect(transformed.highlights == [
+        EditorSyntaxHighlight(range: 1..<3, kind: .string),
+        EditorSyntaxHighlight(range: 3..<5, kind: .property),
+        EditorSyntaxHighlight(range: 7..<9, kind: .property),
+        EditorSyntaxHighlight(range: 11..<13, kind: .number),
+    ])
+
+    let joined = EditorSyntaxProjection(highlights: [
+        EditorSyntaxHighlight(range: 0..<1, kind: .property),
+        EditorSyntaxHighlight(range: 1..<2, kind: .number),
+    ]).applying([EditorContentDelta(range: NSRange(location: 1, length: 0), insertedText: "\u{301}")])
+        .clippingToGraphemes(in: "e\u{301}x")
+    #expect(joined.highlights == [EditorSyntaxHighlight(range: 2..<3, kind: .number)])
+}
+
+@Test @MainActor func editorSyntaxRetainsUnaffectedColorsImmediatelyAcrossEditsAndUndo() async throws {
+    let document = EditorDocuments.make(text: "{\"first\": 1, \"second\": 2}")
+    var projection = EditorSyntaxProjection.empty
+    let controller = EditorSyntaxController(document: document, url: URL(fileURLWithPath: "/tmp/edits.json"),
+                                            initialText: document.text(in: NSRange(location: 0, length: document.length))) {
+        projection = $0
+    }
+    defer { controller.close() }
+    try await waitForSyntax { projection.kind(at: 2) == .property && projection.kind(at: 14) == .property }
+
+    document.replace(NSRange(location: 0, length: 0), with: "  ")
+    #expect(projection.kind(at: 2) == nil)
+    #expect(projection.kind(at: 4) == .property)
+    #expect(projection.kind(at: 16) == .property)
+    #expect(projection.kind(at: 0) == nil)
+
+    document.replace(NSRange(location: 4, length: 5), with: "name")
+    #expect(projection.kind(at: 4) == nil) // changed property has no stale color
+    #expect(projection.kind(at: 15) == .property) // following property shifted left
+    document.undo()
+    #expect(projection.kind(at: 16) == .property)
+    try await waitForSyntax { projection.kind(at: 4) == .property && projection.kind(at: 16) == .property }
+    #expect(document.text(in: NSRange(location: 0, length: document.length)) == "  {\"first\": 1, \"second\": 2}")
+}
+
+@Test @MainActor func editorSyntaxWaitsForNestedNotificationBeforePublishing() async throws {
+    let document = EditorDocuments.make(text: "{\"key\": 1}")
+    let observer = document.addContentChangeObserver { change in
+        if change.version == 1 {
+            document.replace(NSRange(location: 0, length: 0), with: " ")
+        }
+    }
+    defer { document.removeContentChangeObserver(observer) }
+    var delivered: [EditorSyntaxProjection] = []
+    let controller = EditorSyntaxController(document: document, url: URL(fileURLWithPath: "/tmp/nested-edits.json"),
+                                            initialText: document.text(in: NSRange(location: 0, length: document.length))) {
+        delivered.append($0)
+    }
+    defer { controller.close() }
+    try await waitForSyntax { controller.projection.kind(at: 2) == .property }
+    delivered.removeAll()
+
+    document.replace(NSRange(location: 0, length: 0), with: " ")
+    #expect(document.contentVersion == 2)
+    #expect(delivered.count == 1)
+    #expect(delivered[0].kind(at: 4) == .property)
+    #expect(delivered[0].kind(at: 2) == nil)
+    try await waitForSyntax { !controller.hasPendingSyntaxWork }
+    #expect(controller.projection.kind(at: 4) == .property)
+}
+
 @Test @MainActor func editorSyntaxFollowsUnicodeUndoRedoAndIME() async throws {
     _ = NSApplication.shared
     let document = EditorDocuments.make(text: "{\r\n  \"name\": 1\r\n}")

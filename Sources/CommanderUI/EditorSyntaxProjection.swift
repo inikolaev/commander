@@ -1,4 +1,5 @@
 import Foundation
+import EditorCore
 import SyntaxCore
 
 struct EditorSyntaxHighlight: Sendable, Equatable {
@@ -51,5 +52,77 @@ struct EditorSyntaxProjection: Sendable {
         }
         guard low < highlights.count, highlights[low].range.lowerBound <= offset else { return nil }
         return highlights[low].kind
+    }
+
+    /// Keep colors that still describe untouched text while a parse is pending.
+    /// Each delta is expressed in the coordinates left by the preceding delta.
+    func applying(_ changes: [EditorContentDelta]) -> Self {
+        var result = highlights
+        for change in changes {
+            let start = change.range.location
+            let end = NSMaxRange(change.range)
+            let insertedLength = change.insertedText.utf16.count
+            let displacement = insertedLength - change.range.length
+            var next: [EditorSyntaxHighlight] = []
+            next.reserveCapacity(result.count + 1)
+            for highlight in result {
+                let range = highlight.range
+                if range.upperBound <= start {
+                    next.append(highlight)
+                } else if range.lowerBound >= end {
+                    next.append(EditorSyntaxHighlight(
+                        range: (range.lowerBound + displacement)..<(range.upperBound + displacement),
+                        kind: highlight.kind))
+                } else {
+                    if range.lowerBound < start {
+                        next.append(EditorSyntaxHighlight(range: range.lowerBound..<start, kind: highlight.kind))
+                    }
+                    if range.upperBound > end {
+                        next.append(EditorSyntaxHighlight(
+                            range: (start + insertedLength)..<(range.upperBound + displacement),
+                            kind: highlight.kind))
+                    }
+                }
+            }
+            result = next
+        }
+        return Self(highlights: result)
+    }
+
+    /// Joining or inserting Unicode can change grapheme boundaries adjacent to
+    /// an edit. Trim provisional spans to boundaries in the current document.
+    func clippingToGraphemes(in source: String) -> Self {
+        var boundaries = [0]
+        boundaries.reserveCapacity(source.utf16.count + 1)
+        var offset = 0
+        for character in source {
+            offset += character.utf16.count
+            boundaries.append(offset)
+        }
+        func firstBoundary(atOrAfter value: Int) -> Int {
+            var low = 0
+            var high = boundaries.count
+            while low < high {
+                let middle = (low + high) / 2
+                if boundaries[middle] < value { low = middle + 1 } else { high = middle }
+            }
+            return boundaries[min(low, boundaries.count - 1)]
+        }
+        func lastBoundary(atOrBefore value: Int) -> Int {
+            var low = 0
+            var high = boundaries.count
+            while low < high {
+                let middle = (low + high) / 2
+                if boundaries[middle] <= value { low = middle + 1 } else { high = middle }
+            }
+            return boundaries[max(0, low - 1)]
+        }
+        let clipped = highlights.compactMap { highlight -> EditorSyntaxHighlight? in
+            let lower = firstBoundary(atOrAfter: highlight.range.lowerBound)
+            let upper = lastBoundary(atOrBefore: highlight.range.upperBound)
+            guard lower < upper else { return nil }
+            return EditorSyntaxHighlight(range: lower..<upper, kind: highlight.kind)
+        }
+        return Self(highlights: clipped)
     }
 }
