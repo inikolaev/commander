@@ -191,6 +191,21 @@ private struct TestHighlighter: SyntaxHighlighter {
                                                         insertedText: "x")]).kind(at: offset) == .string)
     }
 
+    // Rust characters and Go runes are one scalar long. Extending a valid
+    // single-quoted literal changes how the parser classifies the inserted text.
+    for (source, ext) in [("let c = 'a';", "rs"),
+                          ("package main\nvar c = 'a'", "go")] {
+        let offset = (source as NSString).range(of: "'a'").location + 2
+        let projection = parsed(source, ext)
+        #expect(projection.kind(at: offset - 1) == .string)
+        #expect(projection.inheritableTokens.isEmpty)
+        #expect(projection.applying([EditorContentDelta(range: NSRange(location: offset, length: 0),
+                                                        insertedText: "x")]).kind(at: offset) == nil)
+        let edited = (source as NSString).replacingCharacters(
+            in: NSRange(location: offset, length: 0), with: "x")
+        #expect(parsed(edited, ext).kind(at: offset) != .string)
+    }
+
     let python = parsed("r\"abc\"", "py")
     #expect(python.inheritableTokens.isEmpty)
     #expect(python.applying([EditorContentDelta(range: NSRange(location: 1, length: 0), insertedText: "x")])

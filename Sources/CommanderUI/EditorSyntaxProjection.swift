@@ -49,8 +49,8 @@ struct EditorSyntaxProjection: Sendable {
             let token = utf16Source.substring(with: NSRange(
                 location: highlight.range.lowerBound, length: highlight.range.count))
             let scalars = Array(token.unicodeScalars)
-            guard let quote = scalars.first?.value, quote == 0x22 || quote == 0x27,
-                  scalars.last?.value == quote,
+            guard scalars.first?.value == 0x22,
+                  scalars.last?.value == 0x22,
                   scalars.dropFirst().dropLast().allSatisfy({ isIdentifierScalar($0.value) }) else { return nil }
             // A prefix such as Python r/f or C++ R can change how an apparent
             // quoted range is parsed. Require a standalone opening delimiter.
@@ -138,7 +138,7 @@ struct EditorSyntaxProjection: Sendable {
         return Self(highlights: result, inheritableTokens: tokens)
     }
 
-    /// ASCII identifier characters cannot terminate a simple quoted token.
+    /// ASCII identifier characters cannot terminate a simple double-quoted token.
     private static func canContinue(_ text: String) -> Bool {
         guard !text.isEmpty else { return false }
         return text.unicodeScalars.allSatisfy { isIdentifierScalar($0.value) }
