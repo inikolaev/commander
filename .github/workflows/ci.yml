@@ -38,6 +38,9 @@ jobs:
       - name: Test
         run: |
           swift --version
+          sudo sysctl -w kern.coredump=1
+          sudo sysctl -w kern.corefile="$RUNNER_TEMP/commander-test-core.%P"
+          ulimit -c unlimited
           # AppKit and Ghostty share process-wide UI state.
           swift test --no-parallel
           for attempt in {1..5}; do
@@ -50,6 +53,12 @@ jobs:
         if: failure()
         timeout-minutes: 5
         run: |
+          for core in "$RUNNER_TEMP"/commander-test-core.*; do
+            if [[ -f "$core" ]]; then
+              xcrun lldb --batch --core "$core" -o 'thread backtrace all'
+              exit 0
+            fi
+          done
           test_binary="$(swift build --show-bin-path)/CommanderPackageTests.xctest/Contents/MacOS/CommanderPackageTests"
           test_helper="$DEVELOPER_DIR/Toolchains/XcodeDefault.xctoolchain/usr/libexec/swift/pm/swiftpm-testing-helper"
           test_platform="$(xcrun --show-sdk-platform-path)/Developer"
