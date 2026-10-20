@@ -103,11 +103,14 @@ final class SessionTerminal: TerminalSurfaceCloseDelegate, TerminalSurfaceGridRe
     private let controller: TerminalController
     private var backgroundTick: Timer?
 
-    init(directory: URL) throws {
+    init(directory: URL, shellConfigurationDirectory: URL? = nil) throws {
         mailbox = try TerminalDirectoryMailbox()
         try mailbox.request(directory)
         let shellResources = Bundle.module.url(forResource: "TerminalShell", withExtension: nil)!
-        controller = TerminalController {
+        let colors = TerminalConfiguration.afterglow.background("#000000")
+        // Keep text legible on black in both system appearances.
+        controller = TerminalController(theme: GhosttyTerminal.TerminalTheme(light: colors, dark: colors)) {
+            $0.withBackgroundOpacity(1)
             $0.withCustom("shell-integration", "none")
             $0.withCustom("window-padding-x", "0")
             $0.withCustom("window-padding-y", "0")
@@ -118,7 +121,7 @@ final class SessionTerminal: TerminalSurfaceCloseDelegate, TerminalSurfaceGridRe
             "COMMANDER_SHELL_RESOURCES": shellResources.path,
             "COMMANDER_DIRECTORY_MAILBOX": mailbox.directory.path,
         ]
-        if let original = ProcessInfo.processInfo.environment["ZDOTDIR"] {
+        if let original = shellConfigurationDirectory?.path ?? ProcessInfo.processInfo.environment["ZDOTDIR"] {
             environment["COMMANDER_ORIGINAL_ZDOTDIR"] = original
         }
         view.configuration = TerminalSurfaceOptions(
@@ -186,10 +189,9 @@ final class SessionTerminal: TerminalSurfaceCloseDelegate, TerminalSurfaceGridRe
         let scale = view.window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2
         let height = CGFloat(size.cellHeightPixels) / scale
         guard height > 0 else { return }
-        let padding = max(0, view.bounds.height - CGFloat(size.rows) * height)
-        guard abs(height - cellHeight) > 0.1 || abs(padding - bottomPadding) > 0.1 else { return }
+        bottomPadding = max(0, view.bounds.height - CGFloat(size.rows) * height)
+        guard abs(height - cellHeight) > 0.1 else { return }
         cellHeight = height
-        bottomPadding = padding
         // Layout must not reenter a Ghostty resize callback.
         Task { @MainActor [weak self] in self?.onCellHeightChanged?() }
     }
@@ -197,6 +199,40 @@ final class SessionTerminal: TerminalSurfaceCloseDelegate, TerminalSurfaceGridRe
     func terminalDidClose(processAlive: Bool) {
         // Do not destroy a surface within its Ghostty callback stack.
         Task { @MainActor [weak self] in self?.onExit?() }
+    }
+}
+
+/// Size the terminal in whole rows before Ghostty sees a frame change. The
+/// unused fraction stays above it, keeping the prompt pinned to the key bar.
+@MainActor
+final class TerminalHostView: NSView {
+    var cellHeight: CGFloat = 20 {
+        didSet { if cellHeight != oldValue { needsLayout = true } }
+    }
+
+    override init(frame: NSRect) {
+        super.init(frame: frame)
+        autoresizesSubviews = false
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.black.cgColor
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func setFrameSize(_ newSize: NSSize) {
+        super.setFrameSize(newSize)
+        fitTerminal()
+    }
+
+    override func layout() {
+        super.layout()
+        fitTerminal()
+    }
+
+    private func fitTerminal() {
+        guard let terminal = subviews.first, cellHeight > 0 else { return }
+        let height = floor(bounds.height / cellHeight) * cellHeight
+        let frame = NSRect(x: 0, y: 0, width: bounds.width, height: height)
+        if terminal.frame != frame { terminal.frame = frame }
     }
 }
 

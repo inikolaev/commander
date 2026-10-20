@@ -1,7 +1,23 @@
 import AppKit
 import Foundation
 import Testing
+import GhosttyKit
+@testable import GhosttyTerminal
 @testable import CommanderUI
+
+@MainActor
+private func terminalContents(_ terminal: SessionTerminal) throws -> String {
+    let surface = try #require(terminal.view.surface?.rawValue)
+    let selection = ghostty_selection_s(
+        top_left: ghostty_point_s(tag: GHOSTTY_POINT_SCREEN, coord: GHOSTTY_POINT_COORD_TOP_LEFT, x: 0, y: 0),
+        bottom_right: ghostty_point_s(tag: GHOSTTY_POINT_SCREEN, coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT, x: 0, y: 0),
+        rectangle: false)
+    var text = ghostty_text_s()
+    try #require(ghostty_surface_read_text(surface, selection, &text))
+    defer { ghostty_surface_free_text(surface, &text) }
+    guard let bytes = text.text else { return "" }
+    return String(decoding: UnsafeRawBufferPointer(start: bytes, count: Int(text.text_len)), as: UTF8.self)
+}
 
 @Test func terminalMailboxPreservesLiteralPathsAndCleansUp() throws {
     var mailbox: TerminalDirectoryMailbox? = try TerminalDirectoryMailbox()
@@ -21,6 +37,120 @@ import Testing
         let event = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
             timestamp: 0, windowNumber: 0, context: nil, characters: "O", charactersIgnoringModifiers: "o", isARepeat: false, keyCode: 31))
         #expect(CommanderWindow.isTerminalToggle(event) == expected)
+    }
+}
+
+@Test(arguments: ["resize> ", "context\nresize> "])
+@MainActor func terminalFillsWindowAfterVerticalResizing(prompt: String) async throws {
+    _ = NSApplication.shared
+    let config = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: config) }
+    try #"""
+    HISTFILE=/dev/null
+    SAVEHIST=0
+    PS1='\#(prompt)'
+    RPROMPT=''
+    print -r -- retained-terminal-output
+    TRAPWINCH() { print -r -- "$LINES $COLUMNS" >> "$COMMANDER_DIRECTORY_MAILBOX/resizes"; }
+    _test_cursor() {
+        local response
+        printf '\e[6n'
+        IFS= read -r -d R -t 1 response < /dev/tty
+        print -r -- "$LINES $response" > "$COMMANDER_DIRECTORY_MAILBOX/cursor"
+    }
+    zle -N _test_cursor
+    bindkey '^G' _test_cursor
+    """#.write(to: config.appendingPathComponent(".zshrc"), atomically: true, encoding: .utf8)
+    let controller = CommanderWindowController()
+    // Pass the fixture only to the child shell. Mutating the process environment
+    // can invalidate environment pointers retained by the embedded runtime.
+    controller.selectedTab.start { directory in
+        try SessionTerminal(directory: directory, shellConfigurationDirectory: config)
+    }
+    let window = try #require(controller.window)
+    defer { controller.selectedTab.closeTerminal(); window.orderOut(nil) }
+    let tab = controller.selectedTab
+    let terminal = try #require(tab.terminal)
+    for _ in 0..<150 where !terminal.isAtPrompt { try await Task.sleep(for: .milliseconds(20)) }
+    #expect(terminal.isAtPrompt)
+    let cursorFile = terminal.mailbox.directory.appendingPathComponent("cursor")
+    for expanded in [false, true, false] {
+        if tab.isTerminalVisible != expanded {
+            tab.toggleTerminal()
+        }
+        for height in [380, 700, 901, 500, 800] {
+            window.setContentSize(NSSize(width: 1080, height: height))
+            // Allow deferred grid metrics and cell-aligned layout to settle.
+            for _ in 0..<10 {
+                tab.root.view.layoutSubtreeIfNeeded()
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            let root = tab.root.view
+            let frame = terminal.view.convert(terminal.view.bounds, to: root)
+            let available = root.bounds.height - CommanderUI.TerminalTheme.lineHeight
+            #expect(abs(frame.width - root.bounds.width) < 1)
+            #expect(frame.height <= available)
+            #expect(frame.height > available - terminal.cellHeight)
+            #expect(abs(frame.minY - CommanderUI.TerminalTheme.lineHeight) < 1)
+            #expect(terminal.bottomPadding < 1)
+            #expect(tab.terminal === terminal)
+            try? FileManager.default.removeItem(at: cursorFile)
+            #expect(terminal.view.sendKey(.g, modifiers: .ctrl))
+            for _ in 0..<100 where (try? String(contentsOf: cursorFile, encoding: .utf8).hasSuffix("\n")) != true {
+                try await Task.sleep(for: .milliseconds(20))
+            }
+            let report = try String(contentsOf: cursorFile, encoding: .utf8)
+            let fields = report.components(separatedBy: " \u{1B}[")
+            let rows = try #require(Int(fields[0]))
+            let cursorRow = try #require(fields.count == 2 ? Int(fields[1].split(separator: ";")[0]) : nil)
+            #expect(rows == Int((frame.height / terminal.cellHeight).rounded(.down)))
+            #expect(cursorRow == rows, "Prompt must stay on the bottom row after resizing")
+            let contents = try terminalContents(terminal)
+            #expect(contents.components(separatedBy: "resize> ").count - 1 == 1,
+                "Resizing to height \(height), expanded \(expanded), must not leave prompt copies")
+            #expect(contents.contains("retained-terminal-output"), "Resizing must preserve previous command output")
+            if prompt.contains("context") {
+                #expect(contents.components(separatedBy: "context").count - 1 == 1)
+            }
+        }
+    }
+    let resizesFile = terminal.mailbox.directory.appendingPathComponent("resizes")
+    try Data().write(to: resizesFile)
+    let startHeight = window.contentView!.bounds.height
+    let pixelSteps = Int(terminal.cellHeight)
+    @MainActor final class FrameChanges { var heights: Set<CGFloat> = [] }
+    let changes = FrameChanges()
+    terminal.view.postsFrameChangedNotifications = true
+    let observer = NotificationCenter.default.addObserver(forName: NSView.frameDidChangeNotification,
+        object: terminal.view, queue: nil) { _ in
+        MainActor.assumeIsolated { _ = changes.heights.insert(terminal.view.frame.height) }
+    }
+    defer { NotificationCenter.default.removeObserver(observer) }
+    for offset in 1...pixelSteps {
+        window.setContentSize(NSSize(width: 1080, height: startHeight + CGFloat(offset)))
+        tab.root.view.layoutSubtreeIfNeeded()
+        try await Task.sleep(for: .milliseconds(60))
+    }
+    let resizes = try String(contentsOf: resizesFile, encoding: .utf8).split(separator: "\n")
+    #expect(!resizes.isEmpty)
+    #expect(resizes.count <= 2, "One cell of vertical dragging must not redraw for every pixel: \(resizes)")
+    #expect(changes.heights.count <= 2, "Only whole-row heights should reach the renderer: \(changes.heights)")
+    let input = "printf '%s' 'wrap-start" + String(repeating: "x", count: 260) + "wrap-end'"
+    #expect(terminal.view.paste(text: input))
+    for _ in 0..<100 where !terminal.hasInput { try await Task.sleep(for: .milliseconds(20)) }
+    #expect(terminal.hasInput)
+    for height in [500, 901, 650] {
+        window.setContentSize(NSSize(width: 1080, height: height))
+        for _ in 0..<10 {
+            tab.root.view.layoutSubtreeIfNeeded()
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let contents = try terminalContents(terminal)
+        for text in ["resize> ", "wrap-start", "wrap-end", "retained-terminal-output"] {
+            #expect(contents.components(separatedBy: text).count - 1 == 1,
+                "Resizing wrapped input must retain one copy of \(text)")
+        }
     }
 }
 
