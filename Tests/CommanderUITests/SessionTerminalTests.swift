@@ -62,12 +62,12 @@ private func terminalContents(_ terminal: SessionTerminal) throws -> String {
     zle -N _test_cursor
     bindkey '^G' _test_cursor
     """#.write(to: config.appendingPathComponent(".zshrc"), atomically: true, encoding: .utf8)
-    let originalZDOTDIR = ProcessInfo.processInfo.environment["ZDOTDIR"]
-    setenv("ZDOTDIR", config.path, 1)
     let controller = CommanderWindowController()
-    controller.start()
-    if let originalZDOTDIR { setenv("ZDOTDIR", originalZDOTDIR, 1) }
-    else { unsetenv("ZDOTDIR") }
+    // Pass the fixture only to the child shell. Mutating the process environment
+    // can invalidate environment pointers retained by the embedded runtime.
+    controller.selectedTab.start { directory in
+        try SessionTerminal(directory: directory, shellConfigurationDirectory: config)
+    }
     let window = try #require(controller.window)
     defer { controller.selectedTab.closeTerminal(); window.orderOut(nil) }
     let tab = controller.selectedTab

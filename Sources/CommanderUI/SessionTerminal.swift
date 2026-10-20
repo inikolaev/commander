@@ -103,7 +103,7 @@ final class SessionTerminal: TerminalSurfaceCloseDelegate, TerminalSurfaceGridRe
     private let controller: TerminalController
     private var backgroundTick: Timer?
 
-    init(directory: URL) throws {
+    init(directory: URL, shellConfigurationDirectory: URL? = nil) throws {
         mailbox = try TerminalDirectoryMailbox()
         try mailbox.request(directory)
         let shellResources = Bundle.module.url(forResource: "TerminalShell", withExtension: nil)!
@@ -121,7 +121,7 @@ final class SessionTerminal: TerminalSurfaceCloseDelegate, TerminalSurfaceGridRe
             "COMMANDER_SHELL_RESOURCES": shellResources.path,
             "COMMANDER_DIRECTORY_MAILBOX": mailbox.directory.path,
         ]
-        if let original = ProcessInfo.processInfo.environment["ZDOTDIR"] {
+        if let original = shellConfigurationDirectory?.path ?? ProcessInfo.processInfo.environment["ZDOTDIR"] {
             environment["COMMANDER_ORIGINAL_ZDOTDIR"] = original
         }
         view.configuration = TerminalSurfaceOptions(

@@ -131,10 +131,10 @@ final class CommanderTabSession: NSObject {
         }
     }
 
-    func start() {
+    func start(terminalFactory: (URL) throws -> SessionTerminal = { try SessionTerminal(directory: $0) }) {
         for pane in panes { pane.load(pane.state.directory) }
         activate(0)
-        ensureTerminal()
+        ensureTerminal(terminalFactory: terminalFactory)
     }
 
     private func activate(_ index: Int) {
@@ -179,10 +179,10 @@ final class CommanderTabSession: NSObject {
     }
 
     @discardableResult
-    private func ensureTerminal() -> Bool {
+    private func ensureTerminal(terminalFactory: (URL) throws -> SessionTerminal = { try SessionTerminal(directory: $0) }) -> Bool {
         if terminal != nil { return true }
         do {
-            let terminal = try SessionTerminal(directory: activePane.state.session.hostDirectory)
+            let terminal = try terminalFactory(activePane.state.session.hostDirectory)
             self.terminal = terminal
             terminal.onExit = { [weak self] in self?.closeTerminal() }
             terminal.onOpenSelection = { [weak self] in
