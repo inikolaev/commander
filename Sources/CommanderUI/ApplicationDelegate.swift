@@ -233,7 +233,9 @@ final class CommanderWindow: NSWindow {
     // Intercept here so the embedded terminal cannot consume the toggle.
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
         if Self.isTerminalToggle(event), onToggleTerminal?() == true { return true }
-        if event.modifierFlags.contains(.command), onTerminalInput?(event) == true { return true }
+        // AppKit also offers Control and Shift chords here before sendEvent.
+        // Route pane shortcuts before Ghostty can encode them as terminal input.
+        if onTerminalInput?(event) == true { return true }
         return super.performKeyEquivalent(with: event)
     }
     var onModifiersChanged: ((NSEvent.ModifierFlags) -> Void)?

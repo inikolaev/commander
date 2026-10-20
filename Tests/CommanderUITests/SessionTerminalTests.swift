@@ -4,6 +4,7 @@ import Testing
 import GhosttyKit
 @testable import GhosttyTerminal
 @testable import CommanderUI
+import FileManagerCore
 
 @MainActor
 private func terminalContents(_ terminal: SessionTerminal) throws -> String {
@@ -329,4 +330,172 @@ private func terminalContents(_ terminal: SessionTerminal) throws -> String {
     tab.toggleTerminal()
     #expect(!tab.routeTerminalInput(try key(.downArrow)))
     #expect(!tab.routeTerminalInput(try key(.tab))) // Expanded terminal retains normal keys.
+}
+
+@Test @MainActor func compactPromptShortcutsPreserveShellInputThroughBothDispatchPaths() async throws {
+    _ = NSApplication.shared
+    let manager = FileManager.default
+    let directory = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let leftDirectory = directory.appendingPathComponent("left")
+    let rightDirectory = directory.appendingPathComponent("right")
+    for url in [directory, leftDirectory, rightDirectory] {
+        try manager.createDirectory(at: url, withIntermediateDirectories: true)
+    }
+    defer { try? manager.removeItem(at: directory) }
+    let filename = "a 'quote' $(touch INJECTED)\n日本語.txt"
+    for name in [filename, "b.txt", "c.txt"] {
+        try Data().write(to: leftDirectory.appendingPathComponent(name))
+    }
+    try Data().write(to: rightDirectory.appendingPathComponent("other file.txt"))
+    try #"""
+    HISTFILE=/dev/null
+    SAVEHIST=0
+    PS1='keys> '
+    RPROMPT=''
+    bindkey -e
+    _test_buffer() {
+        print -rn -- "$BUFFER"$'\0'"$CURSOR"$'\0' > "$COMMANDER_DIRECTORY_MAILBOX/buffer"
+    }
+    zle -N _test_buffer
+    bindkey '^G' _test_buffer
+    """#.write(to: directory.appendingPathComponent(".zshrc"), atomically: true, encoding: .utf8)
+    let window = CommanderWindow(contentRect: NSRect(x: 0, y: 0, width: 1080, height: 700),
+        styleMask: [.titled, .resizable], backing: .buffered, defer: false)
+    window.isReleasedWhenClosed = false
+    let tab = CommanderTabSession(window: window, directories: [leftDirectory, rightDirectory], locationReader: LocalLocationReader())
+    window.contentViewController = tab.root
+    window.onTerminalInput = { tab.routeTerminalInput($0) }
+    tab.start { try SessionTerminal(directory: $0, shellConfigurationDirectory: directory) }
+    defer { tab.closeTerminal(); window.onTerminalInput = nil; window.orderOut(nil) }
+    let terminal = try #require(tab.terminal)
+    let panes = tab.root.children.compactMap { $0 as? PaneViewController }
+    let left = try #require(panes[0].view as? TerminalPaneView)
+    let right = try #require(panes[1].view as? TerminalPaneView)
+    for _ in 0..<150 where !terminal.isAtPrompt || panes.contains(where: \.isLoading) {
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    try #require(terminal.isAtPrompt && !panes.contains(where: \.isLoading))
+    let fileIndex = try #require(panes[0].state.rows.firstIndex(where: { $0.name == filename }))
+    left.onInput?(.select(fileIndex))
+    right.onInput?(.select(1))
+
+    func key(_ special: NSEvent.SpecialKey, code: UInt16, flags: NSEvent.ModifierFlags = []) throws -> NSEvent {
+        let text = String(special.unicodeScalar)
+        return try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
+            timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil,
+            characters: text, charactersIgnoringModifiers: text, isARepeat: false, keyCode: code))
+    }
+    let reportURL = terminal.mailbox.directory.appendingPathComponent("buffer")
+    func snapshot() async throws -> (text: String, cursor: Int) {
+        try? manager.removeItem(at: reportURL)
+        #expect(terminal.view.sendKey(.g, modifiers: .ctrl))
+        for _ in 0..<100 {
+            if let report = try? String(contentsOf: reportURL, encoding: .utf8) {
+                let fields = report.components(separatedBy: "\0")
+                // ZLE writes this report before the app's timer necessarily
+                // drains its input notifications. Wait for both sides before
+                // starting another action, so an earlier clear cannot restore
+                // pane focus after the test has already begun inserting a name.
+                if fields.count == 3, let cursor = Int(fields[1]),
+                   terminal.hasInput == !fields[0].isEmpty {
+                    return (fields[0], cursor)
+                }
+            }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        throw CocoaError(.fileReadUnknown)
+    }
+    // AppKit may offer a chord as a key equivalent before sending keyDown.
+    // Exercise both routes with an empty and a nonempty prompt.
+    for text in ["", "echo pending"] {
+        terminal.view.sendKey(.u, modifiers: .ctrl)
+        if !text.isEmpty { terminal.view.paste(text: text) }
+        #expect(try await snapshot().text == text)
+        window.makeFirstResponder(text.isEmpty ? left : terminal.view)
+        let originalHeight = left.frame.height
+        for flags: NSEvent.ModifierFlags in [.shift, .option, [.option, .shift], [.control, .option]] {
+            for (special, code): (NSEvent.SpecialKey, UInt16) in [(.carriageReturn, 36), (.enter, 76)] {
+                let event = try key(special, code: code, flags: flags)
+                #expect(window.performKeyEquivalent(with: event))
+                window.sendEvent(event)
+            }
+        }
+        for (special, code): (NSEvent.SpecialKey, UInt16) in [(.downArrow, 125), (.upArrow, 126), (.rightArrow, 124), (.leftArrow, 123)] {
+            left.onInput?(.select(fileIndex))
+            let event = try key(special, code: code, flags: [.shift, .function, .numericPad])
+            #expect(window.performKeyEquivalent(with: event))
+            #expect(panes[0].state.selectedIndex != fileIndex)
+            #expect(!panes[0].state.markedURLs.isEmpty)
+        }
+        #expect(try await snapshot().text == text)
+        tab.root.view.layoutSubtreeIfNeeded()
+        #expect(terminal.inputRows == 1)
+        #expect(left.frame.height == originalHeight)
+        #expect(!tab.isTerminalVisible)
+    }
+
+    // Insertion uses the cursor entry even when other files are marked, and
+    // preserves punctuation, Unicode and newlines as one literal shell argument.
+    left.onInput?(.select(fileIndex))
+    terminal.view.sendKey(.u, modifiers: .ctrl)
+    _ = try await snapshot()
+    window.makeFirstResponder(left)
+    let insert = try key(.carriageReturn, code: 36, flags: .control)
+    #expect(window.performKeyEquivalent(with: insert))
+    var expected = SessionTerminal.shellArgument(filename) + " "
+    #expect(try await snapshot().text == expected)
+    #expect(window.firstResponder === terminal.view)
+    window.sendEvent(try key(.carriageReturn, code: 36, flags: [.control, .shift]))
+    expected += SessionTerminal.shellArgument("other file.txt") + " "
+    #expect(try await snapshot().text == expected)
+    let controlJ = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .control,
+        timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber, context: nil,
+        characters: "\n", charactersIgnoringModifiers: "j", isARepeat: false, keyCode: 38))
+    #expect(window.performKeyEquivalent(with: controlJ))
+    expected += SessionTerminal.shellArgument(filename) + " "
+    #expect(try await snapshot().text == expected)
+    #expect(!expected.contains("\n"))
+    #expect(!manager.fileExists(atPath: leftDirectory.appendingPathComponent("INJECTED").path))
+    #expect(!tab.isTerminalVisible)
+
+    terminal.view.sendKey(.u, modifiers: .ctrl)
+    terminal.view.paste(text: "one two three")
+    #expect(try await snapshot().cursor == 13)
+    #expect(window.performKeyEquivalent(with: try key(.leftArrow, code: 123, flags: .control)))
+    #expect(try await snapshot().cursor == 8)
+    window.sendEvent(try key(.leftArrow, code: 123, flags: .option))
+    #expect(try await snapshot().cursor == 4)
+    window.sendEvent(try key(.rightArrow, code: 124, flags: .control))
+    let wordRight = try await snapshot()
+    #expect(wordRight.cursor == 8) // zsh forward-word includes the following space.
+    window.sendEvent(try key(.rightArrow, code: 124, flags: .option))
+    #expect(try await snapshot().cursor == 13)
+    window.sendEvent(try key(.home, code: 115, flags: .control))
+    #expect(try await snapshot().cursor == 0)
+    window.sendEvent(insert)
+    #expect(try await snapshot().text == SessionTerminal.shellArgument(filename) + " one two three")
+    window.sendEvent(try key(.end, code: 119, flags: .control))
+    let final = try await snapshot()
+    #expect(final.cursor == final.text.unicodeScalars.count)
+
+    tab.toggleTerminal()
+    #expect(!tab.routeTerminalInput(insert))
+    #expect(!tab.routeTerminalInput(controlJ))
+    #expect(!tab.routeTerminalInput(try key(.carriageReturn, code: 36, flags: .option)))
+    #expect(!tab.routeTerminalInput(try key(.leftArrow, code: 123, flags: .shift)))
+}
+
+@Test @MainActor func insertedFilenamesRoundTripThroughZshQuoting() throws {
+    for name in ["plain.txt", "..", "quote' space \\ $HOME `whoami` ! * ?.txt", "日本語\n\t\r\u{1B}.txt", ""] {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+        process.arguments = ["-f", "-c", "printf '%s' " + SessionTerminal.shellArgument(name)]
+        let output = Pipe()
+        process.standardOutput = output
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        #expect(process.terminationStatus == 0)
+        #expect(String(decoding: data, as: UTF8.self) == name)
+    }
 }
