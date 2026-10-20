@@ -392,7 +392,14 @@ private func terminalContents(_ terminal: SessionTerminal) throws -> String {
         for _ in 0..<100 {
             if let report = try? String(contentsOf: reportURL, encoding: .utf8) {
                 let fields = report.components(separatedBy: "\0")
-                if fields.count == 3, let cursor = Int(fields[1]) { return (fields[0], cursor) }
+                // ZLE writes this report before the app's timer necessarily
+                // drains its input notifications. Wait for both sides before
+                // starting another action, so an earlier clear cannot restore
+                // pane focus after the test has already begun inserting a name.
+                if fields.count == 3, let cursor = Int(fields[1]),
+                   terminal.hasInput == !fields[0].isEmpty {
+                    return (fields[0], cursor)
+                }
             }
             try await Task.sleep(for: .milliseconds(20))
         }
