@@ -272,7 +272,7 @@ final class CommanderTabSession: NSObject {
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         let terminalFocused = responder === terminal?.view
         let isEnter = key == .carriageReturn || key == .enter
-        let insertName = (isEnter && (modifiers == .control || modifiers == [.control, .shift]))
+        let insertName = (isEnter && (modifiers == .command || modifiers == [.command, .shift]))
             || (modifiers == .control && event.charactersIgnoringModifiers?.lowercased() == "j")
         if insertName {
             let pane = panes[modifiers.contains(.shift) ? 1 - activeIndex : activeIndex]
@@ -285,6 +285,14 @@ final class CommanderTabSession: NSObject {
         // in pane mode. In particular, Option-Enter must not insert a newline.
         if isEnter, !modifiers.isEmpty { return true }
         if modifiers == .control || modifiers == .option {
+            if modifiers == .option, key == .upArrow || key == .downArrow {
+                if let terminal = focusPrompt() {
+                    // Use the shell's normal history keys instead of emitting
+                    // modified-arrow sequences that it may treat as text.
+                    terminal.view.sendKey(key == .upArrow ? .arrowUp : .arrowDown)
+                }
+                return true
+            }
             if key == .leftArrow || key == .rightArrow {
                 if let terminal = focusPrompt() {
                     terminal.view.sendKey(key == .leftArrow ? .b : .f, modifiers: .alt)

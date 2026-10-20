@@ -353,6 +353,9 @@ private func terminalContents(_ terminal: SessionTerminal) throws -> String {
     PS1='keys> '
     RPROMPT=''
     bindkey -e
+    fc -p /dev/null 10 0
+    print -s -- 'echo commander-history-older'
+    print -s -- 'echo commander-history-newer'
     _test_buffer() {
         print -rn -- "$BUFFER"$'\0'"$CURSOR"$'\0' > "$COMMANDER_DIRECTORY_MAILBOX/buffer"
     }
@@ -413,7 +416,8 @@ private func terminalContents(_ terminal: SessionTerminal) throws -> String {
         #expect(try await snapshot().text == text)
         window.makeFirstResponder(text.isEmpty ? left : terminal.view)
         let originalHeight = left.frame.height
-        for flags: NSEvent.ModifierFlags in [.shift, .option, [.option, .shift], [.control, .option]] {
+        for flags: NSEvent.ModifierFlags in [.shift, .option, [.option, .shift], .control,
+            [.control, .shift], [.control, .option], [.command, .control], [.command, .option]] {
             for (special, code): (NSEvent.SpecialKey, UInt16) in [(.carriageReturn, 36), (.enter, 76)] {
                 let event = try key(special, code: code, flags: flags)
                 #expect(window.performKeyEquivalent(with: event))
@@ -440,12 +444,19 @@ private func terminalContents(_ terminal: SessionTerminal) throws -> String {
     terminal.view.sendKey(.u, modifiers: .ctrl)
     _ = try await snapshot()
     window.makeFirstResponder(left)
-    let insert = try key(.carriageReturn, code: 36, flags: .control)
+    let insert = try key(.carriageReturn, code: 36, flags: .command)
     #expect(window.performKeyEquivalent(with: insert))
     var expected = SessionTerminal.shellArgument(filename) + " "
     #expect(try await snapshot().text == expected)
     #expect(window.firstResponder === terminal.view)
-    window.sendEvent(try key(.carriageReturn, code: 36, flags: [.control, .shift]))
+    let insertOther = try key(.carriageReturn, code: 36, flags: [.command, .shift])
+    window.sendEvent(insertOther)
+    expected += SessionTerminal.shellArgument("other file.txt") + " "
+    #expect(try await snapshot().text == expected)
+    #expect(window.performKeyEquivalent(with: try key(.enter, code: 76, flags: .command)))
+    expected += SessionTerminal.shellArgument(filename) + " "
+    #expect(try await snapshot().text == expected)
+    #expect(window.performKeyEquivalent(with: try key(.enter, code: 76, flags: [.command, .shift])))
     expected += SessionTerminal.shellArgument("other file.txt") + " "
     #expect(try await snapshot().text == expected)
     let controlJ = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .control,
@@ -478,11 +489,44 @@ private func terminalContents(_ terminal: SessionTerminal) throws -> String {
     let final = try await snapshot()
     #expect(final.cursor == final.text.unicodeScalars.count)
 
+    let historyUp = try key(.upArrow, code: 126, flags: [.option, .function, .numericPad])
+    let historyDown = try key(.downArrow, code: 125, flags: [.option, .function, .numericPad])
+    for keyEquivalent in [true, false] {
+        for draft in ["", "echo unfinished"] {
+            terminal.view.sendKey(.u, modifiers: .ctrl)
+            if !draft.isEmpty { terminal.view.paste(text: draft) }
+            #expect(try await snapshot().text == draft)
+            window.makeFirstResponder(draft.isEmpty ? left : terminal.view)
+            let selection = panes[0].state.selectedIndex
+            let marks = panes[0].state.markedURLs
+            // Both dispatch paths must recall actual history and restore the
+            // unfinished command without changing the file cursor or marks.
+            for (event, expected) in [
+                (historyDown, draft),
+                (historyUp, "echo commander-history-newer"),
+                (historyUp, "echo commander-history-older"),
+                (historyDown, "echo commander-history-newer"),
+                (historyDown, draft),
+            ] {
+                if keyEquivalent { #expect(window.performKeyEquivalent(with: event)) }
+                else { window.sendEvent(event) }
+                let input = try await snapshot()
+                #expect(input.text == expected)
+                #expect(panes[0].state.selectedIndex == selection)
+                #expect(panes[0].state.markedURLs == marks)
+                #expect(!tab.isTerminalVisible)
+            }
+        }
+    }
+
     tab.toggleTerminal()
     #expect(!tab.routeTerminalInput(insert))
+    #expect(!tab.routeTerminalInput(insertOther))
     #expect(!tab.routeTerminalInput(controlJ))
     #expect(!tab.routeTerminalInput(try key(.carriageReturn, code: 36, flags: .option)))
     #expect(!tab.routeTerminalInput(try key(.leftArrow, code: 123, flags: .shift)))
+    #expect(!tab.routeTerminalInput(historyUp))
+    #expect(!tab.routeTerminalInput(historyDown))
 }
 
 @Test @MainActor func insertedFilenamesRoundTripThroughZshQuoting() throws {
