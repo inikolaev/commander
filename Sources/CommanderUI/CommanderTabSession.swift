@@ -285,6 +285,14 @@ final class CommanderTabSession: NSObject {
         // in pane mode. In particular, Option-Enter must not insert a newline.
         if isEnter, !modifiers.isEmpty { return true }
         if modifiers == .control || modifiers == .option {
+            if modifiers == .option, key == .upArrow || key == .downArrow {
+                if let terminal = focusPrompt() {
+                    // Use the shell's normal history keys instead of emitting
+                    // modified-arrow sequences that it may treat as text.
+                    terminal.view.sendKey(key == .upArrow ? .arrowUp : .arrowDown)
+                }
+                return true
+            }
             if key == .leftArrow || key == .rightArrow {
                 if let terminal = focusPrompt() {
                     terminal.view.sendKey(key == .leftArrow ? .b : .f, modifiers: .alt)

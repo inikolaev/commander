@@ -353,6 +353,9 @@ private func terminalContents(_ terminal: SessionTerminal) throws -> String {
     PS1='keys> '
     RPROMPT=''
     bindkey -e
+    fc -p /dev/null 10 0
+    print -s -- 'echo commander-history-older'
+    print -s -- 'echo commander-history-newer'
     _test_buffer() {
         print -rn -- "$BUFFER"$'\0'"$CURSOR"$'\0' > "$COMMANDER_DIRECTORY_MAILBOX/buffer"
     }
@@ -478,11 +481,43 @@ private func terminalContents(_ terminal: SessionTerminal) throws -> String {
     let final = try await snapshot()
     #expect(final.cursor == final.text.unicodeScalars.count)
 
+    let historyUp = try key(.upArrow, code: 126, flags: [.option, .function, .numericPad])
+    let historyDown = try key(.downArrow, code: 125, flags: [.option, .function, .numericPad])
+    for keyEquivalent in [true, false] {
+        for draft in ["", "echo unfinished"] {
+            terminal.view.sendKey(.u, modifiers: .ctrl)
+            if !draft.isEmpty { terminal.view.paste(text: draft) }
+            #expect(try await snapshot().text == draft)
+            window.makeFirstResponder(draft.isEmpty ? left : terminal.view)
+            let selection = panes[0].state.selectedIndex
+            let marks = panes[0].state.markedURLs
+            // Both dispatch paths must recall actual history and restore the
+            // unfinished command without changing the file cursor or marks.
+            for (event, expected) in [
+                (historyDown, draft),
+                (historyUp, "echo commander-history-newer"),
+                (historyUp, "echo commander-history-older"),
+                (historyDown, "echo commander-history-newer"),
+                (historyDown, draft),
+            ] {
+                if keyEquivalent { #expect(window.performKeyEquivalent(with: event)) }
+                else { window.sendEvent(event) }
+                let input = try await snapshot()
+                #expect(input.text == expected)
+                #expect(panes[0].state.selectedIndex == selection)
+                #expect(panes[0].state.markedURLs == marks)
+                #expect(!tab.isTerminalVisible)
+            }
+        }
+    }
+
     tab.toggleTerminal()
     #expect(!tab.routeTerminalInput(insert))
     #expect(!tab.routeTerminalInput(controlJ))
     #expect(!tab.routeTerminalInput(try key(.carriageReturn, code: 36, flags: .option)))
     #expect(!tab.routeTerminalInput(try key(.leftArrow, code: 123, flags: .shift)))
+    #expect(!tab.routeTerminalInput(historyUp))
+    #expect(!tab.routeTerminalInput(historyDown))
 }
 
 @Test @MainActor func insertedFilenamesRoundTripThroughZshQuoting() throws {
