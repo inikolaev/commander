@@ -86,6 +86,25 @@ final class TerminalDirectoryMailbox {
 
 @MainActor
 final class SessionTerminal: TerminalSurfaceCloseDelegate, TerminalSurfaceGridResizeDelegate {
+    /// One literal zsh argument. ANSI-C quoting also keeps control characters
+    /// (including filename newlines) from becoming terminal input or extra rows.
+    static func shellArgument(_ name: String) -> String {
+        let safe = CharacterSet(charactersIn: "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_./-")
+        if !name.isEmpty, name.unicodeScalars.allSatisfy({ safe.contains($0) }) { return name }
+        let escaped = name.unicodeScalars.map { scalar -> String in
+            switch scalar {
+            case "\\": return "\\\\"
+            case "'": return "\\'"
+            default:
+                if CharacterSet.controlCharacters.contains(scalar) {
+                    return String(format: "\\u%04X", scalar.value)
+                }
+                return String(scalar)
+            }
+        }.joined()
+        return "$'" + escaped + "'"
+    }
+
     let view: CommanderTerminalView
     let mailbox: TerminalDirectoryMailbox
     var onExit: (() -> Void)?

@@ -271,6 +271,33 @@ final class CommanderTabSession: NSObject {
         let key = event.specialKey
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         let terminalFocused = responder === terminal?.view
+        let isEnter = key == .carriageReturn || key == .enter
+        let insertName = (isEnter && (modifiers == .control || modifiers == [.control, .shift]))
+            || (modifiers == .control && event.charactersIgnoringModifiers?.lowercased() == "j")
+        if insertName {
+            let pane = panes[modifiers.contains(.shift) ? 1 - activeIndex : activeIndex]
+            if let row = pane.state.selectedRow, let terminal = focusPrompt() {
+                terminal.view.paste(text: SessionTerminal.shellArgument(row.name) + " ")
+            }
+            return true
+        }
+        // Modified Enter is not a shell submission or a multiline-input command
+        // in pane mode. In particular, Option-Enter must not insert a newline.
+        if isEnter, !modifiers.isEmpty { return true }
+        if modifiers == .control || modifiers == .option {
+            if key == .leftArrow || key == .rightArrow {
+                if let terminal = focusPrompt() {
+                    terminal.view.sendKey(key == .leftArrow ? .b : .f, modifiers: .alt)
+                }
+                return true
+            }
+            if modifiers == .control, key == .home || key == .end {
+                if let terminal = focusPrompt() {
+                    terminal.view.sendKey(key == .home ? .a : .e, modifiers: .ctrl)
+                }
+                return true
+            }
+        }
         let functionKeys: [NSEvent.SpecialKey] = [.f1, .f2, .f3, .f4, .f5, .f6, .f7, .f8, .f9, .f10]
         if terminalFocused, modifiers == .control, key == .pageUp {
             activePane.view.keyDown(with: event)
@@ -281,7 +308,7 @@ final class CommanderTabSession: NSObject {
             return true
         }
         let paneNavigation: [NSEvent.SpecialKey] = [.upArrow, .downArrow, .leftArrow, .rightArrow, .home, .end, .pageUp, .pageDown]
-        if terminalFocused, let key, paneNavigation.contains(key),
+        if let key, paneNavigation.contains(key),
            modifiers.subtracting(.shift).isEmpty {
             activePane.view.keyDown(with: event)
             return true
@@ -303,7 +330,6 @@ final class CommanderTabSession: NSObject {
             return true
         }
         if terminalFocused { return false }
-        let isEnter = key == .carriageReturn || key == .enter
         let isPaste = modifiers == .command && event.charactersIgnoringModifiers?.lowercased() == "v"
         let printable = event.characters.map { !$0.isEmpty && $0.unicodeScalars.allSatisfy {
             !CharacterSet.controlCharacters.contains($0) && !(0xF700...0xF8FF).contains($0.value)
@@ -311,12 +337,17 @@ final class CommanderTabSession: NSObject {
         // Space retains pane marking until command editing starts.
         guard isEnter || isPaste || (printable && !modifiers.contains(.command)
             && !modifiers.contains(.control) && event.characters != " ") else { return false }
-        guard ensureTerminal(), let terminal else { return true }
-        editingPrompt = true
-        window?.makeFirstResponder(terminal.view)
+        guard let terminal = focusPrompt() else { return true }
         if isPaste { terminal.view.performBindingAction("paste_from_clipboard") }
         else { terminal.view.keyDown(with: event) }
         return true
+    }
+
+    private func focusPrompt() -> SessionTerminal? {
+        guard ensureTerminal(), let terminal else { return nil }
+        editingPrompt = true
+        window?.makeFirstResponder(terminal.view)
+        return terminal
     }
 
     func closeTerminal() {
