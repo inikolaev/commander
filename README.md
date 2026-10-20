@@ -60,8 +60,8 @@ to package a Release build instead.
 | Space | Toggle marking the current entry |
 | Shift + arrows | Extend or shrink a selection range |
 | Enter | Enter selected folder or open file in its default app |
-| Ctrl-Enter / Ctrl-J | Insert the filename under the active pane cursor into the prompt |
-| Ctrl-Shift-Enter | Insert the filename under the other pane cursor into the prompt |
+| Command-Enter / Ctrl-J | Insert the filename under the active pane cursor into the prompt |
+| Command-Shift-Enter | Insert the filename under the other pane cursor into the prompt |
 | Ctrl-Left / Right or Option-Left / Right | Move the prompt cursor by word while panes are visible |
 | Option-Up / Down | Browse shell command history while panes are visible |
 | Ctrl-Home / End | Move to the start / end of the prompt |
@@ -400,8 +400,8 @@ Backspace edits command text and never changes directories; Ctrl-PageUp goes to
 the parent directory. While panes are visible, arrows, Home/End, and PageUp/PageDown
 navigate files, and Tab/Shift-Tab switch panes, even while editing a command.
 The command stays intact across pane navigation, including Shift-arrow file selection.
-Ctrl-Enter or Ctrl-J inserts the active pane's current filename at the prompt cursor;
-Ctrl-Shift-Enter inserts the other pane's current filename. Names are shell-quoted
+Cmd-Enter or Ctrl-J inserts the active pane's current filename at the prompt cursor;
+Cmd-Shift-Enter inserts the other pane's current filename. Names are shell-quoted
 when needed and followed by a space, without changing the clipboard or executing input.
 Ctrl-Left/Right (also Option-Left/Right) moves by word in the prompt, and Ctrl-Home/End
 moves to its start/end. Option-Up/Down browses command history using the shell's normal

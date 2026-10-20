@@ -272,7 +272,7 @@ final class CommanderTabSession: NSObject {
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         let terminalFocused = responder === terminal?.view
         let isEnter = key == .carriageReturn || key == .enter
-        let insertName = (isEnter && (modifiers == .control || modifiers == [.control, .shift]))
+        let insertName = (isEnter && (modifiers == .command || modifiers == [.command, .shift]))
             || (modifiers == .control && event.charactersIgnoringModifiers?.lowercased() == "j")
         if insertName {
             let pane = panes[modifiers.contains(.shift) ? 1 - activeIndex : activeIndex]

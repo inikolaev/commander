@@ -416,7 +416,8 @@ private func terminalContents(_ terminal: SessionTerminal) throws -> String {
         #expect(try await snapshot().text == text)
         window.makeFirstResponder(text.isEmpty ? left : terminal.view)
         let originalHeight = left.frame.height
-        for flags: NSEvent.ModifierFlags in [.shift, .option, [.option, .shift], [.control, .option]] {
+        for flags: NSEvent.ModifierFlags in [.shift, .option, [.option, .shift], .control,
+            [.control, .shift], [.control, .option], [.command, .control], [.command, .option]] {
             for (special, code): (NSEvent.SpecialKey, UInt16) in [(.carriageReturn, 36), (.enter, 76)] {
                 let event = try key(special, code: code, flags: flags)
                 #expect(window.performKeyEquivalent(with: event))
@@ -443,12 +444,19 @@ private func terminalContents(_ terminal: SessionTerminal) throws -> String {
     terminal.view.sendKey(.u, modifiers: .ctrl)
     _ = try await snapshot()
     window.makeFirstResponder(left)
-    let insert = try key(.carriageReturn, code: 36, flags: .control)
+    let insert = try key(.carriageReturn, code: 36, flags: .command)
     #expect(window.performKeyEquivalent(with: insert))
     var expected = SessionTerminal.shellArgument(filename) + " "
     #expect(try await snapshot().text == expected)
     #expect(window.firstResponder === terminal.view)
-    window.sendEvent(try key(.carriageReturn, code: 36, flags: [.control, .shift]))
+    let insertOther = try key(.carriageReturn, code: 36, flags: [.command, .shift])
+    window.sendEvent(insertOther)
+    expected += SessionTerminal.shellArgument("other file.txt") + " "
+    #expect(try await snapshot().text == expected)
+    #expect(window.performKeyEquivalent(with: try key(.enter, code: 76, flags: .command)))
+    expected += SessionTerminal.shellArgument(filename) + " "
+    #expect(try await snapshot().text == expected)
+    #expect(window.performKeyEquivalent(with: try key(.enter, code: 76, flags: [.command, .shift])))
     expected += SessionTerminal.shellArgument("other file.txt") + " "
     #expect(try await snapshot().text == expected)
     let controlJ = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .control,
@@ -513,6 +521,7 @@ private func terminalContents(_ terminal: SessionTerminal) throws -> String {
 
     tab.toggleTerminal()
     #expect(!tab.routeTerminalInput(insert))
+    #expect(!tab.routeTerminalInput(insertOther))
     #expect(!tab.routeTerminalInput(controlJ))
     #expect(!tab.routeTerminalInput(try key(.carriageReturn, code: 36, flags: .option)))
     #expect(!tab.routeTerminalInput(try key(.leftArrow, code: 123, flags: .shift)))
