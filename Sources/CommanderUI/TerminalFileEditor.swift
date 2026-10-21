@@ -17,6 +17,7 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
     private var dragging = false
     private var hasEditorFocus = false
     private let insertionIndicator = EditorInsertionIndicator()
+    private var secondaryIndicators: [EditorInsertionIndicator] = []
     private var syntaxController: EditorSyntaxController?
     private var syntaxProjection = EditorSyntaxProjection.empty
     private var cell: CGFloat { TerminalTheme.cellAdvance }
@@ -104,6 +105,26 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
     }
 
     private func updateInsertionIndicator(restart: Bool = false) {
+        for indicator in secondaryIndicators { indicator.update(.hidden) }
+        let secondary = Array(selection.carets.dropFirst()).filter {
+            $0.range.length == 0 && $0.line >= topLine && $0.line < topLine + rows
+        }
+        while secondaryIndicators.count < secondary.count {
+            let indicator = EditorInsertionIndicator()
+            secondaryIndicators.append(indicator)
+            addSubview(indicator.view)
+        }
+        if hasEditorFocus, window?.isKeyWindow == true, !isHiddenOrHasHiddenAncestor {
+            for (indicator, caret) in zip(secondaryIndicators, secondary) {
+                let rect = NSRect(x: 2 + cursorX(for: caret) - leftOffset,
+                    y: CGFloat(caret.line - topLine + 1) * TerminalTheme.lineHeight + 1,
+                    width: 2, height: TerminalTheme.lineHeight - 2).intersection(textGeometry.contentRect)
+                if !rect.isEmpty {
+                    indicator.view.frame = rect
+                    indicator.update(dragging ? .visible : .blinking, restart: restart)
+                }
+            }
+        }
         guard hasEditorFocus, window?.isKeyWindow == true, !isHiddenOrHasHiddenAncestor,
               selection.range.length == 0, selection.line >= topLine, selection.line < topLine + rows else {
             insertionIndicator.update(.hidden)
@@ -151,7 +172,7 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         }
         return result
     }
-    private func cursorX() -> CGFloat {
+    private func cursorX(for selection: EditorSelection) -> CGFloat {
         let start = document.lineRange(selection.line).location
         let prefix = document.text(in: NSRange(location: start, length: selection.caret - start))
         var x: CGFloat = 0
@@ -161,7 +182,9 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         }
         return x
     }
+    private func cursorX() -> CGFloat { cursorX(for: selection) }
     func changed(ensureVisible: Bool = true) {
+        selection.coalesceCarets()
         if ensureVisible {
             topLine = min(topLine, selection.line)
             topLine = max(topLine, selection.line - rows + 1)
@@ -184,7 +207,7 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         let height = TerminalTheme.lineHeight
         TerminalTheme.selection.setFill()
         NSRect(x: 0, y: 0, width: bounds.width, height: height).fill()
-        let status = "\(document.isModified ? "*" : "") UTF-8  Ln \(selection.line + 1)/\(document.lineCount) Col \(selection.column + 1)"
+        let status = "\(document.isModified ? "*" : "") UTF-8  Ln \(selection.line + 1)/\(document.lineCount) Col \(selection.column + 1)\(selection.caretCount > 1 ? "  Carets \(selection.caretCount)" : "")"
         let statusWidth = min(bounds.width * 0.7, CGFloat(status.count + 2) * cell)
         TerminalTheme.text(path, in: NSRect(x: 2, y: 0, width: bounds.width - statusWidth - 6, height: height), color: TerminalTheme.contrastText)
         TerminalTheme.text(status, in: NSRect(x: bounds.width - statusWidth, y: 0, width: statusWidth - 2, height: height),
@@ -201,7 +224,7 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
                 if glyph.x >= leftOffset + textWidth { break }
                 let rect = NSRect(x: 2 + glyph.x - leftOffset, y: y,
                     width: glyph.width, height: height)
-                let selected = NSIntersectionRange(selection.range, NSRange(location: glyph.offset, length: glyph.length)).length > 0
+                let selected = selection.ranges.contains { NSIntersectionRange($0, NSRange(location: glyph.offset, length: glyph.length)).length > 0 }
                 if selected { TerminalTheme.selection.setFill(); rect.fill() }
                 // Draw composed graphemes intact (including emoji ZWJ sequences).
                 NSGraphicsContext.saveGraphicsState()
@@ -217,7 +240,7 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
                 }
             }
             // Make a selected newline visible even on an otherwise empty line.
-            if selection.range.location <= NSMaxRange(range) && NSMaxRange(selection.range) > NSMaxRange(range) {
+            if selection.ranges.contains(where: { $0.location <= NSMaxRange(range) && NSMaxRange($0) > NSMaxRange(range) }) {
                 let visible = glyphs(line)
                 let end = visible.last.map { $0.x + $0.width } ?? 0
                 let x = 2 + end - leftOffset
@@ -235,6 +258,13 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
     }
 
     override func keyDown(with event: NSEvent) {
+        if event.modifierFlags.contains([.command, .option]),
+           !event.modifierFlags.contains(.shift), [125, 126].contains(event.keyCode) {
+            unmarkText()
+            selection.addCaretVertically(event.keyCode == 126 ? -1 : 1)
+            changed()
+            return
+        }
         if event.modifierFlags.contains(.command) {
             switch event.charactersIgnoringModifiers?.lowercased() {
             case "s": unmarkText(); onSave?()
@@ -251,7 +281,11 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         if !hasMarkedText() {
             switch event.keyCode {
             case 120: onSave?(); return // F2
-            case 53, 109: onClose?(); return
+            case 53:
+                if selection.caretCount > 1 { selection.clearAdditionalCarets(); changed() }
+                else { onClose?() }
+                return
+            case 109: onClose?(); return
             default: break
             }
         }
@@ -262,28 +296,30 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         let command = selector.description.replacingOccurrences(of: "AndModifySelection", with: "")
         unmarkText()
         switch command {
-        case "moveLeft:", "moveBackward:": selection.moveHorizontal(-1, extending: extending)
-        case "moveRight:", "moveForward:": selection.moveHorizontal(1, extending: extending)
-        case "moveWordLeft:", "moveWordBackward:": moveWord(-1, extending: extending)
-        case "moveWordRight:", "moveWordForward:": moveWord(1, extending: extending)
-        case "moveUp:": selection.moveVertical(-1, extending: extending)
-        case "moveDown:": selection.moveVertical(1, extending: extending)
+        case "moveLeft:", "moveBackward:": selection.forEachCaret { $0.moveHorizontal(-1, extending: extending) }
+        case "moveRight:", "moveForward:": selection.forEachCaret { $0.moveHorizontal(1, extending: extending) }
+        case "moveWordLeft:", "moveWordBackward:": selection.forEachCaret { moveWord(-1, caret: $0, extending: extending) }
+        case "moveWordRight:", "moveWordForward:": selection.forEachCaret { moveWord(1, caret: $0, extending: extending) }
+        case "moveUp:": selection.moveCaretsVertically(-1, extending: extending)
+        case "moveDown:": selection.moveCaretsVertically(1, extending: extending)
         case "pageUp:", "scrollPageUp:": movePage(-1, extending: extending)
         case "pageDown:", "scrollPageDown:": movePage(1, extending: extending)
-        case "moveToBeginningOfLine:", "moveToLeftEndOfLine:": selection.set(document.lineRange(selection.line).location, extending: extending)
-        case "moveToEndOfLine:", "moveToRightEndOfLine:": selection.set(NSMaxRange(document.lineRange(selection.line)), extending: extending)
-        case "moveToBeginningOfDocument:", "scrollToBeginningOfDocument:": selection.set(0, extending: extending)
-        case "moveToEndOfDocument:", "scrollToEndOfDocument:": selection.set(document.length, extending: extending)
+        case "moveToBeginningOfLine:", "moveToLeftEndOfLine:": selection.forEachCaret { $0.set(document.lineRange($0.line).location, extending: extending) }
+        case "moveToEndOfLine:", "moveToRightEndOfLine:": selection.forEachCaret { $0.set(NSMaxRange(document.lineRange($0.line)), extending: extending) }
+        case "moveToBeginningOfDocument:", "scrollToBeginningOfDocument:": selection.forEachCaret { $0.set(0, extending: extending) }
+        case "moveToEndOfDocument:", "scrollToEndOfDocument:": selection.forEachCaret { $0.set(document.length, extending: extending) }
         case "deleteBackward:": selection.delete(backward: true)
         case "deleteForward:": selection.delete(backward: false)
         case "insertNewline:": selection.replace(with: "\n")
         case "insertTab:": selection.replace(with: "\t")
-        case "cancelOperation:": onClose?()
+        case "cancelOperation:":
+            if selection.caretCount > 1 { selection.clearAdditionalCarets() }
+            else { onClose?() }
         default: super.doCommand(by: selector)
         }
         changed()
     }
-    private func moveWord(_ direction: Int, extending: Bool) {
+    private func moveWord(_ direction: Int, caret selection: EditorSelection, extending: Bool) {
         let forward = direction > 0
         var line = selection.line
         let current = document.lineRange(line)
@@ -299,23 +335,53 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         selection.set(range.location + text.nextWord(from: start, forward: forward), extending: extending)
     }
     private func movePage(_ direction: Int, extending: Bool) {
-        let distance = direction * rows
-        selection.moveVertical(distance, extending: extending)
+        let distance = selection.moveCaretsVertically(direction * rows, extending: extending)
         topLine = min(max(0, topLine + distance), max(0, document.lineCount - rows))
+    }
+    private func wordRange(at offset: Int) -> NSRange? {
+        let lineRange = document.lineRange(document.lineIndex(at: offset))
+        let line = document.text(in: lineRange)
+        let local = offset - lineRange.location
+        let characters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
+        var parts: [(start: Int, end: Int, word: Bool)] = []
+        var position = 0
+        for character in line {
+            let end = position + String(character).utf16.count
+            parts.append((position, end, character.unicodeScalars.contains { characters.contains($0) }))
+            position = end
+        }
+        guard let index = parts.firstIndex(where: { $0.word && $0.start <= local && local <= $0.end }) else { return nil }
+        var first = index
+        var last = index
+        while first > 0 && parts[first - 1].word { first -= 1 }
+        while last + 1 < parts.count && parts[last + 1].word { last += 1 }
+        return NSRange(location: lineRange.location + parts[first].start,
+            length: parts[last].end - parts[first].start)
     }
 
     @objc func copy(_ sender: Any?) {
-        guard selection.range.length > 0 else { return }
+        let ranges = selection.ranges.filter { $0.length > 0 }.sorted { $0.location < $1.location }
+        guard !ranges.isEmpty else { return }
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(document.text(in: selection.range), forType: .string)
+        NSPasteboard.general.setString(ranges.map { document.text(in: $0) }.joined(separator: "\n"), forType: .string)
     }
     @objc func cut(_ sender: Any?) { unmarkText(); copy(sender); selection.replace(with: ""); changed() }
     @objc func paste(_ sender: Any?) {
         unmarkText()
-        if let text = NSPasteboard.general.string(forType: .string) { selection.replace(with: text); changed() }
+        if let text = NSPasteboard.general.string(forType: .string) {
+            let normalized = EditorDocuments.normalizeNewlines(text)
+            let lines = normalized.components(separatedBy: "\n")
+            if selection.caretCount > 1 && lines.count == selection.caretCount {
+                selection.replace(with: lines)
+            } else {
+                selection.replace(with: normalized)
+            }
+            changed()
+        }
     }
     override func selectAll(_ sender: Any?) {
         unmarkText()
+        selection.clearAdditionalCarets()
         selection.select(NSRange(location: 0, length: document.length))
         changed()
     }
@@ -324,7 +390,10 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
     func insertText(_ string: Any, replacementRange: NSRange) {
         let text = (string as? NSAttributedString)?.string ?? (string as? String ?? "")
         let replacement = replacementRange.location != NSNotFound ? replacementRange : hasMarkedText() ? marked : selection.range
-        selection.select(safeRange(replacement))
+        if replacementRange.location != NSNotFound || hasMarkedText() { selection.clearAdditionalCarets() }
+        if selection.caretCount == 1 || replacementRange.location != NSNotFound || hasMarkedText() {
+            selection.select(safeRange(replacement))
+        }
         selection.replace(with: text)
         unmarkText()
         changed()
@@ -332,6 +401,7 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
     func setMarkedText(_ string: Any, selectedRange: NSRange, replacementRange: NSRange) {
         let text = (string as? NSAttributedString)?.string ?? (string as? String ?? "")
         let replacement = safeRange(replacementRange.location != NSNotFound ? replacementRange : hasMarkedText() ? marked : selection.range)
+        selection.clearAdditionalCarets()
         if !hasMarkedText() { document.beginUndoGroup() }
         document.replace(replacement, with: text)
         marked = NSRange(location: replacement.location, length: EditorDocuments.normalizeNewlines(text).utf16.count)
@@ -384,7 +454,21 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         }
         window?.makeFirstResponder(self)
         unmarkText()
-        selection.set(offset(at: point), extending: event.modifierFlags.contains(.shift))
+        let offset = offset(at: point)
+        if event.modifierFlags.contains([.option, .shift]) {
+            if event.clickCount >= 2, let word = wordRange(at: offset) {
+                _ = selection.addSelection(word)
+            } else {
+                _ = selection.toggleCaret(at: offset)
+            }
+        } else {
+            selection.clearAdditionalCarets()
+            if event.clickCount >= 2, let word = wordRange(at: offset) {
+                selection.select(word)
+            } else {
+                selection.set(offset, extending: event.modifierFlags.contains(.shift))
+            }
+        }
         dragging = true
         changed()
     }

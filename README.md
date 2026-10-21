@@ -203,11 +203,17 @@ F4 inside the viewer still toggles hex mode.
 - Arrows and Page Up/Down navigate; Command-Left/Right moves to the beginning/end of the line.
 - Option-Left/Right moves by word. Command-Up/Down or Home/End moves to the beginning/end of the document.
 - Shift with movement extends the selection; click/drag also selects.
+- Option-Shift-click adds or removes a caret; Option-Shift-double-click adds a
+  word selection. Command-Option-Up/Down adds a caret on the adjacent line.
+  Typing, deletion, and movement apply at every caret. Copy joins selected ranges with
+  newlines; paste distributes lines when their count matches the caret count.
+  The most recently added caret is primary.
+- Escape clears extra carets first; pressing it again closes the editor.
 - Type, Enter, Tab, Backspace, and forward Delete edit the document.
 - Command-Y deletes the current line, keeping the cursor column when possible.
 - Command-A/C/X/V selects all, copies, cuts, and pastes.
 - Command-Z / Command-Shift-Z undo and redo.
-- F2 or Command-S saves. Escape or F10 closes.
+- F2 or Command-S saves. F10 closes.
 - Closing a modified document, including quitting Commander, offers Save, Discard,
   and Cancel. Save failures leave edits available.
 
