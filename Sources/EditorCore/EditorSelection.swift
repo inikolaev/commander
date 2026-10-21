@@ -58,6 +58,20 @@ public final class EditorSelection {
         if range.length == 0 { moveHorizontal(backward ? -1 : 1, extending: true) }
         replace(with: "")
     }
+    public func deleteLine() {
+        let index = line
+        let column = self.column
+        var removal = document.lineRange(index)
+        if NSMaxRange(removal) < document.length {
+            removal.length += 1 // Include the following newline.
+        } else if removal.location > 0 {
+            removal.location -= 1 // The last line owns the preceding newline.
+            removal.length += 1
+        }
+        document.replace(removal, with: "")
+        let target = document.lineRange(min(index, document.lineCount - 1))
+        set(target.location + document.text(in: target).prefix(column).utf16.count)
+    }
     public func undo() { if let range = document.undo() { select(range) } }
     public func redo() { if let range = document.redo() { select(range) } }
 }

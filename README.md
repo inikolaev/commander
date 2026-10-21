@@ -200,9 +200,11 @@ Shift-F4 prompts for a filename in the active directory and opens it in the edit
 New files are created on save (including empty files); existing names open for editing.
 F4 inside the viewer still toggles hex mode.
 
-- Arrows, Home/End, Command-arrows, and Page Up/Down navigate.
+- Arrows and Page Up/Down navigate; Command-Left/Right moves to the beginning/end of the line.
+- Option-Left/Right moves by word. Command-Up/Down or Home/End moves to the beginning/end of the document.
 - Shift with movement extends the selection; click/drag also selects.
 - Type, Enter, Tab, Backspace, and forward Delete edit the document.
+- Command-Y deletes the current line, keeping the cursor column when possible.
 - Command-A/C/X/V selects all, copies, cuts, and pastes.
 - Command-Z / Command-Shift-Z undo and redo.
 - F2 or Command-S saves. Escape or F10 closes.
