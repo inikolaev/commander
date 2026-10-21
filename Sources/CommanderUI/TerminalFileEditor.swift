@@ -181,6 +181,7 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
             switch event.charactersIgnoringModifiers?.lowercased() {
             case "s": unmarkText(); onSave?()
             case "z": unmarkText(); event.modifierFlags.contains(.shift) ? selection.redo() : selection.undo(); changed()
+            case "y": unmarkText(); selection.deleteLine(); changed()
             case "a": selectAll(nil)
             case "c": copy(nil)
             case "x": cut(nil)
@@ -205,6 +206,8 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         switch command {
         case "moveLeft:", "moveBackward:": selection.moveHorizontal(-1, extending: extending)
         case "moveRight:", "moveForward:": selection.moveHorizontal(1, extending: extending)
+        case "moveWordLeft:", "moveWordBackward:": moveWord(-1, extending: extending)
+        case "moveWordRight:", "moveWordForward:": moveWord(1, extending: extending)
         case "moveUp:": selection.moveVertical(-1, extending: extending)
         case "moveDown:": selection.moveVertical(1, extending: extending)
         case "pageUp:", "scrollPageUp:": movePage(-1, extending: extending)
@@ -221,6 +224,21 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         default: super.doCommand(by: selector)
         }
         changed()
+    }
+    private func moveWord(_ direction: Int, extending: Bool) {
+        let forward = direction > 0
+        var line = selection.line
+        let current = document.lineRange(line)
+        if forward && selection.caret == NSMaxRange(current) && line + 1 < document.lineCount {
+            line += 1
+        } else if !forward && selection.caret == current.location && line > 0 {
+            line -= 1
+        }
+        // Use AppKit's Unicode word boundaries without copying the entire document.
+        let range = document.lineRange(line)
+        let text = NSAttributedString(string: document.text(in: range))
+        let start = min(max(0, selection.caret - range.location), text.length)
+        selection.set(range.location + text.nextWord(from: start, forward: forward), extending: extending)
     }
     private func movePage(_ direction: Int, extending: Bool) {
         let distance = direction * rows
