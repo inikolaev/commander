@@ -69,6 +69,7 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate, NSM
         let tab = CommanderTabSession(window: window!, directories: directories, locationReader: locationReader)
         tab.onQuitRequested = { [weak self] in self?.onQuitRequested() }
         tab.onTitleChanged = { [weak self] in self?.updateTabs(revealSelection: false) }
+        tab.onAppearanceChanged = { [weak self] in self?.refreshWindowAppearance() }
         return tab
     }
 
@@ -273,12 +274,20 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate, NSM
         tabStrip.layoutSubtreeIfNeeded()
     }
     private func updateTabs(revealSelection: Bool = true) {
+        refreshWindowAppearance()
         let isInstalled = window?.titlebarAccessoryViewControllers.contains { $0 === tabAccessory } == true
         if isInstalled != (tabs.count > 1) { installTabStrip() }
         tabStrip.update(tabs: tabs.map { ($0.id, $0.title) }, selected: selectedTab.id, revealSelection: revealSelection, colors: Dictionary(uniqueKeysWithValues: tabs.compactMap { tab in tab.color.map { (tab.id, $0) } }))
     }
+    private func refreshWindowAppearance() {
+        guard let window, !tabs.isEmpty else { return }
+        window.backgroundColor = selectedTab.isTerminalVisible ? .black : TerminalTheme.windowBackground
+        // Keep native title-bar text and controls readable over the black terminal.
+        let appearance = selectedTab.isTerminalVisible ? NSAppearance(named: .darkAqua) : nil
+        if window.appearance?.name != appearance?.name { window.appearance = appearance }
+    }
     func refreshAppearance() {
-        window?.backgroundColor = TerminalTheme.windowBackground
+        refreshWindowAppearance()
         func invalidate(_ view: NSView) {
             view.needsDisplay = true
             view.subviews.forEach(invalidate)

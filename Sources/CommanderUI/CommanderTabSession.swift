@@ -9,6 +9,7 @@ final class CommanderTabSession: NSObject {
     var customTitle: String?
     var color: TabColor?
     var onTitleChanged: (() -> Void)?
+    var onAppearanceChanged: (() -> Void)?
     var title: String { customTitle ?? (activePane.state.session.displayPath as NSString).abbreviatingWithTildeInPath }
     var directories: [URL] { panes.map { $0.state.session.hostDirectory } }
     var canSwitch: Bool { !isExitPromptVisible && !fileOperationInProgress && window?.attachedSheet == nil }
@@ -18,7 +19,9 @@ final class CommanderTabSession: NSObject {
     }
     private(set) var terminal: SessionTerminal?
     // True means expanded; the compact prompt stays visible beside the panes.
-    private(set) var isTerminalVisible = false
+    private(set) var isTerminalVisible = false {
+        didSet { onAppearanceChanged?() }
+    }
     private var automaticallyExpanded = false
     private let terminalHost = TerminalHostView()
     private let paneCover = NSView()
@@ -58,9 +61,9 @@ final class CommanderTabSession: NSObject {
         super.init()
         let rootView = AppearanceObservingView()
         root.view = rootView
-        rootView.onAppearanceChanged = { [weak self, weak window] in
-            window?.backgroundColor = TerminalTheme.windowBackground
+        rootView.onAppearanceChanged = { [weak self] in
             self?.paneCover.layer?.backgroundColor = TerminalTheme.windowBackground.cgColor
+            self?.onAppearanceChanged?()
         }
         for pane in panes { root.addChild(pane) }
 
@@ -264,12 +267,19 @@ final class CommanderTabSession: NSObject {
     /// Called before AppKit dispatch, only for this tab's panes or terminal.
     /// Enter always goes to ZLE; its accept-line widget reads the real buffer.
     func routeTerminalInput(_ event: NSEvent) -> Bool {
+        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        // F10 belongs to the app even when the expanded terminal owns input.
+        if event.type == .keyDown, event.specialKey == .f10, modifiers.isEmpty,
+           isTerminalVisible, !isExitPromptVisible, window?.attachedSheet == nil,
+           let terminal, window?.firstResponder === terminal.view {
+            onQuitRequested()
+            return true
+        }
         guard event.type == .keyDown, !isTerminalVisible, !operationInProgress,
               window?.attachedSheet == nil,
               let responder = window?.firstResponder,
               responder === activePane.view || responder === terminal?.view else { return false }
         let key = event.specialKey
-        let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         let terminalFocused = responder === terminal?.view
         let isEnter = key == .carriageReturn || key == .enter
         let insertName = (isEnter && (modifiers == .command || modifiers == [.command, .shift]))

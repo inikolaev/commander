@@ -36,17 +36,50 @@ import Testing
     #expect(!coordinator.isPresented)
 }
 
-@Test @MainActor func exitDuringFileOperationDoesNotConfirmTermination() throws {
+@Test(arguments: [true, false]) @MainActor func exitDuringFileOperationDoesNotConfirmTermination(requiresConfirmation: Bool) throws {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
     defer { window.orderOut(nil) }
     let coordinator = ExitCoordinator()
     var answer: Bool?
-    coordinator.request(window: window, operationInProgress: true) { answer = $0 }
+    coordinator.request(window: window, operationInProgress: true, requiresConfirmation: requiresConfirmation) { answer = $0 }
     let dialog = try #require(window.contentView?.subviews.first as? TerminalOperationDialog)
     guard case .error = dialog.mode else { Issue.record("Expected busy explanation"); return }
     dialog.onDismiss?()
     #expect(answer == false)
+}
+
+@Test @MainActor func updateRestartSkipsExitConfirmationAndDefersReply() async throws {
+    _ = NSApplication.shared
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 400), styleMask: [.titled], backing: .buffered, defer: false)
+    defer { window.orderOut(nil) }
+    let pane = TerminalPaneView(name: "Test")
+    window.contentView = pane
+    window.makeFirstResponder(pane)
+    let coordinator = ExitCoordinator()
+    // A retry after cancelling an unsaved-document prompt also skips confirmation.
+    for _ in 0..<2 {
+        var reply: Bool?
+        await withCheckedContinuation { continuation in
+            coordinator.request(window: window, operationInProgress: false, requiresConfirmation: false) {
+                reply = $0
+                continuation.resume()
+            }
+            #expect(reply == nil)
+            #expect(pane.subviews.isEmpty)
+            #expect(window.firstResponder === pane)
+        }
+        #expect(reply == true)
+        #expect(!coordinator.isPresented)
+    }
+    // A normal quit still requires confirmation after the update flow ends.
+    var normalReply: Bool?
+    coordinator.request(window: window, operationInProgress: false) { normalReply = $0 }
+    let dialog = try #require(pane.subviews.first as? TerminalOperationDialog)
+    #expect(normalReply == nil)
+    #expect(dialog.focusedControl == 1)
+    dialog.onCancel?()
+    #expect(normalReply == false)
 }
 
 @Test @MainActor func closingWindowRequestsQuitWithoutClosingImmediately() throws {

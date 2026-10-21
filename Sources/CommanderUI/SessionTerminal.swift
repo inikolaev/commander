@@ -85,7 +85,7 @@ final class TerminalDirectoryMailbox {
 }
 
 @MainActor
-final class SessionTerminal: TerminalSurfaceCloseDelegate, TerminalSurfaceGridResizeDelegate {
+final class SessionTerminal: TerminalSurfaceCloseDelegate, TerminalSurfaceGridResizeDelegate, TerminalSurfaceScrollbarDelegate {
     /// One literal zsh argument. ANSI-C quoting also keeps control characters
     /// (including filename newlines) from becoming terminal input or extra rows.
     static func shellArgument(_ name: String) -> String {
@@ -219,6 +219,10 @@ final class SessionTerminal: TerminalSurfaceCloseDelegate, TerminalSurfaceGridRe
         // Do not destroy a surface within its Ghostty callback stack.
         Task { @MainActor [weak self] in self?.onExit?() }
     }
+
+    func terminalDidUpdateScrollbar(_ scrollbar: TerminalScrollbar) {
+        view.updateScrollbar(scrollbar)
+    }
 }
 
 /// Size the terminal in whole rows before Ghostty sees a frame change. The
@@ -258,11 +262,44 @@ final class TerminalHostView: NSView {
 /// App commands belong to Commander; Ghostty keeps terminal copy/paste and input.
 @MainActor
 final class CommanderTerminalView: AppTerminalView {
-    var isCompact = true
+    var isCompact = true {
+        didSet { updateScroller() }
+    }
+    private var scrollbar: TerminalScrollbar?
+    private let scrollView: TerminalScrollView
+
+    override init(frame: NSRect) {
+        scrollView = TerminalScrollView(frame: NSRect(origin: .zero, size: frame.size))
+        super.init(frame: frame)
+        scrollView.autoresizingMask = [.width, .height]
+        scrollView.onScrollToRow = { [weak self] row in self?.scrollToRow(row) }
+        scrollView.onScrollWheel = { [weak self] event in self?.scrollWheel(with: event) }
+        scrollView.isHidden = true
+        // Overlay the surface so showing history never changes the terminal grid.
+        addSubview(scrollView)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    func updateScrollbar(_ scrollbar: TerminalScrollbar) {
+        self.scrollbar = scrollbar
+        updateScroller()
+    }
+
+    private func updateScroller() {
+        guard !isCompact, let scrollbar, scrollbar.len > 0, scrollbar.total > scrollbar.len else {
+            scrollView.isHidden = true
+            return
+        }
+        scrollView.isHidden = false
+        scrollView.update(scrollbar)
+    }
 
     override func scrollWheel(with event: NSEvent) {
         guard !isCompact else { return }
         super.scrollWheel(with: event)
+        if !scrollView.isHidden { scrollView.flashScrollers() }
     }
 
     override func keyDown(with event: NSEvent) {
