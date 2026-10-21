@@ -8,6 +8,246 @@ private func viewerFixture(_ data: Data) throws -> URL {
     return url
 }
 
+@Test func viewerWrappedShortLineCrossesReadBoundaries() async throws {
+    let line = "          const index = +e.target.dataset.index;"
+    for boundary in [4096, 8192, 65_536] {
+        let start = boundary - 13
+        let data = Data((String(repeating: "x", count: start - 1) + "\n" + line + "\nnext\n").utf8)
+        let url = try viewerFixture(data)
+        defer { try? FileManager.default.removeItem(at: url) }
+        for columns in [80, 120, 200] {
+            let document = try FileViewerDocument(url: url)
+            let page = try await document.page(.end, rows: 2, wrapColumns: columns, includeSourceText: true)
+            #expect(page.lines.map(\.text) == [line, "next"])
+            #expect(page.lines.map(\.sourceText) == [line, "next"])
+            #expect(page.lines.map(\.offset) == [Int64(start), Int64(start + 49)])
+            #expect(page.lines.map(\.endOffset) == [Int64(start + 48), Int64(start + 53)])
+            #expect(page.endOffset == Int64(data.count))
+        }
+    }
+}
+
+@Test func viewerWrappedBoundaryNavigationRoundTrips() async throws {
+    let start = 4096 - 13
+    let line = "          const index = +e.target.dataset.index;"
+    let url = try viewerFixture(Data((String(repeating: "x", count: start - 1) + "\n" + line + "\nnext\n").utf8))
+    defer { try? FileManager.default.removeItem(at: url) }
+    for columns in [80, 120, 200] {
+        let document = try FileViewerDocument(url: url)
+        var page = try await document.page(.home, rows: 200, wrapColumns: columns)
+        while page.offset < start && !page.lines.contains(where: { $0.offset == start }) {
+            let next = try await document.page(.scroll(200), rows: 200, wrapColumns: columns)
+            #expect(next.offset > page.offset)
+            page = next
+        }
+        #expect(page.lines.first(where: { $0.offset == start })?.text == line)
+        page = try await document.page(.scroll(1), rows: 1, wrapColumns: columns)
+        while page.offset < start { page = try await document.page(.scroll(1), rows: 1, wrapColumns: columns) }
+        #expect(page.offset == start)
+        #expect(try await document.page(.scroll(1), rows: 1, wrapColumns: columns).offset == start + 49)
+        #expect(try await document.page(.scroll(-1), rows: 1, wrapColumns: columns).offset == start)
+        let cold = try await FileViewerDocument(url: url).page(.end, rows: 2, wrapColumns: columns)
+        #expect(cold.lines.map(\.text) == [line, "next"])
+    }
+}
+
+@Test func viewerWrappedLongLineIgnoresBufferBoundaries() async throws {
+    let url = try viewerFixture(Data((String(repeating: "x", count: 12_000) + "\nnext").utf8))
+    defer { try? FileManager.default.removeItem(at: url) }
+    for width in [80, 120, 127, 5000] {
+        let document = try FileViewerDocument(url: url)
+        let total = (12_000 + width - 1) / width + 1
+        var lines: [ViewerLine] = []
+        var page = try await document.page(.home, rows: 200, wrapColumns: width)
+        lines.append(contentsOf: page.lines)
+        while lines.count < total {
+            page = try await document.page(.scroll(200), rows: 200, wrapColumns: width)
+            lines.append(contentsOf: page.lines)
+        }
+        #expect(lines.count == total)
+        for index in 0..<(total - 1) {
+            #expect(lines[index].offset == Int64(index * width))
+            #expect(lines[index].text == String(repeating: "x", count: min(width, 12_000 - index * width)))
+        }
+        #expect(lines.last?.offset == 12_001)
+        #expect(lines.last?.text == "next")
+    }
+}
+
+@Test func viewerWrappedExactWidthConsumesLineEnding() async throws {
+    for ending in ["\n", "\r\n"] {
+        let url = try viewerFixture(Data((String(repeating: "x", count: 4096) + ending + "next").utf8))
+        defer { try? FileManager.default.removeItem(at: url) }
+        let document = try FileViewerDocument(url: url)
+        let page = try await document.page(.home, rows: 40, wrapColumns: 128)
+        #expect(page.lines.count == 33)
+        #expect(page.lines.prefix(32).allSatisfy { $0.text == String(repeating: "x", count: 128) })
+        #expect(page.lines.last?.text == "next")
+        #expect(page.lines.last?.offset == Int64(4096 + ending.utf8.count))
+    }
+}
+
+@Test func viewerWrappedUTF8AndCRLFCrossReadBoundaries() async throws {
+    let emoji = try viewerFixture(Data((String(repeating: "a", count: 4095) + "😀Z\nlast").utf8))
+    defer { try? FileManager.default.removeItem(at: emoji) }
+    let emojiPage = try await FileViewerDocument(url: emoji).page(rows: 2, wrapColumns: 5000)
+    #expect(emojiPage.lines[0].text == String(repeating: "a", count: 4095) + "😀Z")
+    #expect(emojiPage.lines.map(\.endOffset) == [4100, 4105])
+    #expect(emojiPage.lines[1].offset == 4101)
+    let crlf = try viewerFixture(Data((String(repeating: "a", count: 4095) + "\r\nlast").utf8))
+    defer { try? FileManager.default.removeItem(at: crlf) }
+    let crlfPage = try await FileViewerDocument(url: crlf).page(rows: 2, wrapColumns: 4095)
+    #expect(crlfPage.lines.map(\.offset) == [0, 4097])
+    #expect(crlfPage.lines.map(\.endOffset) == [4095, 4101])
+}
+
+@Test func viewerWrappedTabsAndEOFKeepOffsets() async throws {
+    let url = try viewerFixture(Data("ab\tZ\n".utf8))
+    defer { try? FileManager.default.removeItem(at: url) }
+    let page = try await FileViewerDocument(url: url).page(rows: 3, wrapColumns: 4, includeSourceText: true)
+    #expect(page.lines.map(\.text) == ["ab  ", "Z"])
+    #expect(page.lines.map(\.sourceText) == ["ab\t", "Z"])
+    #expect(page.lines.map(\.offset) == [0, 3])
+    #expect(page.lines.map(\.endOffset) == [3, 4])
+    #expect(page.endOffset == 5)
+    let tab = try viewerFixture(Data("\tX".utf8))
+    defer { try? FileManager.default.removeItem(at: tab) }
+    #expect(try await FileViewerDocument(url: tab).page(rows: 2, wrapColumns: 1).lines.map(\.text) == ["    ", "X"])
+    let bareCR = try viewerFixture(Data("ab\rZ\n".utf8))
+    defer { try? FileManager.default.removeItem(at: bareCR) }
+    let crPage = try await FileViewerDocument(url: bareCR).page(rows: 1, wrapColumns: 4, includeSourceText: true)
+    #expect(crPage.lines[0].text == "ab·Z")
+    #expect(crPage.lines[0].sourceText == "ab\rZ")
+}
+
+@Test func viewerWrappedLayoutChangeRealignsTop() async throws {
+    let url = try viewerFixture(Data((String(repeating: "x", count: 500) + "\nend").utf8))
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try FileViewerDocument(url: url)
+    _ = try await document.page(.scroll(1), rows: 1, wrapColumns: 120)
+    #expect(try await document.page(rows: 1, wrapColumns: 80).offset == 80)
+    #expect(try await document.page(.scroll(-1), rows: 1, wrapColumns: 80).offset == 0)
+    #expect(try await document.page(.scroll(1), rows: 1, wrapColumns: 80).offset == 80)
+    let unwrapped = try await document.page(rows: 1)
+    #expect(unwrapped.offset == 0)
+    #expect(unwrapped.lines[0].text == String(repeating: "x", count: 500))
+}
+
+@Test func viewerWrappedTruncationRecoversValidRow() async throws {
+    let url = try viewerFixture(Data((String(repeating: "x", count: 20_000) + "\nend\n").utf8))
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try FileViewerDocument(url: url)
+    #expect(try await document.page(.end, rows: 1, wrapColumns: 80).offset == 20_001)
+    let start = 4096 - 13
+    try Data((String(repeating: "x", count: start - 1) + "\n          const index = +e.target.dataset.index;\nnext\n").utf8).write(to: url)
+    let page = try await document.page(rows: 1, wrapColumns: 80)
+    #expect(page.offset == 4132)
+    #expect(page.lines.first?.text == "next")
+    try Data().write(to: url)
+    let empty = try await document.page(rows: 1, wrapColumns: 80)
+    #expect(empty.offset == 0)
+    #expect(empty.lines.isEmpty)
+}
+
+@Test func viewerWrappedLongLineRetainsInverseNavigation() async throws {
+    let url = try viewerFixture(Data(repeating: 120, count: 120_003))
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try FileViewerDocument(url: url)
+    _ = try await document.page(.home, rows: 1, wrapColumns: 80)
+    var page = try await document.page(rows: 1, wrapColumns: 80)
+    while page.offset < 100_000 {
+        page = try await document.page(.scroll(200), rows: 1, wrapColumns: 80)
+    }
+    let saved = page.offset
+    let text = page.lines[0].text
+    let previous = try await document.page(.scroll(-1), rows: 1, wrapColumns: 80)
+    #expect(previous.offset < saved)
+    let restored = try await document.page(.scroll(1), rows: 1, wrapColumns: 80)
+    #expect(restored.offset == saved)
+    #expect(restored.lines[0].text == text)
+}
+
+@Test func viewerWrappedColdEndRemainsBounded() async throws {
+    let url = try viewerFixture(Data(repeating: 120, count: 120_003))
+    defer { try? FileManager.default.removeItem(at: url) }
+    let source = try LocalFileContentSource(url: url)
+    let document = FileViewerDocument(source: source)
+    let end = try await document.page(.end, rows: 3, wrapColumns: 80)
+    #expect(end.endOffset == 120_003)
+    #expect(end.lines.count == 3)
+    #expect(end.lines.allSatisfy { !$0.text.isEmpty && $0.endOffset <= 120_003 })
+    #expect(await source.bytesRead < 1_048_576)
+    let saved = end.offset
+    let previous = try await document.page(.scroll(-1), rows: 1, wrapColumns: 80)
+    #expect(previous.offset < saved)
+    #expect(try await document.page(.scroll(1), rows: 1, wrapColumns: 80).offset == saved)
+}
+
+@Test func viewerWrappedColdFallbackAlignsUTF8Scalar() async throws {
+    let url = try viewerFixture(Data(("a" + String(repeating: "😀", count: 30_000) + "b").utf8))
+    defer { try? FileManager.default.removeItem(at: url) }
+    let source = try LocalFileContentSource(url: url)
+    let document = FileViewerDocument(source: source)
+    let end = try await document.page(.end, rows: 2, wrapColumns: 80)
+    #expect(end.endOffset == 120_002)
+    #expect(end.lines.allSatisfy { !$0.text.contains("�") })
+    #expect(end.lines.last?.text.hasSuffix("b") == true)
+    #expect(await source.bytesRead < 1_048_576)
+    let previous = try await document.page(.scroll(-1), rows: 1, wrapColumns: 80)
+    #expect(previous.offset < end.offset)
+    #expect(try await document.page(.scroll(1), rows: 1, wrapColumns: 80).offset == end.offset)
+}
+
+@Test func viewerWrappedColdEndFillsRowsAcrossReplayWindows() async throws {
+    let ascii = try viewerFixture(Data(repeating: 120, count: 2_000_003))
+    defer { try? FileManager.default.removeItem(at: ascii) }
+    for (width, count) in [(500, 200), (5000, 30)] {
+        let document = try FileViewerDocument(url: ascii)
+        let end = try await document.page(.end, rows: count, wrapColumns: width)
+        #expect(end.lines.count == count)
+        #expect(end.endOffset == 2_000_003)
+        let saved = end.offset
+        let previous = try await document.page(.scroll(-1), rows: 1, wrapColumns: width)
+        #expect(previous.offset < saved)
+        #expect(try await document.page(.scroll(1), rows: 1, wrapColumns: width).offset == saved)
+    }
+    let emoji = try viewerFixture(Data(String(repeating: "😀", count: 500_000).utf8))
+    defer { try? FileManager.default.removeItem(at: emoji) }
+    for (width, count) in [(180, 100), (240, 80)] {
+        let document = try FileViewerDocument(url: emoji)
+        let end = try await document.page(.end, rows: count, wrapColumns: width)
+        #expect(end.lines.count == count)
+        #expect(end.endOffset == 2_000_000)
+        #expect(end.lines.allSatisfy { !$0.text.contains("�") })
+    }
+}
+
+@Test func viewerWrappedHexRoundTripPreservesHistory() async throws {
+    let url = try viewerFixture(Data(repeating: 120, count: 120_003))
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try FileViewerDocument(url: url)
+    let end = try await document.page(.end, rows: 1, wrapColumns: 80)
+    let previous = try await document.page(.scroll(-1), rows: 1, wrapColumns: 80)
+    _ = try await document.page(.scroll(1), rows: 1, wrapColumns: 80)
+    _ = try await document.page(rows: 1, mode: .hex)
+    let restored = try await document.page(rows: 1, wrapColumns: 80)
+    #expect(restored.offset == end.offset)
+    #expect(try await document.page(.scroll(-1), rows: 1, wrapColumns: 80).offset == previous.offset)
+    #expect(try await document.page(.scroll(1), rows: 1, wrapColumns: 80).offset == end.offset)
+}
+
+@Test func viewerMovedHexPositionRecoversEmptyTextRow() async throws {
+    let url = try viewerFixture(Data((String(repeating: "x", count: 15) + "\n\nB\n").utf8))
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try FileViewerDocument(url: url)
+    _ = try await document.page(.home, rows: 1, wrapColumns: 80)
+    #expect(try await document.page(.scroll(1), rows: 1, mode: .hex).offset == 16)
+    let text = try await document.page(rows: 1, wrapColumns: 80)
+    #expect(text.offset == 16)
+    #expect(text.lines[0].text == "")
+    #expect(try await document.page(.scroll(1), rows: 1, wrapColumns: 80).offset == 17)
+}
+
 @Test func viewerScrollsBothDirectionsAndHandlesLineEndings() async throws {
     let url = try viewerFixture(Data("one\r\n\ntwo\nlast".utf8))
     defer { try? FileManager.default.removeItem(at: url) }

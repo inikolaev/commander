@@ -30,7 +30,7 @@ public actor ArchiveFileContentSource: FileContentSource {
         do {
             try stream.validate()
             if declaredSize == 0, !stream.isAtEnd { try prepare(through: 0) }
-            return ContentMetadata(size: stream.isAtEnd ? materializedBytes : declaredSize)
+            return ContentMetadata(size: stream.isAtEnd ? materializedBytes : declaredSize, revision: 0)
         } catch {
             recordFailure(error)
             throw error
