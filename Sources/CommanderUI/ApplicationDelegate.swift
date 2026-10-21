@@ -3,11 +3,13 @@ import FileManagerCore
 import Sparkle
 
 @MainActor
-public final class ApplicationDelegate: NSObject, NSApplicationDelegate, @preconcurrency SPUStandardUserDriverDelegate {
+public final class ApplicationDelegate: NSObject, NSApplicationDelegate,
+    @preconcurrency SPUStandardUserDriverDelegate, SPUUpdaterDelegate {
     private var mainWindow: CommanderWindowController?
     private let exitCoordinator = ExitCoordinator()
     private var updaterController: SPUStandardUpdaterController!
     private var updateAccessory: NSTitlebarAccessoryViewController?
+    private var isRestartingForUpdate = false
     private var appearanceMenuItems: [CommanderAppearanceMode: NSMenuItem] = [:]
 
     public override init() {
@@ -17,7 +19,7 @@ public final class ApplicationDelegate: NSObject, NSApplicationDelegate, @precon
         // be represented by a quiet title-bar reminder rather than an alert.
         updaterController = SPUStandardUpdaterController(
             startingUpdater: false,
-            updaterDelegate: nil,
+            updaterDelegate: self,
             userDriverDelegate: self
         )
         #endif
@@ -70,12 +72,23 @@ public final class ApplicationDelegate: NSObject, NSApplicationDelegate, @precon
     public func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         guard let controller = mainWindow, let window = controller.window else { return .terminateNow }
         controller.isExitPromptVisible = true
-        exitCoordinator.request(window: window, operationInProgress: controller.fileOperationInProgress) { confirmed in
+        exitCoordinator.request(window: window, operationInProgress: controller.fileOperationInProgress,
+                                requiresConfirmation: !isRestartingForUpdate) { confirmed in
             controller.isExitPromptVisible = false
             if confirmed { controller.prepareForTermination { sender.reply(toApplicationShouldTerminate: $0) } }
             else { sender.reply(toApplicationShouldTerminate: false) }
         }
         return .terminateLater
+    }
+
+    public func updaterWillRelaunchApplication(_ updater: SPUUpdater) {
+        // Sparkle has already obtained consent to restart. Keep this set for
+        // retries if an unsaved document or active file operation delays quitting.
+        isRestartingForUpdate = true
+    }
+
+    public func updater(_ updater: SPUUpdater, didFinishUpdateCycleFor updateCheck: SPUUpdateCheck, error: Error?) {
+        isRestartingForUpdate = false
     }
 
     public var supportsGentleScheduledUpdateReminders: Bool { true }

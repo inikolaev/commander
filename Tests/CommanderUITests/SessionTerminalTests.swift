@@ -7,11 +7,12 @@ import GhosttyKit
 import FileManagerCore
 
 @MainActor
-private func terminalContents(_ terminal: SessionTerminal) throws -> String {
+private func terminalContents(_ terminal: SessionTerminal, viewportOnly: Bool = false) throws -> String {
     let surface = try #require(terminal.view.surface?.rawValue)
+    let tag = viewportOnly ? GHOSTTY_POINT_VIEWPORT : GHOSTTY_POINT_SCREEN
     let selection = ghostty_selection_s(
-        top_left: ghostty_point_s(tag: GHOSTTY_POINT_SCREEN, coord: GHOSTTY_POINT_COORD_TOP_LEFT, x: 0, y: 0),
-        bottom_right: ghostty_point_s(tag: GHOSTTY_POINT_SCREEN, coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT, x: 0, y: 0),
+        top_left: ghostty_point_s(tag: tag, coord: GHOSTTY_POINT_COORD_TOP_LEFT, x: 0, y: 0),
+        bottom_right: ghostty_point_s(tag: tag, coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT, x: 0, y: 0),
         rectangle: false)
     var text = ghostty_text_s()
     try #require(ghostty_surface_read_text(surface, selection, &text))
@@ -210,6 +211,111 @@ private func terminalContents(_ terminal: SessionTerminal) throws -> String {
     #expect(!controller.selectedTab.isTerminalVisible)
     #expect(controller.selectedTab.terminal === terminal)
     #expect(window.firstResponder !== terminal.view)
+}
+
+@Test @MainActor func terminalF10OpensExitConfirmationThroughBothDispatchPaths() throws {
+    _ = NSApplication.shared
+    let controller = CommanderWindowController()
+    let window = try #require(controller.window as? CommanderWindow)
+    let tab = controller.selectedTab
+    defer { tab.closeTerminal(); window.orderOut(nil) }
+    #expect(tab.toggleTerminal())
+    let terminal = try #require(tab.terminal)
+    let exit = ExitCoordinator()
+    var requests = 0
+    controller.onQuitRequested = {
+        requests += 1
+        controller.isExitPromptVisible = true
+        exit.request(window: window, operationInProgress: false) { confirmed in
+            #expect(!confirmed)
+            controller.isExitPromptVisible = false
+        }
+    }
+    defer { controller.onQuitRequested = {} }
+    func key(_ special: NSEvent.SpecialKey = .f10, modifiers: NSEvent.ModifierFlags = .function) throws -> NSEvent {
+        let text = String(special.unicodeScalar)
+        return try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: modifiers,
+            timestamp: 1, windowNumber: window.windowNumber, context: nil,
+            characters: text, charactersIgnoringModifiers: text, isARepeat: false, keyCode: special == .f10 ? 109 : 101))
+    }
+    for keyEquivalent in [true, false] {
+        if keyEquivalent { #expect(window.performKeyEquivalent(with: try key())) }
+        else { window.sendEvent(try key(modifiers: [])) }
+        #expect(exit.isPresented)
+        let dialog = try #require(tab.root.view.subviews.compactMap { $0 as? TerminalOperationDialog }.first)
+        #expect(dialog.focusedControl == 1) // Cancel remains the default.
+        #expect(!tab.routeTerminalInput(try key())) // Do not reopen an active prompt.
+        dialog.onCancel?()
+        #expect(!exit.isPresented)
+        #expect(window.firstResponder === terminal.view)
+        #expect(tab.isTerminalVisible)
+        terminal.handleShellEvent("running") // F10 also works while a command owns input.
+    }
+    for modifiers: NSEvent.ModifierFlags in [.command, .control, .option, .shift] {
+        #expect(!tab.routeTerminalInput(try key(modifiers: modifiers)))
+    }
+    #expect(!tab.routeTerminalInput(try key(.f9)))
+    #expect(requests == 2)
+}
+
+@Test @MainActor func terminalScrollbarTracksAndNavigatesRealScrollback() async throws {
+    _ = NSApplication.shared
+    let config = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: config) }
+    try "HISTFILE=/dev/null\nSAVEHIST=0\nPS1='scroll> '\nRPROMPT=''\n"
+        .write(to: config.appendingPathComponent(".zshrc"), atomically: true, encoding: .utf8)
+    let controller = CommanderWindowController()
+    let tab = controller.selectedTab
+    tab.start { try SessionTerminal(directory: $0, shellConfigurationDirectory: config) }
+    defer { tab.closeTerminal(); controller.window?.orderOut(nil) }
+    let terminal = try #require(tab.terminal)
+    let scrollView = try #require(terminal.view.subviews.compactMap { $0 as? NSScrollView }.first)
+    let scroller = try #require(scrollView.verticalScroller)
+    func waitFor(_ description: String, _ condition: () throws -> Bool) async throws {
+        for _ in 0..<150 {
+            if try condition() { return }
+            try await Task.sleep(for: .milliseconds(20))
+        }
+        let contents = try terminalContents(terminal, viewportOnly: true)
+        try #require(try condition(), Comment(rawValue: description + "\n" + contents))
+    }
+    try await waitFor("Initial shell prompt") { terminal.isAtPrompt }
+    #expect(scrollView.isHidden)
+    #expect(tab.toggleTerminal())
+    #expect(scrollView.isHidden) // No history yet, even with the terminal expanded.
+    tab.root.view.layoutSubtreeIfNeeded()
+    let size = terminal.view.frame.size
+    #expect(terminal.view.paste(text: "printf 'scrollback-row-%03d\\n' {1..240}"))
+    #expect(terminal.view.sendKey(.enter))
+    try await waitFor("Scrollbar and final output after executing command") {
+        guard terminal.isAtPrompt, !scrollView.isHidden else { return false }
+        return try terminalContents(terminal, viewportOnly: true).contains("scrollback-row-240")
+    }
+    #expect(scroller.knobProportion > 0 && scroller.knobProportion < 1)
+    #expect(scroller.isEnabled)
+    #expect(scroller.doubleValue == 1)
+    #expect(terminal.view.frame.size == size)
+
+    scrollView.contentView.scroll(to: .zero)
+    scrollView.reflectScrolledClipView(scrollView.contentView)
+    try await waitFor("Original command after the native viewport scrolls to the top") { try terminalContents(terminal, viewportOnly: true).contains("scroll> printf") }
+    #expect(try !terminalContents(terminal, viewportOnly: true).contains("scrollback-row-240"))
+    #expect(controller.window?.firstResponder === terminal.view)
+
+    // Scrolling through Ghostty also updates the native thumb.
+    #expect(terminal.view.performBindingAction("scroll_to_bottom"))
+    try await waitFor("Thumb returns to the bottom") { scroller.doubleValue == 1 }
+    #expect(try terminalContents(terminal, viewportOnly: true).contains("scrollback-row-240"))
+    #expect(tab.toggleTerminal())
+    #expect(scrollView.isHidden)
+    #expect(tab.toggleTerminal())
+    #expect(!scrollView.isHidden)
+    #expect(terminal.view.frame.size == size)
+
+    #expect(terminal.view.paste(text: "printf '\\033[3J\\033[2J\\033[H'"))
+    #expect(terminal.view.sendKey(.enter))
+    try await waitFor("Scrollbar hides after erasing scrollback") { scrollView.isHidden }
 }
 
 @Test @MainActor func compactPromptExpandsBeforeExecutionAndRestoresOnCompletion() throws {

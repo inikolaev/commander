@@ -6,8 +6,15 @@ final class ExitCoordinator {
     private let presenter = OperationDialogPresenter()
     private(set) var isPresented = false
 
-    func request(window: NSWindow, operationInProgress: Bool, completion: @escaping (Bool) -> Void) {
+    func request(window: NSWindow, operationInProgress: Bool, requiresConfirmation: Bool = true,
+                 completion: @escaping (Bool) -> Void) {
         guard !isPresented else { return }
+        if !requiresConfirmation && !operationInProgress {
+            // Let applicationShouldTerminate return .terminateLater before the
+            // caller prepares documents and replies to AppKit's quit request.
+            DispatchQueue.main.async { completion(true) }
+            return
+        }
         isPresented = true
         let dialog: TerminalOperationDialog
         if operationInProgress {

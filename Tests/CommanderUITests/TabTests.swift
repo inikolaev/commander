@@ -74,7 +74,7 @@ private func settleTabs(_ controller: CommanderWindowController) async throws {
     #expect(window.firstResponder === terminal)
 }
 
-@Test @MainActor func tabsPreserveUnsavedEditorAndCancelClosing() async throws {
+@Test(arguments: [true, false]) @MainActor func tabsPreserveUnsavedEditorAndCancelClosing(restartingForUpdate: Bool) async throws {
     _ = NSApplication.shared
     let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
     try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -120,7 +120,19 @@ private func settleTabs(_ controller: CommanderWindowController) async throws {
     controller.closeTab(nil)
     controller.selectTab(id: second.id)
     var quit: Bool?
-    controller.prepareForTermination { quit = $0 }
+    if restartingForUpdate {
+        let coordinator = ExitCoordinator()
+        await withCheckedContinuation { continuation in
+            coordinator.request(window: window, operationInProgress: controller.fileOperationInProgress,
+                                requiresConfirmation: false) { confirmed in
+                #expect(confirmed)
+                if confirmed { controller.prepareForTermination { quit = $0 } }
+                continuation.resume()
+            }
+        }
+    } else {
+        controller.prepareForTermination { quit = $0 }
+    }
     let quitDialog = try #require(first.root.view.subviews.first { $0 is TerminalOperationDialog } as? TerminalOperationDialog)
     #expect(controller.selectedTab === first)
     quitDialog.onCancel?()
