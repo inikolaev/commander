@@ -212,6 +212,31 @@ private struct TestSyntaxHighlighter: SyntaxHighlighter {
     }
 }
 
+@Test func viewerSyntaxProjectionPreservesTokenAcrossReadBoundary() async throws {
+    let start = 4096 - 13
+    let line = "          const index = +e.target.dataset.index;"
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".html")
+    try Data((String(repeating: "x", count: start - 1) + "\n" + line + "\nnext\n").utf8).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let highlighter = TestSyntaxHighlighter(spans: [
+        SyntaxHighlightSpan(byteRange: 4093..<4098, kind: .keyword)
+    ])
+    for command in [ViewerCommand.home, .end] {
+        let document = try FileViewerDocument(url: url)
+        let page = try await document.page(command, rows: commandIsHome(command) ? 200 : 2,
+                                           wrapColumns: 80, includeSourceText: true)
+        let index = try #require(page.lines.firstIndex(where: { $0.offset == start }))
+        #expect(page.lines[index].text == line)
+        #expect(ViewerSyntaxProjection.make(page: page, highlighter: highlighter).lines[index] == [
+            ViewerDisplayHighlight(range: 10..<15, kind: .keyword)
+        ])
+    }
+}
+
+private func commandIsHome(_ command: ViewerCommand) -> Bool {
+    if case .home = command { true } else { false }
+}
+
 @Test func viewerSyntaxProjectionMergesSourceAndSpansSequentially() async throws {
     let source = "\t\"é\": true\n"
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)

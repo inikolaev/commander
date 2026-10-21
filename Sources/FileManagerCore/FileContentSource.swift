@@ -4,7 +4,13 @@ import Darwin
 public struct ContentMetadata: Sendable {
     /// Nil means unknown, never the length of a partially prepared cache.
     public let size: Int64?
-    public init(size: Int64?) { self.size = size }
+    /// Changes when this source detects a possible content change. Scoped to this source instance.
+    public let revision: UInt64?
+    public init(size: Int64?) { self.init(size: size, revision: nil) }
+    public init(size: Int64?, revision: UInt64?) {
+        self.size = size
+        self.revision = revision
+    }
 }
 
 /// Stateful, random-access bytes. Implementations own caching and resource lifetimes.
@@ -37,6 +43,7 @@ public actor LocalFileContentSource: FileContentSource {
     private var bufferOffset: Int64 = -1
     private var size: Int64 = 0
     private var modified = timespec()
+    private var revision: UInt64 = 0
     public private(set) var bytesRead: Int64 = 0
 
     public init(url: URL, bufferSize: Int = 65_536) throws {
@@ -67,9 +74,10 @@ public actor LocalFileContentSource: FileContentSource {
         guard fstat(descriptor, &info) == 0 else { throw Self.posixError() }
         if info.st_size != size || info.st_mtimespec.tv_sec != modified.tv_sec || info.st_mtimespec.tv_nsec != modified.tv_nsec {
             buffer = Data(); bufferOffset = -1
+            revision &+= 1
         }
         size = info.st_size; modified = info.st_mtimespec
-        return ContentMetadata(size: size)
+        return ContentMetadata(size: size, revision: revision)
     }
 
     public func length() throws -> Int64 { try metadata().size! }
