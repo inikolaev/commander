@@ -15,6 +15,8 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
     private var scrollRemainder: CGFloat = 0
     private var marked = NSRange(location: NSNotFound, length: 0)
     private var dragging = false
+    private var hasEditorFocus = false
+    private let insertionIndicator = EditorInsertionIndicator()
     private var syntaxController: EditorSyntaxController?
     private var syntaxProjection = EditorSyntaxProjection.empty
     private var cell: CGFloat { TerminalTheme.cellAdvance }
@@ -28,6 +30,7 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         self.selection = EditorSelection(document: document)
         self.path = path
         super.init(frame: .zero)
+        addSubview(insertionIndicator.view)
         setAccessibilityElement(true)
         setAccessibilityRole(.textArea)
         setAccessibilityLabel("File editor: \(path)")
@@ -54,6 +57,65 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
     override var isFlipped: Bool { true }
     override var isOpaque: Bool { true }
     override var acceptsFirstResponder: Bool { true }
+
+    override func becomeFirstResponder() -> Bool {
+        hasEditorFocus = true
+        updateInsertionIndicator(restart: true)
+        return true
+    }
+    override func resignFirstResponder() -> Bool {
+        hasEditorFocus = false
+        dragging = false
+        updateInsertionIndicator()
+        return true
+    }
+    override func viewWillMove(toWindow newWindow: NSWindow?) {
+        if let window {
+            NotificationCenter.default.removeObserver(self, name: NSWindow.didBecomeKeyNotification, object: window)
+            NotificationCenter.default.removeObserver(self, name: NSWindow.didResignKeyNotification, object: window)
+        }
+        insertionIndicator.update(.hidden)
+        super.viewWillMove(toWindow: newWindow)
+    }
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        if let window {
+            for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
+                NotificationCenter.default.addObserver(self, selector: #selector(windowFocusChanged(_:)), name: name, object: window)
+            }
+        }
+        hasEditorFocus = window?.firstResponder === self
+        updateInsertionIndicator(restart: true)
+    }
+    @objc private func windowFocusChanged(_ notification: Notification) {
+        updateInsertionIndicator(restart: true)
+    }
+    override func viewDidHide() {
+        super.viewDidHide()
+        insertionIndicator.update(.hidden)
+    }
+    override func viewDidUnhide() {
+        super.viewDidUnhide()
+        updateInsertionIndicator(restart: true)
+    }
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateInsertionIndicator()
+    }
+
+    private func updateInsertionIndicator(restart: Bool = false) {
+        guard hasEditorFocus, window?.isKeyWindow == true, !isHiddenOrHasHiddenAncestor,
+              selection.range.length == 0, selection.line >= topLine, selection.line < topLine + rows else {
+            insertionIndicator.update(.hidden)
+            return
+        }
+        let rect = NSRect(x: 2 + cursorX() - leftOffset,
+            y: CGFloat(selection.line - topLine + 1) * TerminalTheme.lineHeight + 1,
+            width: 2, height: TerminalTheme.lineHeight - 2).intersection(textGeometry.contentRect)
+        guard !rect.isEmpty else { insertionIndicator.update(.hidden); return }
+        insertionIndicator.view.frame = rect
+        insertionIndicator.update(dragging || hasMarkedText() ? .visible : .blinking, restart: restart)
+    }
 
     private struct Glyph {
         let text: String
@@ -108,6 +170,7 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
             leftOffset = max(leftOffset, x - textWidth + cell)
         }
         topLine = min(max(0, topLine), max(0, document.lineCount - 1))
+        updateInsertionIndicator(restart: true)
         needsDisplay = true
         inputContext?.invalidateCharacterCoordinates()
     }
@@ -163,11 +226,6 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
                     NSRect(x: x, y: y, width: cell, height: height).fill()
                 }
             }
-        }
-        if window?.firstResponder === self && selection.line >= topLine && selection.line < topLine + rows {
-            TerminalTheme.primaryText.setFill()
-            NSRect(x: 2 + cursorX() - leftOffset,
-                y: CGFloat(selection.line - topLine + 1) * height + 1, width: 2, height: height - 2).fill()
         }
         NSGraphicsContext.restoreGraphicsState()
         TerminalFunctionKeys.draw(in: footerRect, labels: [2: "Save", 10: "Close"])
@@ -280,7 +338,12 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         selection.select(safeRange(NSRange(location: marked.location + selectedRange.location, length: selectedRange.length)))
         changed()
     }
-    func unmarkText() { marked = NSRange(location: NSNotFound, length: 0); document.endUndoGroup(); needsDisplay = true }
+    func unmarkText() {
+        marked = NSRange(location: NSNotFound, length: 0)
+        document.endUndoGroup()
+        updateInsertionIndicator(restart: true)
+        needsDisplay = true
+    }
     func hasMarkedText() -> Bool { marked.location != NSNotFound }
     func markedRange() -> NSRange { marked }
     func selectedRange() -> NSRange { selection.range }
@@ -330,7 +393,10 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         selection.set(offset(at: convert(event.locationInWindow, from: nil)), extending: true)
         changed()
     }
-    override func mouseUp(with event: NSEvent) { dragging = false }
+    override func mouseUp(with event: NSEvent) {
+        dragging = false
+        updateInsertionIndicator(restart: true)
+    }
     override func scrollWheel(with event: NSEvent) {
         scrollRemainder += event.scrollingDeltaY / (event.hasPreciseScrollingDeltas ? TerminalTheme.lineHeight : 1)
         let steps = Int(scrollRemainder)
