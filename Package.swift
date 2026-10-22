@@ -13,6 +13,7 @@ let package = Package(
         .package(url: "https://github.com/tree-sitter/tree-sitter", exact: "0.25.10"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-json", revision: "254c42a6476413b776221e03982ac8ae159eeb72"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-python", exact: "0.23.6"),
+        .package(url: "https://github.com/tree-sitter/tree-sitter-ruby", exact: "0.23.1"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-c", exact: "0.24.2"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-cpp", exact: "0.23.4"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-go", exact: "0.25.0"),
@@ -59,6 +60,7 @@ let package = Package(
             .product(name: "TreeSitterCPP", package: "tree-sitter-cpp"),
             .product(name: "TreeSitterC", package: "tree-sitter-c"),
             .product(name: "TreeSitterPython", package: "tree-sitter-python"),
+            .product(name: "TreeSitterRuby", package: "tree-sitter-ruby"),
         ]),
         .target(name: "CommanderUI", dependencies: [
             .product(name: "GhosttyTerminal", package: "libghostty-spm"),
