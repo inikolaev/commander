@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import Testing
 import FileManagerCore
-@testable import CommanderUI
+@testable import Commander
 
 @Test @MainActor func copyDialogKeyboardAndFocus() throws {
     _ = NSApplication.shared

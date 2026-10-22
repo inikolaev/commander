@@ -1,7 +1,7 @@
 import AppKit
 import Testing
 import FileManagerCore
-@testable import CommanderUI
+@testable import Commander
 
 @Test @MainActor func truncatedFilenamesKeepIdenticalPrefixSpacing() throws {
     _ = NSApplication.shared

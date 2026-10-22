@@ -1,6 +1,6 @@
 import AppKit
 import Testing
-@testable import CommanderUI
+@testable import Commander
 
 @Test @MainActor func exitConfirmationDefaultsToCancelAndHandlesQuit() throws {
     _ = NSApplication.shared

@@ -1,6 +1,6 @@
 import fcntl, os, pty, select, signal, struct, tempfile, termios, time, uuid
 from pathlib import Path
-resources = Path(__file__).resolve().parents[1] / 'Sources/CommanderUI/Resources/TerminalShell'
+resources = Path(__file__).resolve().parents[1] / 'Sources/Commander/Resources/TerminalShell'
 with tempfile.TemporaryDirectory() as tmp:
     root=Path(tmp); mailbox=root/'mailbox'; mailbox.mkdir()
     original=root/'config'; original.mkdir()

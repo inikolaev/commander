@@ -1,7 +1,7 @@
 import AppKit
 import Testing
 import EditorCore
-@testable import CommanderUI
+@testable import Commander
 
 @MainActor private func editorKey(_ characters: String, code: UInt16,
                                   modifiers: NSEvent.ModifierFlags) throws -> NSEvent {

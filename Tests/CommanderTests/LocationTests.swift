@@ -2,7 +2,7 @@ import AppKit
 import FileManagerCore
 import Foundation
 import Testing
-@testable import CommanderUI
+@testable import Commander
 
 private final class TestLocationReader: LocationReading, @unchecked Sendable {
     private let lock = NSLock()

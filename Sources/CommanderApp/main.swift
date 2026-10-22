@@ -1,5 +1,5 @@
 import AppKit
-import CommanderUI
+import Commander
 
 if CommandLine.arguments.contains("--verify-bundled-resources") || CommandLine.arguments.contains("--smoke-test") {
     do {

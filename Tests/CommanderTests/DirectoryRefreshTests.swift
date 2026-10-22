@@ -2,7 +2,7 @@ import AppKit
 import FileManagerCore
 import Foundation
 import Testing
-@testable import CommanderUI
+@testable import Commander
 
 @MainActor
 private func eventually(sourceLocation: SourceLocation = #_sourceLocation, _ predicate: () -> Bool) async throws {

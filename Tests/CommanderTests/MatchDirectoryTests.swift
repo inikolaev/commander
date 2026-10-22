@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 import Testing
-@testable import CommanderUI
+@testable import Commander
 
 @Test @MainActor func commandDMatchesDirectoryInEitherDirectionWithoutChangingFocus() async throws {
     _ = NSApplication.shared

@@ -1,13 +1,13 @@
 {
-  "originHash" : "42d9f56ee49d25a84ab37b660a0d0ba62e7fefb365b53f4a0589d30baa150198",
+  "originHash" : "f69246c9e8a9af180b44a7c4aefe85e42cf2e63d8ac31647539e3f7718e4947e",
   "pins" : [
     {
-      "identity" : "commander-tree-sitter",
+      "identity" : "commander-syntax-highlighting",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/inikolaev/commander-tree-sitter.git",
+      "location" : "https://github.com/inikolaev/commander-syntax-highlighting.git",
       "state" : {
-        "revision" : "1293308c825944d0b36d090b1e1a7c6206095998",
-        "version" : "0.2.2"
+        "revision" : "4ff12dcd5f9cb37c9de109b60115f1139d43ca3c",
+        "version" : "0.2.3"
       }
     },
     {

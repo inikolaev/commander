@@ -1,7 +1,7 @@
 import AppKit
 import Foundation
 import Testing
-@testable import CommanderUI
+@testable import Commander
 
 @MainActor
 private func settleTabs(_ controller: CommanderWindowController) async throws {

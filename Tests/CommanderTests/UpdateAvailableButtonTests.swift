@@ -1,6 +1,6 @@
 import AppKit
 import XCTest
-@testable import CommanderUI
+@testable import Commander
 
 @MainActor
 final class UpdateAvailableButtonTests: XCTestCase {

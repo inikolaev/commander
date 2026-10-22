@@ -3,7 +3,7 @@ import Foundation
 import Testing
 import FileManagerCore
 import ArchiveTestSupport
-@testable import CommanderUI
+@testable import Commander
 
 @Test @MainActor func f3ViewsArchiveJSONAndEscapeRestoresPaneSelection() async throws {
     _ = NSApplication.shared

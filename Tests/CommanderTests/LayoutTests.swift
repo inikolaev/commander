@@ -1,6 +1,6 @@
 import AppKit
 import Testing
-@testable import CommanderUI
+@testable import Commander
 
 @Test func paneUsesEveryFullRowAboveFooter() {
     for height in 200...700 {

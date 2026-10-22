@@ -1,7 +1,7 @@
 import AppKit
 import Testing
 import FileManagerCore
-@testable import CommanderUI
+@testable import Commander
 
 @Test @MainActor func fileColorsRespectCategoryPrecedence() {
     func row(_ name: String, directory: Bool = false, executable: Bool = false, hidden: Bool = false) -> PaneRow {

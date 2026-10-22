@@ -2,7 +2,7 @@ import AppKit
 import EditorCore
 import SyntaxCore
 import Testing
-@testable import CommanderUI
+@testable import Commander
 
 private struct TestHighlighter: SyntaxHighlighter {
     let isActive = true

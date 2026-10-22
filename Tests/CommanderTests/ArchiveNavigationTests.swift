@@ -3,7 +3,7 @@ import Foundation
 import Testing
 import FileManagerCore
 import ArchiveTestSupport
-@testable import CommanderUI
+@testable import Commander
 
 @MainActor private func settleArchivePanes(_ panes: [PaneViewController]) async throws {
     for _ in 0..<400 {

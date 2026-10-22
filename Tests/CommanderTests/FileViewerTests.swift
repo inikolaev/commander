@@ -3,7 +3,7 @@ import Foundation
 import Testing
 import FileManagerCore
 import SyntaxCore
-@testable import CommanderUI
+@testable import Commander
 
 @Test @MainActor func viewerDisplaysFilePagesAndRestoresFocusOnEscape() async throws {
     _ = NSApplication.shared

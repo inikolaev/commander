@@ -2,7 +2,7 @@ import AppKit
 import Foundation
 import Testing
 import FileManagerCore
-@testable import CommanderUI
+@testable import Commander
 
 private final class RecordingTrasher: FileTrashing, @unchecked Sendable {
     private let lock = NSLock()

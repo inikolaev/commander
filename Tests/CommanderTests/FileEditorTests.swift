@@ -2,7 +2,7 @@ import AppKit
 import Testing
 import EditorCore
 import FileManagerCore
-@testable import CommanderUI
+@testable import Commander
 
 @Test @MainActor func f4OpensEditorAndShiftF4CreatesFile() throws {
     _ = NSApplication.shared

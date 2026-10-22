@@ -1,7 +1,7 @@
 import AppKit
 import Testing
 import FileManagerCore
-@testable import CommanderUI
+@testable import Commander
 
 @Test @MainActor func renameDialogRetriesAndRenamesFile() async throws {
     _ = NSApplication.shared
