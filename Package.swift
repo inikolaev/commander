@@ -29,7 +29,7 @@ let package = Package(
         .package(url: "https://github.com/tree-sitter/tree-sitter-rust", exact: "0.24.2"),
         .package(url: "https://github.com/tree-sitter-grammars/tree-sitter-starlark", exact: "1.3.0"),
         .package(url: "https://github.com/tree-sitter/tree-sitter-css", exact: "0.23.2"),
-        .package(url: "https://github.com/tree-sitter-grammars/tree-sitter-markdown", revision: "ec1a4f07a20cb5cf8e90653e4a492445e4646154"),
+        .package(url: "https://github.com/tree-sitter-grammars/tree-sitter-markdown", revision: "4597cb1195ef1834c03d3f1a779644a18d49ca36"),
         .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.10.0"),
     ],
     targets: [
