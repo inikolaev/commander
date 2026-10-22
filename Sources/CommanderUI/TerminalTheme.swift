@@ -123,6 +123,7 @@ enum TerminalTheme {
         case .function: accent
         case .type: syntaxProperty
         case .variable: primaryText
+        @unknown default: primaryText
         }
     }
 
