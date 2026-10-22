@@ -317,10 +317,11 @@ bash scripts/generate-icon.sh
   prevent stale results from replacing newer ones. UI updates stay on the main actor.
 - `CommanderApp`: executable entry point; the product and app binary are named `Commander`.
 
-Production targets communicate through public APIs. Tests may use `@testable
-import` for the target they test. A test may inspect another module's internals
-when a necessary test observation has no public API; keep that exception in a
-test-only helper and document why it is needed.
+Our modules use only each other's public APIs, including in tests for a
+different module. A module's own tests may use `@testable import` for that
+module. Tests may inspect a third-party dependency's internals when there is
+no public way to make a necessary assertion; keep that access in a test-only
+helper and document why it is needed. Production targets use public APIs.
 
 `LocalFileCopier` stages copies in the destination filesystem before publishing
 them; a small `CFileCopy` adapter uses macOS `copyfile` to preserve metadata while
