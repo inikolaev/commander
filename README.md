@@ -120,7 +120,7 @@ Tabs themselves are not restored after restarting the app.
 
 ### File colors
 
-File-name colors are defined in `Sources/CommanderUI/FileColorScheme.swift`,
+File-name colors are defined in `Sources/Commander/FileColorScheme.swift`,
 including the archive extension list and rule precedence. Hidden items (dot names
 or macOS hidden flags) are muted, directories white, archives pink, executables
 green, and other files cyan. Executable status uses filesystem permissions and
@@ -309,13 +309,19 @@ bash scripts/generate-icon.sh
 - `FileManagerCore`: immutable file entries, a replaceable `DirectoryReading`
   interface, local directory reads, pure `PaneState` navigation state, and a
   `ColumnViewport` model for paging and keeping selection visible.
-- `CommanderUI`: AppKit application/window setup and pane controllers. Each pane
+- `Commander`: AppKit application/window setup and pane controllers. Each pane
   owns its independent state. `TerminalPaneView` draws and hit-tests a shared
   `PaneGeometry`; `TerminalTheme` centralizes colors and typography. Keyboard
   input is translated into pane actions. `TerminalKeyBar` draws the shortcut strip.
   Directory reads run outside the main actor; request identities and cancellation
   prevent stale results from replacing newer ones. UI updates stay on the main actor.
-- `Commander`: executable entry point.
+- `CommanderApp`: executable entry point; the product and app binary are named `Commander`.
+
+Our modules use only each other's public APIs, including in tests for a
+different module. A module's own tests may use `@testable import` for that
+module. Tests may inspect a third-party dependency's internals when there is
+no public way to make a necessary assertion; keep that access in a test-only
+helper and document why it is needed. Production targets use public APIs.
 
 `LocalFileCopier` stages copies in the destination filesystem before publishing
 them; a small `CFileCopy` adapter uses macOS `copyfile` to preserve metadata while

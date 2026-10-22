@@ -1,5 +1,11 @@
 # Syntax highlighting
 
+Commander imports the prebuilt `SyntaxCore` module from
+[`commander-syntax-highlighting`](https://github.com/inikolaev/commander-syntax-highlighting),
+pinned in `Package.swift`. The parser, language definitions, registry, and their
+tests live in that repository. Commander owns the viewer/editor projections and
+theme colors described here.
+
 # Viewer
 
 The viewer consumes semantic UTF-8 byte spans through `SyntaxHighlighter`.
@@ -112,7 +118,8 @@ indexed lookup takes O(log n + k) for k returned spans.
 
 ## Adding a language
 
-1. Add its grammar dependency to `Package.swift` and the `SyntaxCore` target.
+1. In `commander-syntax-highlighting`, add its upstream grammar dependency to the source
+   `Package.swift` and the `SyntaxCore` target.
 2. Create a definition file like `JSONSyntaxDefinition.swift`: supply the grammar,
    query, and a mapping from query capture names to `SyntaxCaptureStyle` values.
    Unmapped captures are ignored and can be used as predicate inputs.
@@ -121,7 +128,12 @@ indexed lookup takes O(log n + k) for k returned spans.
    The ID and extensions also resolve fence labels; put additional names in `aliases`.
 4. Add fixtures for token kinds, precedence, predicates, and multiline content.
    Use UTF-8 byte offsets in assertions.
-5. Add a `SyntaxKind` and theme mapping only when a new visual semantic is needed.
+5. Add a `SyntaxKind` there and a Commander theme mapping only when a new visual
+   semantic is needed.
+
+Build and release a new `commander-syntax-highlighting` binary, then update Commander's
+version pin. Public custom highlighters can be registered through
+`SyntaxRegistry(languages:)` without adding a built-in grammar.
 
 The coordinator, projection, and renderer should not need language-specific edits.
 
