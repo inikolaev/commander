@@ -30,6 +30,8 @@ import Testing
     let cases: [(String, String, SyntaxKind, String)] = [
         ("python", "def greet(): return 42", .function, "greet"),
         ("PY", "print(42)", .function, "print"),
+        ("ruby", "def greet; 42; end", .function, "greet"),
+        ("rb", "puts 'hello'", .function, "puts"),
         ("c", "int main() { return 42; }", .function, "main"),
         ("c++", "class Greeter {};", .keyword, "class"),
         ("golang", "package main", .keyword, "package"),

@@ -63,6 +63,7 @@ discarded before reaching the renderer.
 | --- | --- |
 | JSON | `.json` |
 | Python | `.py`, `.pyi`, `.pyw` |
+| Ruby | `.rb`, `.rake`, `.gemspec`, `Gemfile`, `Rakefile`, `Guardfile`, `Capfile`, `Vagrantfile`, `Brewfile` |
 | C / C++ | `.c`, `.h` / `.cc`, `.cpp`, `.cxx`, `.c++`, `.hh`, `.hpp`, `.hxx`, `.h++`, `.ipp`, `.tpp` |
 | Go | `.go` |
 | Bash / shell | `.sh`, `.bash` |
@@ -196,7 +197,7 @@ shared registry. `MarkdownCodeFences` only extracts the label. The current regis
 is passed through nested injections, so registering a new grammar also enables
 its fences without changing Markdown or the engine.
 
-Markdown temporarily pins upstream revision `ec1a4f07a20cb5cf8e90653e4a492445e4646154`
+Markdown temporarily pins upstream revision `4597cb1195ef1834c03d3f1a779644a18d49ca36`
 (the unreleased fix in tree-sitter-markdown PR #271). It recognizes closing
 backtick and tilde fences at EOF, including trailing whitespace, without requiring
 a final newline. Move back to a release pin once that fix is released.

@@ -1,5 +1,5 @@
 {
-  "originHash" : "8bfba606ab07483d991008fcba0e712d2f717c0de1b202d66a02e25b249e2690",
+  "originHash" : "50cd2a17d790c66798eedd40f2e32c584bcd14eeb4344b484cf294a74a06b4fd",
   "pins" : [
     {
       "identity" : "displaylink",
@@ -156,7 +156,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/tree-sitter-grammars/tree-sitter-markdown",
       "state" : {
-        "revision" : "ec1a4f07a20cb5cf8e90653e4a492445e4646154"
+        "revision" : "4597cb1195ef1834c03d3f1a779644a18d49ca36"
       }
     },
     {
@@ -166,6 +166,15 @@
       "state" : {
         "revision" : "bffb65a8cfe4e46290331dfef0dbf0ef3679de11",
         "version" : "0.23.6"
+      }
+    },
+    {
+      "identity" : "tree-sitter-ruby",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/tree-sitter/tree-sitter-ruby",
+      "state" : {
+        "revision" : "71bd32fb7607035768799732addba884a37a6210",
+        "version" : "0.23.1"
       }
     },
     {
