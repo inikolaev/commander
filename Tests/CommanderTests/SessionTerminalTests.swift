@@ -1,8 +1,27 @@
 import AppKit
 import Foundation
 import Testing
+import GhosttyKit
+@testable import GhosttyTerminal
 @testable import Commander
 import FileManagerCore
+
+// Ghostty's AppKit view does not expose its screen text. Keep this read-only
+// test helper here so resize and scrollback tests can inspect rendered cells.
+@MainActor
+private func terminalContents(_ terminal: SessionTerminal, viewportOnly: Bool = false) throws -> String {
+    let surface = try #require(terminal.view.surface?.rawValue)
+    let tag = viewportOnly ? GHOSTTY_POINT_VIEWPORT : GHOSTTY_POINT_SCREEN
+    let selection = ghostty_selection_s(
+        top_left: ghostty_point_s(tag: tag, coord: GHOSTTY_POINT_COORD_TOP_LEFT, x: 0, y: 0),
+        bottom_right: ghostty_point_s(tag: tag, coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT, x: 0, y: 0),
+        rectangle: false)
+    var text = ghostty_text_s()
+    try #require(ghostty_surface_read_text(surface, selection, &text))
+    defer { ghostty_surface_free_text(surface, &text) }
+    guard let bytes = text.text else { return "" }
+    return String(decoding: UnsafeRawBufferPointer(start: bytes, count: Int(text.text_len)), as: UTF8.self)
+}
 
 @Test func terminalMailboxPreservesLiteralPathsAndCleansUp() throws {
     var mailbox: TerminalDirectoryMailbox? = try TerminalDirectoryMailbox()
@@ -91,6 +110,13 @@ import FileManagerCore
             let cursorRow = try #require(fields.count == 2 ? Int(fields[1].split(separator: ";")[0]) : nil)
             #expect(rows == Int((frame.height / terminal.cellHeight).rounded(.down)))
             #expect(cursorRow == rows, "Prompt must stay on the bottom row after resizing")
+            let contents = try terminalContents(terminal)
+            #expect(contents.components(separatedBy: "resize> ").count - 1 == 1,
+                "Resizing to height \(height), expanded \(expanded), must not leave prompt copies")
+            #expect(contents.contains("retained-terminal-output"), "Resizing must preserve previous command output")
+            if prompt.contains("context") {
+                #expect(contents.components(separatedBy: "context").count - 1 == 1)
+            }
         }
     }
     let resizesFile = terminal.mailbox.directory.appendingPathComponent("resizes")
@@ -124,8 +150,11 @@ import FileManagerCore
             tab.root.view.layoutSubtreeIfNeeded()
             try await Task.sleep(for: .milliseconds(20))
         }
-        #expect(terminal.hasInput, "Resizing wrapped input must preserve its editing state")
-        #expect(terminal.isAtPrompt, "Resizing wrapped input must keep the shell at its prompt")
+        let contents = try terminalContents(terminal)
+        for text in ["resize> ", "wrap-start", "wrap-end", "retained-terminal-output"] {
+            #expect(contents.components(separatedBy: text).count - 1 == 1,
+                "Resizing wrapped input must retain one copy of \(text)")
+        }
     }
 }
 
@@ -250,7 +279,8 @@ import FileManagerCore
             if try condition() { return }
             try await Task.sleep(for: .milliseconds(20))
         }
-        try #require(try condition(), Comment(rawValue: description))
+        let contents = try terminalContents(terminal, viewportOnly: true)
+        try #require(try condition(), Comment(rawValue: description + "\n" + contents))
     }
     try await waitFor("Initial shell prompt") { terminal.isAtPrompt }
     #expect(scrollView.isHidden)
@@ -261,7 +291,8 @@ import FileManagerCore
     #expect(terminal.view.paste(text: "printf 'scrollback-row-%03d\\n' {1..240}"))
     #expect(terminal.view.sendKey(.enter))
     try await waitFor("Scrollbar and final output after executing command") {
-        terminal.isAtPrompt && !scrollView.isHidden
+        guard terminal.isAtPrompt, !scrollView.isHidden else { return false }
+        return try terminalContents(terminal, viewportOnly: true).contains("scrollback-row-240")
     }
     #expect(scroller.knobProportion > 0 && scroller.knobProportion < 1)
     #expect(scroller.isEnabled)
@@ -270,12 +301,14 @@ import FileManagerCore
 
     scrollView.contentView.scroll(to: .zero)
     scrollView.reflectScrolledClipView(scrollView.contentView)
-    try await waitFor("Native viewport scrolls to the top") { scroller.doubleValue == 0 }
+    try await waitFor("Original command after the native viewport scrolls to the top") { try terminalContents(terminal, viewportOnly: true).contains("scroll> printf") }
+    #expect(try !terminalContents(terminal, viewportOnly: true).contains("scrollback-row-240"))
     #expect(controller.window?.firstResponder === terminal.view)
 
     // Scrolling through Ghostty also updates the native thumb.
     #expect(terminal.view.performBindingAction("scroll_to_bottom"))
     try await waitFor("Thumb returns to the bottom") { scroller.doubleValue == 1 }
+    #expect(try terminalContents(terminal, viewportOnly: true).contains("scrollback-row-240"))
     #expect(tab.toggleTerminal())
     #expect(scrollView.isHidden)
     #expect(tab.toggleTerminal())
