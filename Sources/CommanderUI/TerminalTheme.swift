@@ -54,30 +54,31 @@ enum TerminalTheme {
         contrastText: .black
     )
 
-    // Soft Sky: a low-glare light-blue palette with restrained, warm syntax colors.
+    // Blue Sky: a light theme that keeps Commander's blue terminal character
+    // while using dark, restrained foreground colors instead of neon accents.
     private static let light = Palette(
-        windowBackground: NSColor(hex: 0xDCEAF4),
-        background: NSColor(hex: 0xEAF4FB),
-        accent: NSColor(hex: 0x4C8FB6),
-        selection: NSColor(hex: 0xA8D7E8),
-        primaryText: NSColor(hex: 0x2F4151),
-        heading: NSColor(hex: 0x326E93),
-        warning: NSColor(hex: 0x9A6A16),
-        syntaxProperty: NSColor(hex: 0xB06A2E),
-        syntaxString: NSColor(hex: 0x3E7A5E),
-        syntaxNumber: NSColor(hex: 0xC45B41),
-        syntaxConstant: NSColor(hex: 0x7B66B2),
-        syntaxComment: NSColor(hex: 0x5B6E7D),
-        hiddenFile: NSColor(hex: 0x718493),
-        archiveFile: NSColor(hex: 0x9B507D),
-        executableFile: NSColor(hex: 0x347A52),
-        markedFile: NSColor(hex: 0x9A6A16),
-        keyBarBackground: NSColor(hex: 0xD7E8F2),
-        keyBarText: NSColor(hex: 0x2F4151),
-        keyBarButton: NSColor(hex: 0xA8D7E8),
-        keyBarButtonText: NSColor(hex: 0x2F4151),
+        windowBackground: NSColor(hex: 0x3E9FDF),
+        background: NSColor(hex: 0x52B2F7),
+        accent: NSColor(hex: 0x0E5C8A),
+        selection: NSColor(hex: 0x8ED3FF),
+        primaryText: NSColor(hex: 0x18354A),
+        heading: NSColor(hex: 0x815600),
+        warning: NSColor(hex: 0x8A4B00),
+        syntaxProperty: NSColor(hex: 0x8A4B10),
+        syntaxString: NSColor(hex: 0x176B45),
+        syntaxNumber: NSColor(hex: 0xA83B22),
+        syntaxConstant: NSColor(hex: 0x5D3FA3),
+        syntaxComment: NSColor(hex: 0x365E78),
+        hiddenFile: NSColor(hex: 0x4D6E85),
+        archiveFile: NSColor(hex: 0x8D3D75),
+        executableFile: NSColor(hex: 0x1E6A43),
+        markedFile: NSColor(hex: 0x815600),
+        keyBarBackground: NSColor(hex: 0x2D8FCF),
+        keyBarText: NSColor(hex: 0xE7F4FC),
+        keyBarButton: NSColor(hex: 0x8ED3FF),
+        keyBarButtonText: NSColor(hex: 0x18354A),
         dangerText: NSColor(hex: 0xF3F6F8),
-        contrastText: NSColor(hex: 0x20303D)
+        contrastText: NSColor(hex: 0x173247)
     )
 
     private static var palette: Palette {
