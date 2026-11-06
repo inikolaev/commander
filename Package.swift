@@ -35,10 +35,12 @@ let package = Package(
     targets: [
         .target(name: "CFileCopy"),
         .target(name: "ArchiveCore", dependencies: [.product(name: "CLibArchive", package: "libarchive-bin")]),
-        .target(name: "FileManagerCore", dependencies: ["CFileCopy", "ArchiveCore"]),
+        .target(name: "TextSearchCore", exclude: ["SEMANTICS.md"]),
+        .testTarget(name: "TextSearchCoreTests", dependencies: ["TextSearchCore"]),
+        .target(name: "FileManagerCore", dependencies: ["CFileCopy", "ArchiveCore", "TextSearchCore"]),
         .target(name: "ArchiveTestSupport", path: "Tests/ArchiveTestSupport", resources: [.copy("Fixtures")]),
         .testTarget(name: "ArchiveCoreTests", dependencies: ["ArchiveCore", "ArchiveTestSupport"]),
-        .target(name: "EditorCore", dependencies: [.product(name: "TextBuffer", package: "TextBuffer")]),
+        .target(name: "EditorCore", dependencies: ["TextSearchCore", .product(name: "TextBuffer", package: "TextBuffer")]),
         .target(name: "SyntaxCore", dependencies: [
             .product(name: "SwiftTreeSitter", package: "SwiftTreeSitter"),
             .product(name: "TreeSitter", package: "tree-sitter"),
@@ -66,6 +68,7 @@ let package = Package(
             .product(name: "GhosttyTerminal", package: "libghostty-spm"),
             "FileManagerCore",
             "EditorCore",
+            "TextSearchCore",
             "SyntaxCore",
             .product(name: "Sparkle", package: "Sparkle"),
         ], resources: [.copy("Resources/TerminalShell")]),

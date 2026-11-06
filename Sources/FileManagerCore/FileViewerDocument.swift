@@ -4,7 +4,7 @@ import Darwin
 public enum ViewerMode: Sendable { case text, hex }
 
 public enum ViewerCommand: Sendable {
-    case stay, scroll(Int), home, end
+    case stay, scroll(Int), home, end, reveal(byteOffset: Int64)
 }
 
 public struct ViewerLine: Sendable {
@@ -12,6 +12,7 @@ public struct ViewerLine: Sendable {
     public let endOffset: Int64
     public let text: String
     public let sourceText: String?
+    public let searchColumns: [Range<Int>]
 
 }
 
@@ -20,17 +21,20 @@ public struct ViewerPage: Sendable {
     public let offset: Int64
     public let endOffset: Int64
     public let fileSize: Int64?
+    public let revision: UInt64?
     public let mode: ViewerMode
 }
 
 public enum FileViewerError: LocalizedError {
     case notRegularFile
     case lineTooLong
+    case sourceChanged
     case symbolicLinkUnavailable(path: String, target: String, reason: String)
     public var errorDescription: String? {
         switch self {
         case .notRegularFile: "The viewer can only open regular files."
         case .lineTooLong: "This line exceeds the 16 MiB text limit. Use wrapped text or hex viewing."
+        case .sourceChanged: "The file changed while reading it."
         case let .symbolicLinkUnavailable(path, target, reason):
             "Cannot open symbolic link \(path) → \(target). \(reason)"
         }
@@ -99,6 +103,12 @@ public actor FileViewerDocument {
         return metadata
     }
 
+    private func verifyRead(_ initial: ContentMetadata) async throws {
+        let current = try await source.metadata()
+        if let revision = initial.revision, current.revision != revision { throw FileViewerError.sourceChanged }
+        if let size = initial.size, current.size != size { throw FileViewerError.sourceChanged }
+    }
+
     /// Only a parsing buffer: source implementations decide what to cache/reuse.
     private func bytes(at offset: Int64, count: Int) async throws -> [UInt8] {
         try Task.checkCancellation()
@@ -123,8 +133,9 @@ public actor FileViewerDocument {
         return offset + min(Int64(budget), size - offset)
     }
 
-    private func readRow(at offset: Int64, columns: Int? = nil, includeSourceText: Bool = false) async throws
-        -> (text: String, sourceText: String?, contentEnd: Int64, next: Int64) {
+    private func readRow(at offset: Int64, columns: Int? = nil, includeSourceText: Bool = false,
+                         activeRange: Range<Int64>? = nil) async throws
+        -> (text: String, sourceText: String?, contentEnd: Int64, next: Int64, searchColumns: [Range<Int>]) {
         let limit = columns.map { wrappedReadLimit(at: offset, columns: $0) } ?? size
         var cursor = offset
         var bytes: [UInt8] = []
@@ -151,6 +162,8 @@ public actor FileViewerDocument {
         if includeSourceText { sourceText?.reserveCapacity(bytes.count) }
         var column = 0
         var consumedBytes = 0
+        var searchScalars: [Range<Int>] = []
+        var renderedScalars = 0
         var parser = Unicode.UTF8.ForwardParser()
         var iterator = bytes.makeIterator()
         var nextCancellationCheck = 0
@@ -177,6 +190,14 @@ public actor FileViewerDocument {
                 rendered = CharacterSet.controlCharacters.contains(scalar) ? "·" : String(scalar)
             }
             if let maximum, column + width > maximum, consumedBytes > 0 { break }
+            if let activeRange {
+                let scalarStart = offset + Int64(consumedBytes)
+                let scalarEnd = scalarStart + Int64(byteCount)
+                if scalarStart < activeRange.upperBound && scalarEnd > activeRange.lowerBound {
+                    searchScalars.append(renderedScalars..<(renderedScalars + width))
+                }
+                renderedScalars += width
+            }
             display.append(contentsOf: rendered)
             if includeSourceText { sourceText?.append(contentsOf: String(scalar)) }
             column += width
@@ -187,7 +208,38 @@ public actor FileViewerDocument {
         // the unread bytes for the next visible row instead of advancing to cursor.
         let contentEnd = offset + Int64(consumedBytes)
         let next = consumedBytes < bytes.count ? contentEnd : cursor
-        return (display, sourceText, contentEnd, next)
+        let markTerminator = activeRange.map { range in
+            consumedBytes == bytes.count && cursor > contentEnd &&
+            range.lowerBound < cursor && range.upperBound > contentEnd
+        } ?? false
+        var searchColumns: [Range<Int>] = []
+        if !searchScalars.isEmpty || markTerminator {
+            var mapped = [Range<Int>?](repeating: nil, count: searchScalars.count)
+            var scalarPosition = 0
+            var characterPosition = 0
+            var spanIndex = 0
+            for character in display {
+                let nextScalar = scalarPosition + character.unicodeScalars.count
+                while spanIndex < searchScalars.count && searchScalars[spanIndex].upperBound <= scalarPosition {
+                    spanIndex += 1
+                }
+                var index = spanIndex
+                while index < searchScalars.count && searchScalars[index].lowerBound < nextScalar {
+                    if searchScalars[index].upperBound > scalarPosition {
+                        let start = mapped[index]?.lowerBound ?? characterPosition
+                        mapped[index] = start..<(characterPosition + 1)
+                    }
+                    index += 1
+                }
+                scalarPosition = nextScalar
+                characterPosition += 1
+            }
+            searchColumns = mapped.compactMap { $0 }
+            if markTerminator {
+                searchColumns.append(max(0, characterPosition - 1)..<max(1, characterPosition))
+            }
+        }
+        return (display, sourceText, contentEnd, next, searchColumns)
     }
 
     private func previousLogicalStart(before offset: Int64) async throws -> Int64 {
@@ -329,7 +381,8 @@ public actor FileViewerDocument {
 
     public func page(_ command: ViewerCommand = .stay, rows requestedRows: Int,
                      mode requestedMode: ViewerMode = .text, wrapColumns: Int? = nil,
-                     includeSourceText: Bool = false) async throws -> ViewerPage {
+                     includeSourceText: Bool = false,
+                     activeRange: Range<Int64>? = nil) async throws -> ViewerPage {
         await acquirePage()
         let previous = (top, mode, savedTextTop)
         var succeeded = false
@@ -366,7 +419,9 @@ public actor FileViewerDocument {
             mode = requestedMode
         }
         if mode == .hex {
-            let page = try await hexPage(command, rows: count)
+            let page = try await hexPage(command, rows: count, activeRange: activeRange,
+                                         revision: metadata.revision)
+            try await verifyRead(metadata)
             try Task.checkCancellation()
             if let lastTextContext,
                !lastTextContext.sourceMatches(revision: metadata.revision,
@@ -383,6 +438,9 @@ public actor FileViewerDocument {
             case .home, .end: break
             default: top = try await textStart(containing: top, columns: columns, navigation: &navigation)
             }
+        }
+        if case .reveal(let byteOffset) = command {
+            top = try await textStart(containing: byteOffset, columns: columns, navigation: &navigation)
         }
         switch command {
         case .home: top = 0
@@ -408,24 +466,28 @@ public actor FileViewerDocument {
                 }
             }
         case .stay: break
+        case .reveal: break
         }
         var lines: [ViewerLine] = []
         var cursor = top
         for _ in 0..<count {
             try Task.checkCancellation()
             guard cursor < size else { break }
-            let row = try await readRow(at: cursor, columns: columns, includeSourceText: includeSourceText)
+            let row = try await readRow(at: cursor, columns: columns, includeSourceText: includeSourceText,
+                                        activeRange: activeRange)
             guard row.next > cursor else { break }
             lines.append(ViewerLine(
                 offset: cursor,
                 endOffset: row.contentEnd,
                 text: row.text,
-                sourceText: row.sourceText
+                sourceText: row.sourceText,
+                searchColumns: row.searchColumns
             ))
             if columns != nil { navigation.record(start: cursor, next: row.next) }
             cursor = row.next
         }
         try Task.checkCancellation()
+        try await verifyRead(metadata)
         if sizeKnown && metadata.size != nil && size != metadata.size {
             rowNavigation.removeAll()
         } else {
@@ -434,9 +496,11 @@ public actor FileViewerDocument {
                                           fileSize: sizeKnown ? size : nil, columns: columns)
         }
         succeeded = true
-        return ViewerPage(lines: lines, offset: top, endOffset: cursor, fileSize: sizeKnown ? size : nil, mode: .text)
+        return ViewerPage(lines: lines, offset: top, endOffset: cursor,
+                          fileSize: sizeKnown ? size : nil, revision: metadata.revision, mode: .text)
     }
-    private func hexPage(_ command: ViewerCommand, rows: Int) async throws -> ViewerPage {
+    private func hexPage(_ command: ViewerCommand, rows: Int,
+                         activeRange: Range<Int64>?, revision: UInt64?) async throws -> ViewerPage {
         let lastRow = size > 0 ? ((size - 1) / 16) * 16 : 0
         top = min(lastRow, (top / 16) * 16)
         switch command {
@@ -446,6 +510,7 @@ public actor FileViewerDocument {
             let movement = Int64(max(-200, min(200, delta))) * 16
             top = movement > 0 ? top + min(movement, lastRow - top) : max(0, top + movement)
         case .stay: break
+        case .reveal(let byteOffset): top = max(0, min(lastRow, (byteOffset / 16) * 16))
         }
         var lines: [ViewerLine] = []
         var cursor = top
@@ -460,14 +525,20 @@ public actor FileViewerDocument {
                 offset: start,
                 endOffset: cursor,
                 text: HexRowFormatter.format(offset: start, bytes: bytes),
-                sourceText: nil
+                sourceText: nil,
+                searchColumns: (0..<bytes.count).flatMap { index -> [Range<Int>] in
+                    guard let activeRange, activeRange.contains(start + Int64(index)) else { return [] }
+                    let columns = HexRowFormatter.columns(forByte: index)
+                    return [columns.hex, columns.ascii]
+                }
             ))
         }
         if lines.isEmpty, top > 0, top >= size {
             top = size > 0 ? ((size - 1) / 16) * 16 : 0
-            return try await hexPage(.stay, rows: rows)
+            return try await hexPage(.stay, rows: rows, activeRange: activeRange, revision: revision)
         }
-        return ViewerPage(lines: lines, offset: top, endOffset: cursor, fileSize: sizeKnown ? size : nil, mode: .hex)
+        return ViewerPage(lines: lines, offset: top, endOffset: cursor,
+                          fileSize: sizeKnown ? size : nil, revision: revision, mode: .hex)
     }
 
 }

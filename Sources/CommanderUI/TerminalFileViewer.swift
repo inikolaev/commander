@@ -4,7 +4,8 @@ import SyntaxCore
 
 @MainActor
 final class TerminalFileViewer: NSView {
-    enum Input { case navigate(ViewerCommand), close, toggleMode, toggleWrap }
+    enum Input { case navigate(ViewerCommand), close, toggleMode, toggleWrap,
+        search(DocumentSearchKeyAction) }
     var onInput: ((Input) -> Void)?
     let path: String
     private let syntaxHighlighter: any SyntaxHighlighter
@@ -35,6 +36,14 @@ final class TerminalFileViewer: NSView {
         }.joined(separator: "\n")
     }
     private(set) var horizontalOffset = 0
+    var activeSearchRange: Range<Int64>? { didSet { needsDisplay = true } }
+    var searchActive = false {
+        didSet {
+            guard oldValue != searchActive else { return }
+            needsDisplay = true
+            onResize?()
+        }
+    }
     var wrapsText = true {
         didSet {
             if wrapsText { horizontalOffset = 0 }
@@ -43,7 +52,12 @@ final class TerminalFileViewer: NSView {
     }
     private var scrollRemainder: CGFloat = 0
     var onResize: (() -> Void)?
-    var visibleRows: Int { min(200, TerminalTextGeometry(bounds: bounds).visibleRows) }
+    private var contentBounds: NSRect {
+        var result = bounds
+        if searchActive { result.size.height = max(0, result.height - DocumentSearchSurface.height) }
+        return result
+    }
+    var visibleRows: Int { min(200, TerminalTextGeometry(bounds: contentBounds).visibleRows) }
     var visibleColumns: Int { max(1, Int(floor((bounds.width - 2) / TerminalTheme.cellAdvance))) }
 
     init(
@@ -76,6 +90,18 @@ final class TerminalFileViewer: NSView {
         needsDisplay = true
     }
 
+    func revealSearchColumn() {
+        guard let page, let activeSearchRange, !wrapsText,
+              let row = page.lines.first(where: { $0.offset <= activeSearchRange.lowerBound &&
+                  activeSearchRange.lowerBound < $0.endOffset }),
+              let first = row.searchColumns.map(\.lowerBound).min() else { return }
+        if first < horizontalOffset { horizontalOffset = first }
+        else if first >= horizontalOffset + visibleColumns {
+            horizontalOffset = max(0, first - visibleColumns + 1)
+        }
+        needsDisplay = true
+    }
+
     override func setFrameSize(_ newSize: NSSize) {
         let oldRows = visibleRows
         let oldColumns = visibleColumns
@@ -102,7 +128,7 @@ final class TerminalFileViewer: NSView {
             width: statusWidth, height: line), color: TerminalTheme.contrastText, alignment: .right)
         drawFunctionKeys(in: footer)
         NSGraphicsContext.saveGraphicsState()
-        TerminalTextGeometry(bounds: bounds).contentRect.clip()
+        TerminalTextGeometry(bounds: contentBounds).contentRect.clip()
         if let page {
             for (index, row) in page.lines.prefix(visibleRows).enumerated() {
                 let rect = NSRect(x: 1, y: CGFloat(index + 1) * line, width: bounds.width - 2, height: line)
@@ -111,6 +137,21 @@ final class TerminalFileViewer: NSView {
                     TerminalTheme.text(displayed, in: rect, color: TerminalTheme.accent, truncate: .byClipping)
                     if page.mode == .text {
                         drawSyntaxHighlights(forRow: index, displayed: displayed, in: rect)
+                    }
+                    if selection == nil {
+                        for range in visibleSearchColumns(forRow: index) {
+                            let start = max(range.lowerBound, horizontalOffset)
+                            let end = min(range.upperBound, horizontalOffset + visibleColumns)
+                            guard end > start else { continue }
+                            let left = rect.minX + textWidth(String(displayed.prefix(start - horizontalOffset)))
+                            let right = rect.minX + textWidth(String(displayed.prefix(end - horizontalOffset)))
+                            NSGraphicsContext.saveGraphicsState()
+                            NSRect(x: left, y: rect.minY, width: max(1, right - left), height: rect.height).clip()
+                            TerminalTheme.selection.setFill()
+                            rect.fill()
+                            TerminalTheme.text(displayed, in: rect, color: TerminalTheme.contrastText, truncate: .byClipping)
+                            NSGraphicsContext.restoreGraphicsState()
+                        }
                     }
                     if let selection, index >= selection.start.row, index <= selection.end.row {
                         let start = index == selection.start.row ? selection.start.column : 0
@@ -137,6 +178,11 @@ final class TerminalFileViewer: NSView {
             TerminalTheme.text("Opening file…", in: NSRect(x: 8, y: line, width: bounds.width - 16, height: line))
         }
         NSGraphicsContext.restoreGraphicsState()
+    }
+
+    func visibleSearchColumns(forRow index: Int) -> [Range<Int>] {
+        guard activeSearchRange != nil, let page, page.lines.indices.contains(index) else { return [] }
+        return page.lines[index].searchColumns
     }
 
     private func drawSyntaxHighlights(forRow row: Int, displayed: String, in rect: NSRect) {
@@ -171,11 +217,14 @@ final class TerminalFileViewer: NSView {
             2: wrapsText ? "Unwrap" : "Wrap",
             3: "Close",
             4: page?.mode == .hex ? "Text" : "Hex",
+            7: "Search",
             10: "Quit",
         ])
     }
 
     override func keyDown(with event: NSEvent) {
+        let searchAction = DocumentSearchKeyAction.action(for: event, searchActive: searchActive)
+        if searchAction != .none { onInput?(.search(searchAction)); return }
         if event.modifierFlags.contains(.command) {
             if event.charactersIgnoringModifiers == "r" { onInput?(.navigate(.stay)) }
             else if event.charactersIgnoringModifiers?.lowercased() == "c" { copy(nil) }
@@ -207,6 +256,13 @@ final class TerminalFileViewer: NSView {
         default: break
         }
     }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let action = DocumentSearchKeyAction.action(for: event, searchActive: searchActive)
+        guard action != .none else { return super.performKeyEquivalent(with: event) }
+        onInput?(.search(action))
+        return true
+    }
     override func mouseDown(with event: NSEvent) {
         isSelecting = false
         window?.makeFirstResponder(self)
@@ -216,6 +272,7 @@ final class TerminalFileViewer: NSView {
             if slot == 2 { onInput?(.toggleWrap) }
             else if slot == 3 || slot == 10 { onInput?(.close) }
             else if slot == 4 { onInput?(.toggleMode) }
+            else if slot == 7 { onInput?(.search(.focus)) }
             return
         }
         guard TerminalTextGeometry(bounds: bounds).contentRect.contains(point), let position = position(at: point) else { return }

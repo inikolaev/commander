@@ -187,7 +187,17 @@ scrolling and End, even for files with no newlines. Use horizontal panning to se
 wide rows. Byte position is displayed instead of a total line count. Tabs expand
 to four-column stops; invalid UTF-8 is replaced with `�`, and other control bytes
 are shown as dots. The text and hex viewer does not render PDF/images;
-UTF-16 and legacy encoding detection and search are not implemented. Editing is available separately with F4 from the panes.
+UTF-16 and legacy encoding detection are not implemented. Editing is available separately with F4 from the panes.
+
+In the viewer or editor, F7 or Command-F opens text search. Type a literal
+phrase, then use Enter or Shift-Enter for the next or previous hit. Shift-F7
+or Command-G continues forward; Option-F7 or Command-Shift-G continues backward.
+The search bar also offers case sensitivity and whole-word matching. Search
+wraps around the file, highlights the current hit, and Escape dismisses the bar.
+Search covers the entire accessible document, including text beyond the current
+page or editor viewport. Matches can overlap. Case-insensitive matching uses
+Unicode case folding without accent normalization; malformed UTF-8 in the viewer
+cannot be matched through. Search does not change editor text or undo history.
 
 The viewer tolerates truncation and growth on subsequent navigation/refresh. It
 keeps the original file descriptor open; if a file is replaced by a new inode,
@@ -227,7 +237,7 @@ Saving stages a sibling temporary file and replaces the resolved target, preserv
 symlinks, permissions, and extended attributes. External content changes are checked
 before saving and again before replacement; detected conflicts leave the document
 open. This is not a cross-process lock. Saving multiply hard-linked files is currently
-rejected to avoid breaking their relationship. There is no Save As, search, syntax
+rejected to avoid breaking their relationship. There is no Save As, syntax
 highlighting, soft wrapping, or automatic recovery yet.
 
 EditorCore.EditorDocument is the replaceable document interface. Only its private

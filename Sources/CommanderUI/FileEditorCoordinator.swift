@@ -1,5 +1,12 @@
 import AppKit
 import EditorCore
+import TextSearchCore
+
+@MainActor
+private final class EditorSearchSnapshotStore {
+    var snapshot: EditorSearchSnapshot
+    init(_ snapshot: EditorSearchSnapshot) { self.snapshot = snapshot }
+}
 
 /// Owns the editor lifetime and modal file operations, independently of rendering.
 @MainActor
@@ -11,6 +18,10 @@ final class FileEditorCoordinator {
     private weak var previousResponder: NSResponder?
     private var view: TerminalFileEditor?
     private var file: EditorFile?
+    private var searchController: DocumentSearchController<Int, EditorSearchHit, Int>?
+    private var searchSurface: DocumentSearchSurface?
+    private var searchSnapshots: EditorSearchSnapshotStore?
+    private var contentObserver: UUID?
     private let presenter = OperationDialogPresenter()
 
     func presentNewFile(directory: URL, window: NSWindow) {
@@ -72,6 +83,12 @@ final class FileEditorCoordinator {
         view = editor
         editor.onSave = { [weak self] in self?.save() }
         editor.onClose = { [weak self] in self?.requestClose() }
+        editor.onSearchAction = { [weak self] action in self?.handleSearch(action) }
+        editor.onManualNavigation = { [weak self] origin in self?.searchController?.manualNavigation(to: origin) }
+        editor.onContentChange = { [weak self] origin in self?.documentChanged(origin: origin) }
+        contentObserver = editor.document.addContentChangeObserver { [weak self, weak editor] _ in
+            self?.documentChanged(origin: editor?.selection.range.location ?? 0)
+        }
         editor.translatesAutoresizingMaskIntoConstraints = false
         content.addSubview(editor)
         NSLayoutConstraint.activate([
@@ -82,6 +99,89 @@ final class FileEditorCoordinator {
         ])
         content.layoutSubtreeIfNeeded()
         window.makeFirstResponder(editor)
+    }
+    private func documentChanged(origin: Int) {
+        guard let view, let searchController else { return }
+        searchSnapshots?.snapshot = view.document.makeSearchSnapshot()
+        searchController.documentDidChange(origin: origin)
+    }
+
+    private func handleSearch(_ action: DocumentSearchKeyAction) {
+        switch action {
+        case .focus: openSearch()
+        case .forward, .backward:
+            if searchSurface == nil { openSearch() }
+            searchController?.continueSearch(action == .forward ? .forward : .backward)
+        case .dismiss: searchSurface?.dismissAndRestoreFocus()
+        case .none: break
+        }
+    }
+
+    func openSearch() {
+        guard let editor = view, !isBusy else { return }
+        if let searchSurface { searchSurface.focus(contentResponder: editor); return }
+        let store = EditorSearchSnapshotStore(editor.document.makeSearchSnapshot())
+        let origin = editor.selection.range.location
+        let controller = DocumentSearchController<Int, EditorSearchHit, Int>(
+            origin: origin,
+            revision: { [weak editor] in editor?.document.contentVersion ?? -1 },
+            hitStart: { $0.exactRange.location },
+            wrapStart: { direction in
+                let length = await store.snapshot.length
+                return direction == .forward ? 0 : (length > 0 ? length - 1 : nil)
+            },
+            scan: { query, direction, anchor, limit, _ in
+                let snapshot = await store.snapshot
+                let worker = Task.detached(priority: .userInitiated) {
+                    snapshot.search(TextSearchQuery(text: query.text,
+                        caseSensitive: query.caseSensitive, wholeWord: query.wholeWord),
+                        direction: direction == .forward ? .forward : .backward,
+                        fromUTF16Offset: anchor, exclusiveStartLimit: limit,
+                        isCancelled: { Task.isCancelled })
+                }
+                let result = await withTaskCancellationHandler { await worker.value } onCancel: { worker.cancel() }
+                switch result {
+                case .found(let hit): return .found(hit)
+                case .exhausted: return .exhausted
+                case .cancelled: return .cancelled
+                }
+            },
+            validate: { hit, _ in hit.isCurrent(contentVersion: await store.snapshot.contentVersion) }
+        )
+        let surface = DocumentSearchSurface(frame: .zero)
+        surface.translatesAutoresizingMaskIntoConstraints = false
+        editor.addSubview(surface)
+        NSLayoutConstraint.activate([
+            surface.leadingAnchor.constraint(equalTo: editor.leadingAnchor),
+            surface.trailingAnchor.constraint(equalTo: editor.trailingAnchor),
+            surface.bottomAnchor.constraint(equalTo: editor.bottomAnchor,
+                                            constant: -TerminalTheme.lineHeight),
+            surface.heightAnchor.constraint(equalToConstant: TerminalFileEditor.searchBarHeight),
+        ])
+        surface.onQueryChange = { [weak self] query in self?.searchController?.setQuery(query) }
+        surface.onContinue = { [weak self] direction in self?.searchController?.continueSearch(direction) }
+        surface.onDismiss = { [weak self] in self?.dismissSearch() }
+        controller.onStatus = { [weak surface] status in surface?.update(status: status.displayText) }
+        controller.onHit = { [weak editor] hit, _ in
+            guard let editor, hit.isCurrent(contentVersion: editor.document.contentVersion) else { return }
+            editor.selection.clearAdditionalCarets()
+            editor.selection.select(hit.selectionRange)
+            editor.changed()
+        }
+        searchController = controller
+        searchSurface = surface
+        searchSnapshots = store
+        editor.searchActive = true
+        controller.open(at: origin)
+        surface.focus(contentResponder: editor)
+    }
+
+    private func dismissSearch() {
+        searchController?.close()
+        searchController = nil
+        searchSurface = nil
+        searchSnapshots = nil
+        view?.searchActive = false
     }
     func save(completion: ((Bool) -> Void)? = nil) {
         guard !isBusy, let file, let view, let window else { completion?(false); return }
@@ -146,6 +246,10 @@ final class FileEditorCoordinator {
         presenter.present(dialog, window: window)
     }
     private func finish() {
+        searchSurface?.removeFromSuperview()
+        dismissSearch()
+        if let contentObserver, let view { view.document.removeContentChangeObserver(contentObserver) }
+        contentObserver = nil
         if let window { presenter.dismiss(window: window) }
         isBusy = false
         view?.stopSyntax()

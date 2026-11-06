@@ -4,6 +4,104 @@ import EditorCore
 import FileManagerCore
 @testable import CommanderUI
 
+@Test @MainActor func editorSearchViewportRevealsEOFAboveSearchBar() {
+    _ = NSApplication.shared
+    let document = EditorDocuments.make(text: (0..<30).map { "line \($0)" }.joined(separator: "\n"))
+    let editor = TerminalFileEditor(document: document, path: "/tmp/search-viewport.txt")
+    editor.frame = NSRect(x: 0, y: 0, width: 500, height: 220)
+    let normalRows = editor.visibleRows
+    editor.searchActive = true
+    #expect(editor.visibleRows < normalRows)
+    editor.selection.select(document.lineRange(document.lineCount - 1))
+    editor.changed()
+    #expect(editor.selection.line >= editor.topLine)
+    #expect(editor.selection.line < editor.topLine + editor.visibleRows)
+    editor.searchActive = false
+    #expect(editor.visibleRows == normalRows)
+}
+
+@Test @MainActor func editorSearchHitAtEOFStaysAboveSurface() async throws {
+    _ = NSApplication.shared
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let url = root.appendingPathComponent("tail.txt")
+    let lines = Array(repeating: "plain", count: 99) + ["tail target"]
+    try Data(lines.joined(separator: "\n").utf8).write(to: url)
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 320),
+        styleMask: [.titled], backing: .buffered, defer: false)
+    let pane = NSView(frame: window.contentRect(forFrameRect: window.frame))
+    window.contentView = pane
+    let coordinator = FileEditorCoordinator()
+    coordinator.present(url: url, window: window)
+    for _ in 0..<200 where coordinator.isBusy { try await Task.sleep(for: .milliseconds(5)) }
+    let editor = try #require(pane.subviews.compactMap { $0 as? TerminalFileEditor }.first)
+    coordinator.openSearch()
+    let surface = try #require(editor.subviews.compactMap { $0 as? DocumentSearchSurface }.first)
+    surface.onQueryChange?(DocumentSearchQuery(text: "target"))
+    for _ in 0..<200 where editor.selection.line != 99 { try await Task.sleep(for: .milliseconds(5)) }
+    #expect(editor.selection.line == 99)
+    #expect(editor.selection.line - editor.topLine < editor.visibleRows)
+    editor.layoutSubtreeIfNeeded()
+    let selectedRowTop = CGFloat(editor.selection.line - editor.topLine + 1) * TerminalTheme.lineHeight
+    let textHeight = ceil(("Mg" as NSString).size(withAttributes: [.font: TerminalTheme.font]).height)
+    #expect(selectedRowTop + textHeight <= surface.frame.minY)
+    surface.dismissAndRestoreFocus()
+    coordinator.requestClose()
+}
+
+@Test @MainActor func editorSearchRevealAndMutationPreserveHistory() async throws {
+    _ = NSApplication.shared
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let url = root.appendingPathComponent("search.txt")
+    try Data("e\u{301}e\u{301} target target".utf8).write(to: url)
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 800, height: 320),
+        styleMask: [.titled], backing: .buffered, defer: false)
+    let pane = NSView(frame: window.contentRect(forFrameRect: window.frame))
+    window.contentView = pane
+    let coordinator = FileEditorCoordinator()
+    coordinator.present(url: url, window: window)
+    for _ in 0..<200 where coordinator.isBusy { try await Task.sleep(for: .milliseconds(5)) }
+    let editor = try #require(pane.subviews.compactMap { $0 as? TerminalFileEditor }.first)
+    coordinator.openSearch()
+    let surface = try #require(editor.subviews.compactMap { $0 as? DocumentSearchSurface }.first)
+    surface.onQueryChange?(DocumentSearchQuery(text: "target"))
+    for _ in 0..<200 where editor.selection.range.location != 5 {
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(editor.selection.range == NSRange(location: 5, length: 6))
+    #expect(editor.document.contentVersion == 0)
+    #expect(!editor.document.isModified)
+    #expect(!editor.document.canUndo)
+    surface.onContinue?(.forward)
+    for _ in 0..<200 where editor.selection.range.location != 12 {
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(editor.selection.range == NSRange(location: 12, length: 6))
+    surface.onQueryChange?(DocumentSearchQuery(text: "\u{301}", caseSensitive: true))
+    for _ in 0..<200 where editor.selection.range.location != 0 {
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(editor.selection.range == NSRange(location: 0, length: 2))
+    surface.onContinue?(.forward)
+    for _ in 0..<200 where editor.selection.range.location != 2 {
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(editor.selection.range == NSRange(location: 2, length: 2))
+    editor.document.replace(NSRange(location: 0, length: 2), with: "x")
+    #expect(editor.document.contentVersion == 1)
+    #expect(editor.document.isModified)
+    let selectionAfterEdit = editor.selection.range
+    try await Task.sleep(for: .milliseconds(30))
+    #expect(editor.selection.range == selectionAfterEdit)
+    surface.dismissAndRestoreFocus()
+    #expect(window.firstResponder === editor)
+    coordinator.requestClose()
+    try #require(pane.subviews.compactMap { $0 as? TerminalOperationDialog }.first).onChoice?(1)
+}
+
 @Test @MainActor func f4OpensEditorAndShiftF4CreatesFile() throws {
     _ = NSApplication.shared
     let pane = TerminalPaneView(name: "Test")
