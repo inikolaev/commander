@@ -504,16 +504,12 @@ final class CommanderTabSession: NSObject {
         if !sourcePane.state.markedEntries.isEmpty { entries = sourcePane.state.markedEntries }
         else if case .entry(let entry) = row { entries = [entry] }
         else { return }
-        guard entries.allSatisfy({ !$0.isDirectory || $0.isSymbolicLink }) else {
-            sourcePane.showStatus("Folder copying is not supported yet; unmark folders before copying", isError: true)
-            return
-        }
         copyCoordinator.begin(sources: entries.map(\.url), directory: destinationPane.state.directory, window: window,
-            onStart: { sourcePane.showStatus("Copying \(entries.count) file(s)…") },
+            onStart: { sourcePane.showStatus("Copying \(entries.count) item(s)…") },
             onFinish: { [weak self] result in
                 guard let self else { return }
                 if case .success = result { sourcePane.clearMarks() }
-                // A stopped batch may already have published some complete files.
+                // A stopped batch may already have published some complete items.
                 // Refresh both panes even on cancellation or failure; keep marks then.
                 for pane in self.panes { pane.refresh() }
             })

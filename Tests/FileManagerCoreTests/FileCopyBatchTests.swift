@@ -38,3 +38,30 @@ import Testing
     }
     #expect(try FileManager.default.contentsOfDirectory(atPath: target.path).isEmpty)
 }
+
+@Test func batchCopiesMixedFilesAndDirectoriesWithCombinedProgress() throws {
+    let manager = FileManager.default
+    let root = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let target = root.appendingPathComponent("target")
+    let directory = root.appendingPathComponent("folder")
+    try manager.createDirectory(at: target, withIntermediateDirectories: true)
+    try manager.createDirectory(at: directory, withIntermediateDirectories: false)
+    defer { try? manager.removeItem(at: root) }
+    let file = root.appendingPathComponent("file")
+    try Data(repeating: 1, count: 1000).write(to: file)
+    try Data(repeating: 2, count: 2000).write(to: directory.appendingPathComponent("nested"))
+    let progress = BatchProgressCapture()
+    _ = try FileCopyBatch(sources: [file, directory], destination: target).run(using: LocalFileCopier(),
+        progress: { progress.record($0) }, isCancelled: { false })
+    #expect(try Data(contentsOf: target.appendingPathComponent("file")) == Data(contentsOf: file))
+    #expect(try Data(contentsOf: target.appendingPathComponent("folder/nested")) == Data(contentsOf: directory.appendingPathComponent("nested")))
+    #expect(progress.samples.last?.copiedBytes == 3000)
+    #expect(progress.samples.allSatisfy { $0.totalBytes == 3000 })
+}
+
+private final class BatchProgressCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values: [CopyProgress] = []
+    func record(_ value: CopyProgress) { lock.withLock { values.append(value) } }
+    var samples: [CopyProgress] { lock.withLock { values } }
+}

@@ -30,7 +30,7 @@ final class CopyCoordinator {
                onFinish: @escaping (Result<URL, Error>) -> Void) {
         guard let source = sources.first, !isBusy, window.attachedSheet == nil else { return }
         isBusy = true
-        let dialog = TerminalOperationDialog(mode: .confirmation(sourceName: sources.count == 1 ? source.lastPathComponent : "\(sources.count) selected files",
+        let dialog = TerminalOperationDialog(mode: .confirmation(sourceName: sources.count == 1 ? source.lastPathComponent : "\(sources.count) selected items",
             destination: sources.count == 1 ? directory.appendingPathComponent(source.lastPathComponent).path : directory.path,
             isBatch: sources.count > 1))
         dialog.onCancel = { [weak self] in self?.finish(window: window) }
@@ -38,7 +38,7 @@ final class CopyCoordinator {
             guard let self else { return }
             let path = (input as NSString).expandingTildeInPath
             guard !path.isEmpty else {
-                self.showError("Enter a destination file path.", window: window) {
+                self.showError("Enter a destination path.", window: window) {
                     onFinish(.failure(NSError(domain: NSCocoaErrorDomain, code: NSFileWriteInvalidFileNameError)))
                 }
                 return
@@ -51,7 +51,7 @@ final class CopyCoordinator {
 
     private func copy(sources: [URL], destination: URL, window: NSWindow,
                       onStart: @escaping () -> Void, onFinish: @escaping (Result<URL, Error>) -> Void) {
-        let dialog = TerminalOperationDialog(mode: .progress(sourceName: sources.count == 1 ? sources[0].lastPathComponent : "\(sources.count) selected files", destination: destination.path))
+        let dialog = TerminalOperationDialog(mode: .progress(sourceName: sources.count == 1 ? sources[0].lastPathComponent : "\(sources.count) selected items", destination: destination.path))
         let token = CopyCancellation()
         cancellation = token
         dialog.onCancel = { [weak dialog] in token.cancel(); dialog?.showCancelling() }
