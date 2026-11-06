@@ -74,7 +74,7 @@ to package a Release build instead.
 | Command-period | Toggle hidden files in active pane |
 | F3 | Open selected file in the read-only text viewer |
 | F4 | Open the selected file in the text editor |
-| F5 | Copy selected file to the opposite pane (editable destination) |
+| F5 | Copy marked items or the cursor item to the opposite pane (editable destination) |
 | F6 | Move marked entries or the cursor entry |
 | Shift-F6 | Rename the entry under the cursor |
 | F7 | Create a directory in the active pane |
@@ -267,15 +267,15 @@ selected after creation.
 
 
 F5 (or Fn-F5, depending on macOS keyboard settings) and the footer Copy button
-open a gray terminal-style destination dialog. With multiple marked files, the
-destination is an existing folder, and files copy in pane order with combined
+open a gray terminal-style destination dialog. With multiple marked items, the
+destination is an existing folder, and items copy in pane order with combined
 byte progress. A failure or cancellation stops the batch, keeps completed copies,
 and retains marks; a fully successful copy clears marks. Tab switches between the path and
 buttons; Enter copies and Escape cancels. A matching progress dialog shows actual
 bytes copied and percentage, with Cancel/Escape to stop the operation. Copy errors
-use a red dialog dismissed with OK, Enter, or Escape. Files copy in the background; existing destinations are
+use a red dialog dismissed with OK, Enter, or Escape. Items copy in the background; existing destinations are
 never overwritten. Successful copies refresh panes showing the destination folder.
-File symlinks are copied as links; relative link targets remain unchanged.
+Folders copy recursively. Symlinks are copied as links; relative link targets remain unchanged.
 
 F8 (or Fn-F8) and the footer Delete button open a red confirmation dialog.
 Marked entries are trashed together; with no marks, the cursor entry is used.
@@ -286,7 +286,7 @@ Escape cancels. Folders and their contents are moved together; symlinks are tras
 as links. Deletion never falls back to permanent removal if Trash is unavailable.
 Errors appear in a red dialog, and successful deletion refreshes affected panes.
 
-This draft does not support folder copying, permanent deletion, shell,
+This draft does not support permanent deletion, shell,
 or persistent navigation history.
 macOS privacy restrictions can prevent access to some directories; the pane reports
 the error and retains the previous listing.

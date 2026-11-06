@@ -24,14 +24,12 @@ public struct FileCopyBatch: Sendable {
                 throw CocoaError(.fileWriteInvalidFileName)
             }
         }
-        let sizes = try sources.map { source -> Int64 in
-            let values = try source.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
-            guard values.isRegularFile == true || values.isSymbolicLink == true else {
-                throw FileCopyError.directoryNotSupported
-            }
-            return values.isSymbolicLink == true ? 0 : Int64(values.fileSize ?? 0)
+        let sizes = try sources.map { try LocalFileCopier.byteCount(at: $0, isCancelled: isCancelled) }
+        let total = try sizes.reduce(Int64(0)) { count, size in
+            let (sum, overflow) = count.addingReportingOverflow(size)
+            if overflow { throw CocoaError(.fileReadTooLarge) }
+            return sum
         }
-        let total = sizes.reduce(Int64(0), +)
         var completed: Int64 = 0
         var lastDestination = destination
         for (index, source) in sources.enumerated() {
@@ -59,6 +57,6 @@ private struct BatchCopyFailure: LocalizedError {
     let completedCount: Int
     let underlying: Error
     var errorDescription: String? {
-        "Could not copy \(source.lastPathComponent). \(underlying.localizedDescription)\n\n\(completedCount) files copied before stopping. Completed copies are kept."
+        "Could not copy \(source.lastPathComponent). \(underlying.localizedDescription)\n\n\(completedCount) items copied before stopping. Completed copies are kept."
     }
 }

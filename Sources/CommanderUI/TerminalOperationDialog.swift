@@ -76,7 +76,7 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
         setAccessibilityElement(false)
         let input: (value: String, label: String)?
         switch mode {
-        case .confirmation(_, let destination, _): input = (destination, "Destination file path")
+        case .confirmation(_, let destination, _): input = (destination, "Destination path")
         case .textInput(_, let prompt, let value, _): input = (value, prompt)
         default: input = nil
         }
@@ -187,11 +187,11 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
         case .confirmation(let name, _, let isBatch):
             TerminalTheme.selection.setFill()
             fieldRect.fill()
-            label(isBatch ? "Copy: \(name)" : "Copy file: \(name)", y: 40)
+            label("Copy: \(name)", y: 40)
             label(isBatch ? "To folder:" : "To:", y: 62)
-            label("Existing files will not be overwritten.", y: 114)
+            label("Existing items will not be overwritten.", y: 114)
         case .progress(let name, let destination):
-            label(cancelling ? "Cancelling…" : "Copying the file", y: 38)
+            label(cancelling ? "Cancelling…" : "Copying items", y: 38)
             label(name, y: 60)
             label("To: \(destination)", y: 86)
             let bar = NSRect(x: panel.minX + 26, y: panel.minY + 118, width: panel.width - 112, height: 18)
@@ -205,7 +205,7 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
             label("\(Int(fraction * 100))%", x: panel.width - 78, y: 118, width: 52, alignment: .right)
             label("\(progress.copiedBytes.formatted()) of \(progress.totalBytes.formatted()) bytes", y: 150)
             if progress.totalBytes > 0 && progress.copiedBytes >= progress.totalBytes && !cancelling {
-                label("Finishing file metadata…", y: 174)
+                label("Finishing item metadata…", y: 174)
             }
         case .error(let message, _), .decision(_, let message, _, _), .busy(_, let message), .choice(_, let message, _):
             // Wrap errors instead of truncating away the useful failure reason.
