@@ -156,7 +156,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/tree-sitter-grammars/tree-sitter-markdown",
       "state" : {
-        "revision" : "4597cb1195ef1834c03d3f1a779644a18d49ca36"
+        "revision" : "41ff24a6c775492c543b09228aeb98d1cd2b3a0f",
+        "version" : "0.5.4"
       }
     },
     {
