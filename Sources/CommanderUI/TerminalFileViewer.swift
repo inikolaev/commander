@@ -4,7 +4,7 @@ import SyntaxCore
 
 @MainActor
 final class TerminalFileViewer: NSView {
-    enum Input { case navigate(ViewerCommand), close, toggleMode, toggleWrap,
+    enum Input { case navigate(ViewerCommand), close, toggleMode, toggleWrap, toggleWrapType,
         search(DocumentSearchKeyAction) }
     var onInput: ((Input) -> Void)?
     let path: String
@@ -50,6 +50,7 @@ final class TerminalFileViewer: NSView {
             needsDisplay = true
         }
     }
+    var wrapStyle: ViewerWrapStyle = .character { didSet { needsDisplay = true } }
     private var scrollRemainder: CGFloat = 0
     var onResize: (() -> Void)?
     private var contentBounds: NSRect {
@@ -121,7 +122,9 @@ final class TerminalFileViewer: NSView {
         let percent = page.flatMap { page in page.fileSize.map { $0 == 0 ? 100 : Int(Double(page.endOffset) / Double($0) * 100) } }
         let position = page.map { "Byte \($0.offset.formatted())/\($0.fileSize?.formatted() ?? "?")" } ?? "Opening…"
         let encoding = page?.mode == .hex ? "HEX / ASCII" : "UTF-8"
-        let status = "\(encoding)   \(position)   Col \(horizontalOffset + 1)   \(percent.map { "\($0)%" } ?? "")"
+        let wrapping = page?.mode == .text && wrapsText
+            ? (wrapStyle == .word ? "Wrap: Words" : "Wrap: Characters") : "No wrap"
+        let status = "\(encoding)   \(wrapping)   \(position)   Col \(horizontalOffset + 1)   \(percent.map { "\($0)%" } ?? "")"
         let statusWidth = min(bounds.width * 0.76, ceil((status as NSString).size(withAttributes: [.font: TerminalTheme.font]).width))
         TerminalTheme.text(path, in: NSRect(x: 1, y: 0, width: max(0, bounds.width - statusWidth - 16), height: line), color: TerminalTheme.contrastText)
         TerminalTheme.text(status, in: NSRect(x: bounds.width - statusWidth - 2, y: 0,
@@ -232,7 +235,7 @@ final class TerminalFileViewer: NSView {
             return
         }
         switch event.keyCode {
-        case 120: onInput?(.toggleWrap) // F2
+        case 120: onInput?(event.modifierFlags.contains(.shift) ? .toggleWrapType : .toggleWrap) // F2 / Shift-F2
         case 118: onInput?(.toggleMode) // F4
         case 53, 99, 109: onInput?(.close) // Escape / F3 / F10
         case 125: onInput?(.navigate(.scroll(1)))

@@ -165,6 +165,10 @@ column (non-printable bytes become dots). Switching preserves the nearby byte
 position and resets horizontal panning. Up/Down and the mouse wheel scroll; Page Up/Down or Space move a page;
 Home/End jump to the beginning/end; Left/Right pan horizontally. Escape, F3, or F10
 returns to the original panes and selection. Command-R refreshes the open file.
+F2 turns text wrapping on or off. Shift-F2 switches between character and word
+wrapping, turning wrapping on if needed. Word wrapping prefers spaces and the
+punctuation `, ; > )`, skips spaces at a break, and splits words longer than the
+viewer width. The status bar shows the current wrap style.
 
 `FileViewerDocument` uses positional `pread` reads on a dedicated actor, with one
 64 KiB cache and at most 200 visible rows. It stores byte offsets, not a growing

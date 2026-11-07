@@ -2,6 +2,7 @@ import Foundation
 import Darwin
 
 public enum ViewerMode: Sendable { case text, hex }
+public enum ViewerWrapStyle: Sendable { case character, word }
 
 public enum ViewerCommand: Sendable {
     case stay, scroll(Int), home, end, reveal(byteOffset: Int64)
@@ -53,6 +54,7 @@ public actor FileViewerDocument {
         let revision: UInt64?
         let fileSize: Int64?
         let columns: Int?
+        let wrapStyle: ViewerWrapStyle
 
         func sourceMatches(revision newRevision: UInt64?, fileSize newSize: Int64?) -> Bool {
             guard revision == newRevision else { return false }
@@ -61,7 +63,8 @@ public actor FileViewerDocument {
         }
 
         func matches(_ new: TextContext) -> Bool {
-            columns == new.columns && sourceMatches(revision: new.revision, fileSize: new.fileSize)
+            columns == new.columns && wrapStyle == new.wrapStyle &&
+                sourceMatches(revision: new.revision, fileSize: new.fileSize)
         }
     }
     private var size: Int64 = 0
@@ -133,7 +136,69 @@ public actor FileViewerDocument {
         return offset + min(Int64(budget), size - offset)
     }
 
-    private func readRow(at offset: Int64, columns: Int? = nil, includeSourceText: Bool = false,
+    private static func wordBreak(in bytes: [UInt8], columns: Int) -> (end: Int, resume: Int)? {
+        var parser = Unicode.UTF8.ForwardParser()
+        var iterator = bytes.makeIterator()
+        var consumed = 0
+        var column = 0
+        var sawWord = false
+        var whitespaceStart: Int?
+        var lastBreak: (end: Int, resume: Int)?
+        while consumed < bytes.count {
+            let scalar: Unicode.Scalar
+            let length: Int
+            switch parser.parseScalar(from: &iterator) {
+            case .valid(let encoded): scalar = Unicode.UTF8.decode(encoded); length = encoded.count
+            case .error(let count): scalar = "�"; length = count
+            case .emptyInput: return nil
+            }
+            let width = scalar == "\t" ? 4 - column % 4 : 1
+            if column + width > columns && consumed > 0 {
+                if (scalar == " " || scalar == "\t") && sawWord {
+                    return (whitespaceStart ?? consumed, consumed)
+                }
+                if let whitespaceStart, whitespaceStart > 0 {
+                    return (whitespaceStart, consumed)
+                }
+                return lastBreak
+            }
+            let isSpace = scalar == " " || scalar == "\t"
+            if isSpace {
+                if sawWord && whitespaceStart == nil { whitespaceStart = consumed }
+            } else {
+                if let whitespaceStart {
+                    lastBreak = (whitespaceStart, consumed)
+                }
+                whitespaceStart = nil
+                sawWord = true
+            }
+            consumed += length
+            column += width
+            if scalar == "," || scalar == ";" || scalar == ">" || scalar == ")" {
+                lastBreak = (consumed, consumed)
+            }
+        }
+        return nil
+    }
+
+    private func skipWrapWhitespace(from offset: Int64) async throws -> Int64 {
+        var cursor = offset
+        while cursor < size {
+            try Task.checkCancellation()
+            let chunk = try await bytes(at: cursor, count: Self.readChunkSize)
+            guard !chunk.isEmpty else { break }
+            for byte in chunk {
+                if byte == 10 { return cursor + 1 }
+                if byte == 13, try await self.byte(at: cursor + 1) == 10 { return cursor + 2 }
+                if byte != 32 && byte != 9 { return cursor }
+                cursor += 1
+            }
+        }
+        return cursor
+    }
+
+    private func readRow(at offset: Int64, columns: Int? = nil,
+                         wrapStyle: ViewerWrapStyle = .character, includeSourceText: Bool = false,
                          activeRange: Range<Int64>? = nil) async throws
         -> (text: String, sourceText: String?, contentEnd: Int64, next: Int64, searchColumns: [Range<Int>]) {
         let limit = columns.map { wrappedReadLimit(at: offset, columns: $0) } ?? size
@@ -154,6 +219,15 @@ public actor FileViewerDocument {
             cursor += Int64(chunk.count)
         }
         if bytes.last == 13 { bytes.removeLast() }
+
+        var wordWrapNext: Int64?
+        if wrapStyle == .word, let columns,
+           let boundary = Self.wordBreak(in: bytes, columns: max(1, columns)) {
+            let resume = offset + Int64(boundary.resume)
+            let skipped = try await skipWrapWhitespace(from: resume)
+            wordWrapNext = skipped > resume ? skipped : resume
+            bytes.removeSubrange(boundary.end..<bytes.count)
+        }
 
         let maximum = columns.map { max(1, $0) }
         var display = ""
@@ -207,10 +281,10 @@ public actor FileViewerDocument {
         // If wrapping stopped before the logical row boundary, keep
         // the unread bytes for the next visible row instead of advancing to cursor.
         let contentEnd = offset + Int64(consumedBytes)
-        let next = consumedBytes < bytes.count ? contentEnd : cursor
+        let next = wordWrapNext ?? (consumedBytes < bytes.count ? contentEnd : cursor)
         let markTerminator = activeRange.map { range in
-            consumedBytes == bytes.count && cursor > contentEnd &&
-            range.lowerBound < cursor && range.upperBound > contentEnd
+            consumedBytes == bytes.count && next > contentEnd &&
+            range.lowerBound < next && range.upperBound > contentEnd
         } ?? false
         var searchColumns: [Range<Int>] = []
         if !searchScalars.isEmpty || markTerminator {
@@ -292,13 +366,13 @@ public actor FileViewerDocument {
     }
 
     /// Replays rows from an anchor until one covers the target or ends at/after it.
-    private func replay(from anchor: Int64, target: Int64, columns: Int,
+    private func replay(from anchor: Int64, target: Int64, columns: Int, wrapStyle: ViewerWrapStyle,
                         containing: Bool, navigation: inout ViewerRowNavigation) async throws -> Int64 {
         var cursor = anchor
         var last = anchor
         while cursor < size {
             try Task.checkCancellation()
-            let next = try await readRow(at: cursor, columns: columns).next
+            let next = try await readRow(at: cursor, columns: columns, wrapStyle: wrapStyle).next
             guard next > cursor else { break }
             navigation.record(start: cursor, next: next)
             if containing ? (cursor <= target && target < next) : (next >= target) { return cursor }
@@ -308,22 +382,22 @@ public actor FileViewerDocument {
         return last
     }
 
-    private func previousDisplayStart(before offset: Int64, columns: Int?,
+    private func previousDisplayStart(before offset: Int64, columns: Int?, wrapStyle: ViewerWrapStyle,
                                       navigation: inout ViewerRowNavigation) async throws -> Int64 {
         guard offset > 0 else { return 0 }
         guard let columns else { return try await previousLogicalStart(before: offset) }
         let target = min(offset, size)
         if let cached = navigation.predecessor(endingAt: target) {
-            if try await readRow(at: cached, columns: columns).next == target { return cached }
+            if try await readRow(at: cached, columns: columns, wrapStyle: wrapStyle).next == target { return cached }
             navigation.removeAll()
         }
         let anchor = try await findWrappedAnchor(before: target, skipTrailingLF: true)
         if anchor.isLocalFallback { navigation.removeAll() }
-        return try await replay(from: anchor.offset, target: target, columns: columns,
+        return try await replay(from: anchor.offset, target: target, columns: columns, wrapStyle: wrapStyle,
                                 containing: false, navigation: &navigation)
     }
 
-    private func textStart(containing offset: Int64, columns: Int?,
+    private func textStart(containing offset: Int64, columns: Int?, wrapStyle: ViewerWrapStyle,
                            navigation: inout ViewerRowNavigation) async throws -> Int64 {
         guard size > 0 else { return 0 }
         let target = max(0, min(offset, size - 1))
@@ -340,20 +414,20 @@ public actor FileViewerDocument {
         }
         let anchor = try await findWrappedAnchor(before: target, skipTrailingLF: false)
         if anchor.isLocalFallback { navigation.removeAll() }
-        return try await replay(from: anchor.offset, target: target, columns: columns,
+        return try await replay(from: anchor.offset, target: target, columns: columns, wrapStyle: wrapStyle,
                                 containing: true, navigation: &navigation)
     }
 
-    private func wrappedEndStart(rows: Int, columns: Int,
+    private func wrappedEndStart(rows: Int, columns: Int, wrapStyle: ViewerWrapStyle,
                                  navigation: inout ViewerRowNavigation) async throws -> Int64 {
         var position = size
         var remaining = rows
         while remaining > 0 && position > 0 {
             try Task.checkCancellation()
-            let start = try await previousDisplayStart(before: position, columns: columns,
+            let start = try await previousDisplayStart(before: position, columns: columns, wrapStyle: wrapStyle,
                                                        navigation: &navigation)
             guard start < position else { break }
-            let next = try await readRow(at: start, columns: columns).next
+            let next = try await readRow(at: start, columns: columns, wrapStyle: wrapStyle).next
             if next > position {
                 // The fallback replay already replaced incompatible history
                 // and retained its prefix. Count the suffix in that alignment,
@@ -362,7 +436,7 @@ public actor FileViewerDocument {
                 var cursor = start
                 while cursor < size {
                     try Task.checkCancellation()
-                    let rowNext = try await readRow(at: cursor, columns: columns).next
+                    let rowNext = try await readRow(at: cursor, columns: columns, wrapStyle: wrapStyle).next
                     guard rowNext > cursor else { break }
                     navigation.record(start: cursor, next: rowNext)
                     suffix.append(cursor)
@@ -381,6 +455,7 @@ public actor FileViewerDocument {
 
     public func page(_ command: ViewerCommand = .stay, rows requestedRows: Int,
                      mode requestedMode: ViewerMode = .text, wrapColumns: Int? = nil,
+                     wrapStyle: ViewerWrapStyle = .character,
                      includeSourceText: Bool = false,
                      activeRange: Range<Int64>? = nil) async throws -> ViewerPage {
         await acquirePage()
@@ -399,7 +474,8 @@ public actor FileViewerDocument {
         let count = min(200, max(1, requestedRows))
         let columns = wrapColumns.map { max(1, $0) }
         let context = TextContext(revision: metadata.revision,
-                                  fileSize: sizeKnown ? size : nil, columns: columns)
+                                  fileSize: sizeKnown ? size : nil, columns: columns,
+                                  wrapStyle: columns == nil ? .character : wrapStyle)
         let contextMatches = lastTextContext?.matches(context) == true
         var navigation = metadata.revision != nil && contextMatches
             ? rowNavigation : ViewerRowNavigation()
@@ -436,31 +512,36 @@ public actor FileViewerDocument {
         if recoverTextPosition {
             switch command {
             case .home, .end: break
-            default: top = try await textStart(containing: top, columns: columns, navigation: &navigation)
+            default: top = try await textStart(containing: top, columns: columns, wrapStyle: wrapStyle,
+                                               navigation: &navigation)
             }
         }
         if case .reveal(let byteOffset) = command {
-            top = try await textStart(containing: byteOffset, columns: columns, navigation: &navigation)
+            top = try await textStart(containing: byteOffset, columns: columns, wrapStyle: wrapStyle,
+                                      navigation: &navigation)
         }
         switch command {
         case .home: top = 0
         case .end:
             if let columns {
-                top = try await wrappedEndStart(rows: count, columns: columns, navigation: &navigation)
+                top = try await wrappedEndStart(rows: count, columns: columns, wrapStyle: wrapStyle,
+                                                navigation: &navigation)
             } else {
                 top = size
                 for _ in 0..<count {
-                    top = try await previousDisplayStart(before: top, columns: nil, navigation: &navigation)
+                    top = try await previousDisplayStart(before: top, columns: nil, wrapStyle: wrapStyle,
+                                                          navigation: &navigation)
                 }
             }
         case .scroll(let delta):
             for _ in 0..<abs(max(-200, min(200, delta))) {
                 try Task.checkCancellation()
                 if delta < 0 {
-                    top = try await previousDisplayStart(before: top, columns: columns, navigation: &navigation)
+                    top = try await previousDisplayStart(before: top, columns: columns, wrapStyle: wrapStyle,
+                                                          navigation: &navigation)
                 }
                 else {
-                    let next = try await readRow(at: top, columns: columns).next
+                    let next = try await readRow(at: top, columns: columns, wrapStyle: wrapStyle).next
                     if columns != nil { navigation.record(start: top, next: next) }
                     if next > top && next < size { top = next } else { break }
                 }
@@ -473,7 +554,8 @@ public actor FileViewerDocument {
         for _ in 0..<count {
             try Task.checkCancellation()
             guard cursor < size else { break }
-            let row = try await readRow(at: cursor, columns: columns, includeSourceText: includeSourceText,
+            let row = try await readRow(at: cursor, columns: columns, wrapStyle: wrapStyle,
+                                        includeSourceText: includeSourceText,
                                         activeRange: activeRange)
             guard row.next > cursor else { break }
             lines.append(ViewerLine(
@@ -493,7 +575,8 @@ public actor FileViewerDocument {
         } else {
             rowNavigation = columns == nil || metadata.revision == nil ? ViewerRowNavigation() : navigation
             lastTextContext = TextContext(revision: metadata.revision,
-                                          fileSize: sizeKnown ? size : nil, columns: columns)
+                                          fileSize: sizeKnown ? size : nil, columns: columns,
+                                          wrapStyle: columns == nil ? .character : wrapStyle)
         }
         succeeded = true
         return ViewerPage(lines: lines, offset: top, endOffset: cursor,

@@ -5,6 +5,23 @@ import FileManagerCore
 import SyntaxCore
 @testable import CommanderUI
 
+@Test @MainActor func viewerShiftF2SelectsWordWrapping() throws {
+    _ = NSApplication.shared
+    let viewer = TerminalFileViewer(path: "sample.txt")
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 400, height: 200),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+    window.contentView = viewer
+    var selectedWordWrap = false
+    viewer.onInput = { input in
+        if case .toggleWrapType = input { selectedWordWrap = true }
+    }
+    let event = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
+        modifierFlags: .shift, timestamp: 1, windowNumber: window.windowNumber, context: nil,
+        characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 120))
+    viewer.keyDown(with: event)
+    #expect(selectedWordWrap)
+}
+
 @Test @MainActor func viewerDisplaysFilePagesAndRestoresFocusOnEscape() async throws {
     _ = NSApplication.shared
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
