@@ -32,10 +32,11 @@ private func viewerFixture(_ data: Data) throws -> URL {
     defer { try? FileManager.default.removeItem(at: url) }
     let document = try FileViewerDocument(url: url)
     let page = try await document.page(rows: 12, wrapColumns: 6, wrapStyle: .word,
-                                       includeSourceText: true, activeRange: 12..<13)
+                                       includeSourceText: true, activeRange: 13..<15)
     #expect(page.lines.map(\.text) == ["Привет", "мир", "abcdef", "ghij", "alpha,", "beta", "abc", "def"])
     #expect(page.lines.map(\.offset) == [0, 13, 20, 26, 31, 37, 42, 46])
-    #expect(page.lines.first?.searchColumns == [5..<6])
+    #expect(page.lines.first?.searchColumns.isEmpty == true)
+    #expect(page.lines[1].searchColumns == [0..<1])
     #expect(page.lines[6].sourceText == "abc")
 }
 
@@ -61,6 +62,19 @@ private func viewerFixture(_ data: Data) throws -> URL {
     #expect(page.lines.map(\.offset) == [0, 5006])
     #expect(try await document.page(.scroll(1), rows: 1, wrapColumns: 4, wrapStyle: .word).offset == 5006)
     #expect(try await document.page(.scroll(-1), rows: 1, wrapColumns: 4, wrapStyle: .word).offset == 0)
+}
+
+@Test func viewerWordWrapDoesNotHighlightAHiddenSeparatorAsText() async throws {
+    let url = try viewerFixture(Data("foo bar\n".utf8))
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try FileViewerDocument(url: url)
+    let space = try await document.page(rows: 2, wrapColumns: 3, wrapStyle: .word,
+                                        activeRange: 3..<4)
+    #expect(space.lines.map(\.text) == ["foo", "bar"])
+    #expect(space.lines.allSatisfy { $0.searchColumns.isEmpty })
+    let newline = try await document.page(rows: 2, wrapColumns: 3, wrapStyle: .word,
+                                          activeRange: 7..<8)
+    #expect(newline.lines[1].searchColumns == [2..<3])
 }
 @Test func viewerWrappedShortLineCrossesReadBoundaries() async throws {
     let line = "          const index = +e.target.dataset.index;"

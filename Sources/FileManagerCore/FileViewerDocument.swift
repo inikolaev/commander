@@ -136,6 +136,20 @@ public actor FileViewerDocument {
         return offset + min(Int64(budget), size - offset)
     }
 
+    private static func decodeScalar(parser: inout Unicode.UTF8.ForwardParser,
+                                     iterator: inout [UInt8].Iterator)
+        -> (scalar: Unicode.Scalar, byteCount: Int)? {
+        switch parser.parseScalar(from: &iterator) {
+        case .valid(let encoded): return (Unicode.UTF8.decode(encoded), encoded.count)
+        case .error(let length): return ("�", length)
+        case .emptyInput: return nil
+        }
+    }
+
+    private static func displayWidth(of scalar: Unicode.Scalar, at column: Int) -> Int {
+        scalar == "\t" ? 4 - column % 4 : 1
+    }
+
     private static func wordBreak(in bytes: [UInt8], columns: Int) -> (end: Int, resume: Int)? {
         var parser = Unicode.UTF8.ForwardParser()
         var iterator = bytes.makeIterator()
@@ -145,14 +159,9 @@ public actor FileViewerDocument {
         var whitespaceStart: Int?
         var lastBreak: (end: Int, resume: Int)?
         while consumed < bytes.count {
-            let scalar: Unicode.Scalar
-            let length: Int
-            switch parser.parseScalar(from: &iterator) {
-            case .valid(let encoded): scalar = Unicode.UTF8.decode(encoded); length = encoded.count
-            case .error(let count): scalar = "�"; length = count
-            case .emptyInput: return nil
-            }
-            let width = scalar == "\t" ? 4 - column % 4 : 1
+            guard let decoded = decodeScalar(parser: &parser, iterator: &iterator) else { return nil }
+            let scalar = decoded.scalar
+            let width = displayWidth(of: scalar, at: column)
             if column + width > columns && consumed > 0 {
                 if (scalar == " " || scalar == "\t") && sawWord {
                     return (whitespaceStart ?? consumed, consumed)
@@ -172,7 +181,7 @@ public actor FileViewerDocument {
                 whitespaceStart = nil
                 sawWord = true
             }
-            consumed += length
+            consumed += decoded.byteCount
             column += width
             if scalar == "," || scalar == ";" || scalar == ">" || scalar == ")" {
                 lastBreak = (consumed, consumed)
@@ -246,21 +255,15 @@ public actor FileViewerDocument {
                 try Task.checkCancellation()
                 nextCancellationCheck = consumedBytes + 4096
             }
-            let scalar: Unicode.Scalar
-            let byteCount: Int
-            switch parser.parseScalar(from: &iterator) {
-            case .valid(let encoded): scalar = Unicode.UTF8.decode(encoded); byteCount = encoded.count
-            case .error(let length): scalar = "�"; byteCount = length
-            case .emptyInput: break decoding
-            }
+            guard let decoded = Self.decodeScalar(parser: &parser, iterator: &iterator) else { break decoding }
+            let scalar = decoded.scalar
+            let byteCount = decoded.byteCount
 
             let rendered: String
-            let width: Int
+            let width = Self.displayWidth(of: scalar, at: column)
             if scalar == "\t" {
-                width = 4 - column % 4
                 rendered = String(repeating: " ", count: width)
             } else {
-                width = 1
                 rendered = CharacterSet.controlCharacters.contains(scalar) ? "·" : String(scalar)
             }
             if let maximum, column + width > maximum, consumedBytes > 0 { break }
@@ -282,10 +285,16 @@ public actor FileViewerDocument {
         // the unread bytes for the next visible row instead of advancing to cursor.
         let contentEnd = offset + Int64(consumedBytes)
         let next = wordWrapNext ?? (consumedBytes < bytes.count ? contentEnd : cursor)
-        let markTerminator = activeRange.map { range in
-            consumedBytes == bytes.count && next > contentEnd &&
-            range.lowerBound < next && range.upperBound > contentEnd
-        } ?? false
+        var markTerminator = false
+        if consumedBytes == bytes.count, let activeRange, next > contentEnd {
+            if wordWrapNext == nil {
+                markTerminator = activeRange.lowerBound < cursor && activeRange.upperBound > contentEnd
+            } else if try await byte(at: next - 1) == 10 {
+                var newlineStart = next - 1
+                if next >= 2, try await byte(at: next - 2) == 13 { newlineStart -= 1 }
+                markTerminator = activeRange.lowerBound < next && activeRange.upperBound > newlineStart
+            }
+        }
         var searchColumns: [Range<Int>] = []
         if !searchScalars.isEmpty || markTerminator {
             var mapped = [Range<Int>?](repeating: nil, count: searchScalars.count)
