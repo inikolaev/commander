@@ -9,6 +9,13 @@ continue to use Foundation. The selector is passed into the shared scanner;
 it does not affect ASCII preparation, Unicode fallback, chunk overlap, or
 source-coordinate handling.
 
+| Matcher | Search method | Status |
+| --- | --- | --- |
+| Foundation | `Data.range(of:)` | Production default |
+| Darwin `memmem` | libc byte substring search | Benchmark-only; slower on common multi-byte cases |
+| Short SIMD | Two-byte vector filter, then `memcmp` | Benchmark-only; strong selective gains, mixed-text uncertainty |
+| Swift single-pattern Aho-Corasick | Failure-link scan (KMP-equivalent), no SIMD prefilter | Benchmark-only; slower on the tested hits |
+
 ## Experiment 1: Darwin `memmem`
 
 The first candidate calls Darwin `memmem` for forward searches and keeps
@@ -90,10 +97,11 @@ change. The 100 MiB and mixed measurements use the final binary.
 | 10 GiB viewer end-short | 3458.87 ms | 3173.91 ms | −8% |
 
 The 100 MiB scan-only controls were 20.04 ms for the viewer and 9.64 ms for
-the editor. Thus the viewer end-short search cost 13.90 ms above scan with
-Foundation and 11.55 ms with SIMD; the editor cost 13.78 and 10.12 ms above
-scan, respectively. These differences include the same case-insensitive
-preparation in both matchers.
+the editor in the Foundation run, and 19.15 and 9.90 ms in the SIMD run.
+Subtracting each run's own scan median gives viewer end-short differences of
+13.90 and 11.55 ms, and editor differences of 13.78 and 10.12 ms. These are
+separate-run estimates, not isolated matcher costs; they include the same
+case-insensitive preparation in both matchers.
 
 Additional files test less uniform content and worst-case candidate density:
 
@@ -131,3 +139,92 @@ Raw runs: [100 MiB Foundation](profiles/search-matcher-simd-foundation-100mib.js
 [mixed/adversarial](profiles/search-matcher-simd-extra.jsonl). The final
 [binary provenance](profiles/search-matcher-simd-final-provenance.txt) records
 source and executable hashes.
+
+## Experiment 3: Swift single-pattern Aho-Corasick
+
+For the app's one-literal search contract, a one-pattern Aho-Corasick trie is
+a single path. This candidate builds its failure links once per scanner and
+uses the resulting KMP-equivalent byte automaton in both directions. It has
+no SIMD prefilter. It runs through the same viewer/editor adapters, ASCII
+preparation, chunk boundaries, and Unicode fallback as the other choices.
+This is a handwritten Swift candidate, not a benchmark of the optimized
+Rust library used by [Zed](https://github.com/zed-industries/zed/blob/main/crates/project/src/search.rs).
+That library's builder supports [prefilters](https://docs.rs/aho-corasick/latest/aho_corasick/struct.AhoCorasickBuilder.html#method.prefilter)
+and other backends absent here.
+
+The following 100 MiB results use **one release binary** for all four
+matchers. Each matrix covers 44 viewer/editor scenarios with 8 iterations;
+the first iteration of each scenario is excluded. Values are medians in
+milliseconds, lower is better. `CI` means case-insensitive. Scan-only rows
+measure traversal without a search.
+
+| 100 MiB case, CI | Foundation | `memmem` | SIMD | Swift AC |
+| --- | ---: | ---: | ---: | ---: |
+| Viewer scan-only forward | 20.00 | 19.66 | 19.50 | 19.77 |
+| Viewer middle short, forward | 16.44 | 35.67 | 15.02 | 37.57 |
+| Viewer end short, forward | 34.20 | 71.20 | 30.00 | 76.00 |
+| Viewer end long, forward | 26.26 | 70.71 | 25.09 | 74.49 |
+| Viewer absent, forward | 83.29 | 70.48 | 76.96 | 74.10 |
+| Viewer begin short, reverse | 32.70 | 33.40 | 32.71 | 142.39 |
+| Editor scan-only forward | 9.75 | 9.86 | 10.08 | 9.92 |
+| Editor middle short, forward | 11.56 | 29.88 | 10.15 | 33.88 |
+| Editor end short, forward | 23.01 | 60.29 | 20.22 | 64.90 |
+| Editor end long, forward | 15.03 | 59.90 | 15.49 | 65.13 |
+| Editor absent, forward | 66.41 | 60.34 | 66.54 | 63.85 |
+| Editor begin short, reverse | 22.40 | 22.34 | 22.42 | 130.17 |
+
+The extra matrix uses mixed 16 MiB text, a repeated 100 MiB file, and a
+periodic 16 MiB file. It covers 176 scenarios and 1408 iteration records
+across all four matchers and both surfaces/directions. Selected forward
+medians in milliseconds:
+
+| Case | Foundation | `memmem` | SIMD | Swift AC |
+| --- | ---: | ---: | ---: | ---: |
+| Mixed short tail hit, viewer | 10.49 | 12.84 | 10.16 | 20.32 |
+| Mixed short tail hit, editor | 8.74 | 10.80 | 10.13 | 18.67 |
+| Mixed short absent, viewer | 11.61 | 12.92 | 4.44 | 14.79 |
+| Mixed short absent, editor | 9.50 | 11.74 | 3.16 | 19.80 |
+| Mixed one-byte absent, viewer | 7.51 | 4.11 | 4.72 | 11.80 |
+| Mixed one-byte absent, editor | 5.92 | 2.51 | 3.13 | 10.32 |
+| Repeated near miss, viewer | 107.69 | 194.83 | 29.25 | 190.63 |
+| Repeated near miss, editor | 99.15 | 186.20 | 19.82 | 181.54 |
+| Periodic near miss, viewer | 9.84 | 19.56 | 9.95 | 19.48 |
+| Periodic near miss, editor | 8.15 | 17.70 | 7.86 | 15.40 |
+
+The mixed editor short tail hit was 16% slower with SIMD in this run, versus
+about 2% in the earlier run above. This variation reinforces the decision to
+keep it benchmark-selectable until paired repeats resolve that case.
+
+At 1 GiB, the viewer end-short hit took 347.87 ms with Foundation and
+775.48 ms with Swift AC; the editor took 251.13 and 691.82 ms. The reverse
+begin-short case took 340.42 versus 1471.89 ms in the viewer and 237.28
+versus 1370.38 ms in the editor. These paired 1 GiB matrices each passed 18
+scenarios and 108 iteration records. A targeted 10 GiB viewer end-short run
+passed four iterations per matcher and took 3.55 s with Foundation versus
+7.86 s with Swift AC. We did not run the 10 GiB editor case because its
+memory requirement is substantially higher.
+
+All recorded search results were correct. The release build passed 31
+`TextSearchCore` tests and 56 focused 1 MiB viewer/editor benchmark cases.
+The senior advisor reviewed the candidate; the dedicated reviewer agent was
+unavailable due a usage limit. The new candidate remains benchmark-only.
+The measured losses are consistent with this implementation inspecting every
+byte while Foundation can skip ahead; that explanation is an inference from
+the algorithms and the earlier Foundation profile. The 100 MiB
+absent case is an exception, but it does not offset the hit and reverse
+regressions. This result does not predict the performance of Zed's Rust
+`aho-corasick` library or multi-pattern searches.
+
+Raw results: [100 MiB Foundation](profiles/search-algorithms-foundation-100mib.jsonl),
+[100 MiB `memmem`](profiles/search-algorithms-memmem-100mib.jsonl),
+[100 MiB SIMD](profiles/search-algorithms-simd-100mib.jsonl),
+[100 MiB Swift AC](profiles/search-algorithms-aho-100mib.jsonl),
+[mixed/adversarial](profiles/search-algorithms-extra.jsonl),
+[1 GiB Foundation](profiles/search-algorithms-foundation-1gib.jsonl),
+[1 GiB Swift AC](profiles/search-algorithms-aho-1gib.jsonl),
+[10 GiB viewer Foundation](profiles/search-algorithms-foundation-10gib-viewer-end-short.jsonl),
+[10 GiB viewer Swift AC](profiles/search-algorithms-aho-10gib-viewer-end-short.jsonl),
+and [binary provenance](profiles/search-algorithms-provenance.txt). The binary
+was built before the Aho candidate was committed, so provenance records the
+parent revision plus hashes of the candidate sources and measured executable.
+The benchmark, corpus generator, and profiler remain manual tools outside CI.
