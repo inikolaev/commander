@@ -58,10 +58,13 @@ Run each case in a separate process. Examples:
 `--file` allow other corpora. For an arbitrary query, `--expect-offset` plus
 `--expect-length` checks a hit, while `--expect-length 0` checks an exhausted
 result. Other options are `--whole-word` and `--chunk-size` (default 65,536).
-`--matcher foundation|darwin-memmem|simd-short` selects the internal byte matcher
-for search runs. Foundation is the default; the alternative matchers use
-Foundation for reverse matching. The SIMD matcher handles short ASCII patterns
-and falls back to Foundation for longer or dense patterns. The selector is
+`--matcher foundation|darwin-memmem|simd-short|aho-corasick` selects the internal
+byte matcher for search runs. Foundation is the default. Darwin memmem and the
+SIMD matcher use Foundation for reverse matching; the SIMD matcher handles
+short ASCII patterns and falls back to Foundation for longer or dense patterns.
+The Aho-Corasick candidate uses single-pattern failure links in both directions
+(equivalent to byte KMP), with no SIMD prefilter. It is a handwritten Swift
+candidate, not the Rust `aho-corasick` crate used by Zed. The selector is
 included in every JSONL record.
 The fixture tokens are embedded in `x`, so whole-word searches for them are
 expected to be exhausted. When combining `--whole-word` with `--case`, pass

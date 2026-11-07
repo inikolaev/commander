@@ -315,7 +315,7 @@ private func found(_ result: ViewerSearchResult) -> ViewerSearchHit? {
                                     (.backward, Int64(text.utf8.count - 1)),
                                     (.backward, Int64(32))] {
             let ordinary = try await search.search(query, direction: direction, fromByteOffset: anchor)
-            for matcher in [ASCIILiteralMatcher.darwinMemmem, .simdShort] {
+            for matcher in [ASCIILiteralMatcher.darwinMemmem, .simdShort, .ahoCorasick] {
                 let candidate = try await search.search(query, direction: direction, fromByteOffset: anchor,
                                                         matcher: matcher)
                 #expect(candidate == ordinary)

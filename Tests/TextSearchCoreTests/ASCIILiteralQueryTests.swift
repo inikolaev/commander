@@ -297,3 +297,83 @@ private func scannedHit(_ result: ASCIILiteralScanResult<Int>) -> TextMatch<Int>
     #expect(scannedHit(continued.consume(Data(("abc" + String(repeating: "x", count: 32)).utf8),
                                          startingAt: 24, requireASCII: true))?.lowerBound == 24)
 }
+
+@Test func singlePatternACMatchesFoundationForSlicesPartitionsAndDirections() {
+    let patterns = ["a", "ab", "ababac", "a" + String(repeating: "b", count: 15) + "c",
+                    String(repeating: "ab", count: 16), String(repeating: "x", count: 63) + "z"]
+    for pattern in patterns {
+        let padding = String(repeating: "_", count: 73)
+        let prefix = String(pattern.prefix(max(1, pattern.count - 1)))
+        let texts: [String] = [
+            pattern + padding,
+            padding + pattern,
+            padding,
+            String(repeating: prefix, count: 4) + pattern,
+            pattern + "_" + pattern,
+        ]
+        for sensitive in [false, true] {
+            let query = ASCIILiteralQuery(query: .init(text: pattern, caseSensitive: sensitive),
+                                          maximumLength: 64)!
+            for text in texts {
+                let bytes = Array(text.utf8)
+                for direction in [SearchDirection.forward, .backward] {
+                    for partition in [1, 2, 7, 15, 16, 17, 32, 64, 128] {
+                        var foundation = ASCIILiteralScanner<Int>(query: query, direction: direction,
+                                                                  matcher: .foundation)
+                        var candidate = ASCIILiteralScanner<Int>(query: query, direction: direction,
+                                                                 matcher: .ahoCorasick)
+                        let starts = stride(from: 0, to: bytes.count, by: partition).map { $0 }
+                        var found: TextMatch<Int>?
+                        for start in direction == .forward ? starts : starts.reversed() {
+                            let end = min(start + partition, bytes.count)
+                            let storage = Data([0xFF, 0xFF, 0xFF] + bytes[start..<end])
+                            let slice = storage[3..<storage.count]
+                            let left = foundation.consume(slice, startingAt: start, requireASCII: true)
+                            let right = candidate.consume(slice, startingAt: start, requireASCII: true)
+                            #expect(scannedHit(left) == scannedHit(right))
+                            found = scannedHit(left)
+                            if found != nil { break }
+                        }
+                        let expected = Data(bytes).range(of: Data(pattern.utf8),
+                                                           options: direction == .backward ? .backwards : [])
+                        #expect(found?.lowerBound == expected?.lowerBound)
+                        #expect(found?.upperBound == expected?.upperBound)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Test func singlePatternACPreservesUnicodeFallbackAndSensitiveHighBytes() {
+    let folded = ASCIILiteralQuery(query: .init(text: "ss"), maximumLength: 16)!
+    for direction in [SearchDirection.forward, .backward] {
+        var scanner = ASCIILiteralScanner<Int>(query: folded, direction: direction,
+                                              matcher: .ahoCorasick)
+        if case .requiresUnicode = scanner.consume(Data("ßSS".utf8), startingAt: 0,
+                                                   requireASCII: false) {}
+        else { Issue.record("Unicode block must trigger scalar fallback") }
+    }
+    let sensitive = ASCIILiteralQuery(query: .init(text: "abc", caseSensitive: true),
+                                      maximumLength: 16)!
+    let bytes = Data("éabc".utf8)
+    for direction in [SearchDirection.forward, .backward] {
+        var scanner = ASCIILiteralScanner<Int>(query: sensitive, direction: direction,
+                                              matcher: .ahoCorasick)
+        #expect(scannedHit(scanner.consume(bytes, startingAt: 0,
+                                           requireASCII: false))?.lowerBound == 2)
+    }
+}
+
+@Test func singlePatternACChoosesFirstOrLastOverlappingMatch() {
+    for (pattern, text) in [("aaa", "aaaaa"), ("aba", "ababa")] {
+        let query = ASCIILiteralQuery(query: .init(text: pattern, caseSensitive: true),
+                                      maximumLength: 8)!
+        for (direction, expected) in [(SearchDirection.forward, 0), (.backward, 2)] {
+            var scanner = ASCIILiteralScanner<Int>(query: query, direction: direction,
+                                                  matcher: .ahoCorasick)
+            #expect(scannedHit(scanner.consume(Data(text.utf8), startingAt: 0,
+                                               requireASCII: true))?.lowerBound == expected)
+        }
+    }
+}

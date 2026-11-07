@@ -94,7 +94,7 @@ private final class CancellationProbe: @unchecked Sendable {
                                     (.backward, snapshot.length - 1),
                                     (.backward, 32)] {
             let ordinary = snapshot.search(query, direction: direction, fromUTF16Offset: anchor, chunkSize: 64)
-            for matcher in [ASCIILiteralMatcher.darwinMemmem, .simdShort] {
+            for matcher in [ASCIILiteralMatcher.darwinMemmem, .simdShort, .ahoCorasick] {
                 let candidate = snapshot.search(query, direction: direction, fromUTF16Offset: anchor,
                                                 chunkSize: 64, matcher: matcher)
                 #expect(candidate == ordinary)

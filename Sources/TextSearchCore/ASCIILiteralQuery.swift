@@ -92,6 +92,59 @@ public enum ASCIILiteralMatcher: Sendable {
     case foundation
     case darwinMemmem
     case simdShort
+    case ahoCorasick
+}
+
+/// A one-pattern Aho-Corasick trie is one path; these are its failure links.
+/// This is the byte KMP automaton, prepared once for the selected direction.
+private struct SinglePatternAC {
+    let pattern: [UInt8]
+    let failure: [Int]
+
+    init(_ bytes: Data, reversed: Bool) {
+        let forward = Array(bytes)
+        pattern = reversed ? Array(forward.reversed()) : forward
+        var links = [Int](repeating: 0, count: pattern.count)
+        if pattern.count > 1 {
+            for index in 1..<pattern.count {
+                var prefix = links[index - 1]
+                while prefix > 0 && pattern[prefix] != pattern[index] {
+                    prefix = links[prefix - 1]
+                }
+                if pattern[prefix] == pattern[index] { prefix += 1 }
+                links[index] = prefix
+            }
+        }
+        failure = links
+    }
+
+    func findForward(_ bytes: Data) -> Int? {
+        bytes.withUnsafeBytes { raw in
+            var state = 0
+            for index in 0..<raw.count {
+                let byte = raw[index]
+                while state > 0 && pattern[state] != byte { state = failure[state - 1] }
+                if pattern[state] == byte { state += 1 }
+                if state == pattern.count { return index + 1 - state }
+            }
+            return nil
+        }
+    }
+
+    func findBackward(_ bytes: Data) -> Int? {
+        bytes.withUnsafeBytes { raw in
+            var state = 0
+            var index = raw.count
+            while index > 0 {
+                index -= 1
+                let byte = raw[index]
+                while state > 0 && pattern[state] != byte { state = failure[state - 1] }
+                if pattern[state] == byte { state += 1 }
+                if state == pattern.count { return index }
+            }
+            return nil
+        }
+    }
 }
 
 private struct SIMDShortFilter {
@@ -109,6 +162,7 @@ public struct ASCIILiteralScanner<Offset: FixedWidthInteger & Sendable> {
     private let direction: SearchDirection
     private let matcher: ASCIILiteralMatcher
     private let simdFilter: SIMDShortFilter?
+    private let ahoAutomaton: SinglePatternAC?
     private var carry = Data()
     private var simdFailedCandidates = 0
     private var simdUseFoundation = false
@@ -122,6 +176,11 @@ public struct ASCIILiteralScanner<Offset: FixedWidthInteger & Sendable> {
         self.query = query
         self.direction = direction
         self.matcher = matcher
+        if case .ahoCorasick = matcher {
+            ahoAutomaton = SinglePatternAC(query.pattern, reversed: direction == .backward)
+        } else {
+            ahoAutomaton = nil
+        }
         if case .simdShort = matcher, direction == .forward,
            (1...16).contains(query.pattern.count) {
             let first = query.pattern[query.pattern.startIndex]
@@ -168,11 +227,11 @@ public struct ASCIILiteralScanner<Offset: FixedWidthInteger & Sendable> {
             let suffix = block.suffix(overlap)
             var boundary = Data(suffix)
             boundary.append(carry)
-            if let offset = Self.foundationBackward(boundary, query.pattern) {
+            if let offset = findBackward(boundary) {
                 return match(start + Offset(block.count - suffix.count)
                              + Offset(offset))
             }
-            if let offset = Self.foundationBackward(block, query.pattern) {
+            if let offset = findBackward(block) {
                 return match(start + Offset(offset))
             }
             if block.count >= overlap {
@@ -196,6 +255,15 @@ public struct ASCIILiteralScanner<Offset: FixedWidthInteger & Sendable> {
         case .foundation: Self.foundationForward(bytes, query.pattern)
         case .darwinMemmem: Self.darwinMemmemForward(bytes, query.pattern)
         case .simdShort: simdShortForward(bytes)
+        case .ahoCorasick: ahoAutomaton!.findForward(bytes)
+        }
+    }
+
+    private func findBackward(_ bytes: Data) -> Int? {
+        switch matcher {
+        case .ahoCorasick: ahoAutomaton!.findBackward(bytes)
+        case .foundation, .darwinMemmem, .simdShort:
+            Self.foundationBackward(bytes, query.pattern)
         }
     }
 
