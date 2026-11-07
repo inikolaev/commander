@@ -23,12 +23,11 @@ public struct ASCIILiteralQuery: Sendable {
         if !requireASCII && !isCaseInsensitive { return bytes }
         if !isCaseInsensitive {
             let isASCII = bytes.withUnsafeBytes { raw in
-                let highBit = SIMD16<UInt8>(repeating: 0x80)
                 let vectorEnd = raw.count - raw.count % 16
                 var index = 0
                 while index < vectorEnd {
                     let block = raw.loadUnaligned(fromByteOffset: index, as: SIMD16<UInt8>.self)
-                    if any(block .>= highBit) { return false }
+                    if Self.containsNonASCII(block) { return false }
                     index += 16
                 }
                 while index < raw.count {
@@ -42,7 +41,6 @@ public struct ASCIILiteralQuery: Sendable {
         var folded = Data(count: bytes.count)
         let isASCII = bytes.withUnsafeBytes { source in
             folded.withUnsafeMutableBytes { destination -> Bool in
-                let highBit = SIMD16<UInt8>(repeating: 0x80)
                 let upperA = SIMD16<UInt8>(repeating: 65)
                 let upperZ = SIMD16<UInt8>(repeating: 90)
                 let lowercaseBit = SIMD16<UInt8>(repeating: 32)
@@ -50,7 +48,7 @@ public struct ASCIILiteralQuery: Sendable {
                 var index = 0
                 while index < vectorEnd {
                     let block = source.loadUnaligned(fromByteOffset: index, as: SIMD16<UInt8>.self)
-                    if any(block .>= highBit) { return false }
+                    if Self.containsNonASCII(block) { return false }
                     let uppercase = (block .>= upperA) .& (block .<= upperZ)
                     let lowered = block.replacing(with: block | lowercaseBit, where: uppercase)
                     destination.storeBytes(of: lowered, toByteOffset: index, as: SIMD16<UInt8>.self)
@@ -70,6 +68,13 @@ public struct ASCIILiteralQuery: Sendable {
 
     private static func lowercase(_ byte: UInt8) -> UInt8 {
         (65...90).contains(byte) ? byte + 32 : byte
+    }
+
+    @inline(__always)
+    private static func containsNonASCII(_ block: SIMD16<UInt8>) -> Bool {
+        // Both vectors are 16 bytes; masking both 64-bit words tests each byte's high bit.
+        let words = unsafeBitCast(block, to: SIMD2<UInt64>.self)
+        return ((words[0] | words[1]) & 0x8080_8080_8080_8080) != 0
     }
 }
 
