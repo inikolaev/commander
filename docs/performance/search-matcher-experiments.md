@@ -228,3 +228,20 @@ and [binary provenance](profiles/search-algorithms-provenance.txt). The binary
 was built before the Aho candidate was committed, so provenance records the
 parent revision plus hashes of the candidate sources and measured executable.
 The benchmark, corpus generator, and profiler remain manual tools outside CI.
+
+## Strategy-file refactor sanity check
+
+The matcher implementations were moved into separate files behind an internal
+prepared-strategy interface. The normal API still constructs Foundation.
+Before and after release binaries were compared on existing small fixtures:
+`/private/tmp/SearchBenchmark-pre-strategy-refactor` (SHA-256 `8fc657a7…`)
+and `.build/search-benchmark-offline/SearchBenchmark` (SHA-256 `700f6c80…`).
+Both used `--matcher foundation`; the first iteration of each invocation was
+excluded. The 1 MiB beginning short hit used 30 iterations and four alternating
+old/new invocation pairs. Median invocation medians were 24.98 → 25.71 µs
+for viewer and 11.94 → 12.04 µs for editor. Individual invocation medians
+overlapped, so this check does not establish a tiny-search regression. A
+single eight-iteration pair for a 16 MiB mixed-text no-hit case measured
+11.72 → 11.13 ms for viewer and 9.62 → 9.60 ms for editor; one pair is only
+a smoke check. All checked results were correct. Full matcher matrices were
+not rerun for this structural refactor.

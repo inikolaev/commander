@@ -1,5 +1,4 @@
 import Foundation
-import Darwin
 
 /// A byte-search shortcut for literals whose UTF-8 bytes have the same
 /// positions as their source scalars. Adapters still own source validation
@@ -85,74 +84,6 @@ public enum ASCIILiteralScanResult<Offset: FixedWidthInteger & Sendable>: Sendab
     case requiresUnicode
 }
 
-/// Internal benchmark selector. The ordinary scanner initializer always uses
-/// Foundation; opt-in strategies are exposed only to benchmark clients.
-@_spi(Benchmark)
-public enum ASCIILiteralMatcher: Sendable {
-    case foundation
-    case darwinMemmem
-    case simdShort
-    case ahoCorasick
-}
-
-/// A one-pattern Aho-Corasick trie is one path; these are its failure links.
-/// This is the byte KMP automaton, prepared once for the selected direction.
-private struct SinglePatternAC {
-    let pattern: [UInt8]
-    let failure: [Int]
-
-    init(_ bytes: Data, reversed: Bool) {
-        let forward = Array(bytes)
-        pattern = reversed ? Array(forward.reversed()) : forward
-        var links = [Int](repeating: 0, count: pattern.count)
-        if pattern.count > 1 {
-            for index in 1..<pattern.count {
-                var prefix = links[index - 1]
-                while prefix > 0 && pattern[prefix] != pattern[index] {
-                    prefix = links[prefix - 1]
-                }
-                if pattern[prefix] == pattern[index] { prefix += 1 }
-                links[index] = prefix
-            }
-        }
-        failure = links
-    }
-
-    func findForward(_ bytes: Data) -> Int? {
-        bytes.withUnsafeBytes { raw in
-            var state = 0
-            for index in 0..<raw.count {
-                let byte = raw[index]
-                while state > 0 && pattern[state] != byte { state = failure[state - 1] }
-                if pattern[state] == byte { state += 1 }
-                if state == pattern.count { return index + 1 - state }
-            }
-            return nil
-        }
-    }
-
-    func findBackward(_ bytes: Data) -> Int? {
-        bytes.withUnsafeBytes { raw in
-            var state = 0
-            var index = raw.count
-            while index > 0 {
-                index -= 1
-                let byte = raw[index]
-                while state > 0 && pattern[state] != byte { state = failure[state - 1] }
-                if pattern[state] == byte { state += 1 }
-                if state == pattern.count { return index }
-            }
-            return nil
-        }
-    }
-}
-
-private struct SIMDShortFilter {
-    let first: SIMD16<UInt8>
-    let second: SIMD16<UInt8>
-    let secondOffset: Int?
-}
-
 /// The byte matcher shared by viewer and editor. Call with contiguous blocks
 /// in traversal order; source reads, offset validation, and fallback belong to
 /// the adapter. Only a query-length boundary is copied between blocks. Stop
@@ -160,46 +91,27 @@ private struct SIMDShortFilter {
 public struct ASCIILiteralScanner<Offset: FixedWidthInteger & Sendable> {
     private let query: ASCIILiteralQuery
     private let direction: SearchDirection
-    private let matcher: ASCIILiteralMatcher
-    private let simdFilter: SIMDShortFilter?
-    private let ahoAutomaton: SinglePatternAC?
+    private var matcher: any ByteLiteralMatching
     private var carry = Data()
-    private var simdFailedCandidates = 0
-    private var simdUseFoundation = false
 
     public init(query: ASCIILiteralQuery, direction: SearchDirection) {
-        self.init(query: query, direction: direction, matcher: .foundation)
+        self.init(query: query, direction: direction,
+                  preparedMatcher: FoundationByteMatcher(pattern: query.pattern,
+                                                         direction: direction))
     }
 
     @_spi(Benchmark)
     public init(query: ASCIILiteralQuery, direction: SearchDirection, matcher: ASCIILiteralMatcher) {
+        self.init(query: query, direction: direction,
+                  preparedMatcher: matcher.prepare(pattern: query.pattern, direction: direction))
+    }
+
+    // Internal seam for independently defined matchers; no selector case is needed.
+    init(query: ASCIILiteralQuery, direction: SearchDirection,
+         preparedMatcher: any ByteLiteralMatching) {
         self.query = query
         self.direction = direction
-        self.matcher = matcher
-        if case .ahoCorasick = matcher {
-            ahoAutomaton = SinglePatternAC(query.pattern, reversed: direction == .backward)
-        } else {
-            ahoAutomaton = nil
-        }
-        if case .simdShort = matcher, direction == .forward,
-           (1...16).contains(query.pattern.count) {
-            let first = query.pattern[query.pattern.startIndex]
-            let secondOffset = (1..<query.pattern.count).last {
-                query.pattern[query.pattern.startIndex + $0] != first
-            }
-            if query.pattern.count == 1 || secondOffset != nil {
-                simdFilter = SIMDShortFilter(
-                    first: SIMD16<UInt8>(repeating: first),
-                    second: SIMD16<UInt8>(repeating: secondOffset.map {
-                        query.pattern[query.pattern.startIndex + $0]
-                    } ?? first),
-                    secondOffset: secondOffset)
-            } else {
-                simdFilter = nil
-            }
-        } else {
-            simdFilter = nil
-        }
+        matcher = preparedMatcher
     }
 
     public mutating func consume(_ bytes: Data, startingAt start: Offset,
@@ -211,10 +123,10 @@ public struct ASCIILiteralScanner<Offset: FixedWidthInteger & Sendable> {
         if direction == .forward {
             var boundary = carry
             boundary.append(block.prefix(overlap))
-            if let offset = findForward(boundary) {
+            if let offset = matcher.find(in: boundary) {
                 return match(start - Offset(carry.count) + Offset(offset))
             }
-            if let offset = findForward(block) {
+            if let offset = matcher.find(in: block) {
                 return match(start + Offset(offset))
             }
             if block.count >= overlap {
@@ -227,11 +139,11 @@ public struct ASCIILiteralScanner<Offset: FixedWidthInteger & Sendable> {
             let suffix = block.suffix(overlap)
             var boundary = Data(suffix)
             boundary.append(carry)
-            if let offset = findBackward(boundary) {
+            if let offset = matcher.find(in: boundary) {
                 return match(start + Offset(block.count - suffix.count)
                              + Offset(offset))
             }
-            if let offset = findBackward(block) {
+            if let offset = matcher.find(in: block) {
                 return match(start + Offset(offset))
             }
             if block.count >= overlap {
@@ -248,98 +160,5 @@ public struct ASCIILiteralScanner<Offset: FixedWidthInteger & Sendable> {
     private func match(_ start: Offset) -> ASCIILiteralScanResult<Offset> {
         .match(TextMatch(lowerBound: start,
                          upperBound: start + Offset(query.pattern.count))!)
-    }
-
-    private mutating func findForward(_ bytes: Data) -> Int? {
-        switch matcher {
-        case .foundation: Self.foundationForward(bytes, query.pattern)
-        case .darwinMemmem: Self.darwinMemmemForward(bytes, query.pattern)
-        case .simdShort: simdShortForward(bytes)
-        case .ahoCorasick: ahoAutomaton!.findForward(bytes)
-        }
-    }
-
-    private func findBackward(_ bytes: Data) -> Int? {
-        switch matcher {
-        case .ahoCorasick: ahoAutomaton!.findBackward(bytes)
-        case .foundation, .darwinMemmem, .simdShort:
-            Self.foundationBackward(bytes, query.pattern)
-        }
-    }
-
-    private mutating func simdShortForward(_ bytes: Data) -> Int? {
-        let pattern = query.pattern
-        let length = pattern.count
-        // Small ranges and longer or uniform needles are better left to Foundation.
-        guard !simdUseFoundation, let simdFilter, bytes.count >= length + 15 else {
-            return Self.foundationForward(bytes, pattern)
-        }
-
-        return bytes.withUnsafeBytes { haystack in
-            pattern.withUnsafeBytes { needle in
-                let base = haystack.baseAddress!
-                let needleBase = needle.baseAddress!
-                let candidateCount = haystack.count - length + 1
-                var window = 0
-                while window + 16 <= candidateCount {
-                    let leading = haystack.loadUnaligned(fromByteOffset: window, as: SIMD16<UInt8>.self)
-                    let matches: SIMDMask<SIMD16<UInt8>.MaskStorage>
-                    if let secondOffset = simdFilter.secondOffset {
-                        let trailing = haystack.loadUnaligned(fromByteOffset: window + secondOffset,
-                                                              as: SIMD16<UInt8>.self)
-                        matches = (leading .== simdFilter.first) .& (trailing .== simdFilter.second)
-                    } else {
-                        matches = leading .== simdFilter.first
-                    }
-                    // A true lane contributes bit 0 of its byte; each 64-bit word holds eight lanes.
-                    let laneBytes = SIMD16<UInt8>.zero.replacing(with: SIMD16<UInt8>(repeating: 1),
-                                                                 where: matches)
-                    let words = unsafeBitCast(laneBytes, to: SIMD2<UInt64>.self)
-                    for wordIndex in 0..<2 {
-                        var bits = UInt64(littleEndian: words[wordIndex]) & 0x0101_0101_0101_0101
-                        while bits != 0 {
-                            let lane = wordIndex * 8 + bits.trailingZeroBitCount / 8
-                            let candidate = window + lane
-                            if memcmp(base.advanced(by: candidate), needleBase, length) == 0 {
-                                return candidate
-                            }
-                            // Count across this scan; repeated misses make later blocks use Foundation.
-                            simdFailedCandidates += 1
-                            if simdFailedCandidates >= 8 {
-                                simdUseFoundation = true
-                                let remaining = bytes[(bytes.startIndex + candidate + 1)..<bytes.endIndex]
-                                return Self.foundationForward(remaining, pattern).map { candidate + 1 + $0 }
-                            }
-                            bits &= bits - 1
-                        }
-                    }
-                    window += 16
-                }
-                if window < candidateCount {
-                    let remaining = bytes[(bytes.startIndex + window)..<bytes.endIndex]
-                    return Self.foundationForward(remaining, pattern).map { window + $0 }
-                }
-                return nil
-            }
-        }
-    }
-
-    private static func foundationForward(_ bytes: Data, _ pattern: Data) -> Int? {
-        bytes.range(of: pattern).map { $0.lowerBound - bytes.startIndex }
-    }
-
-    private static func foundationBackward(_ bytes: Data, _ pattern: Data) -> Int? {
-        bytes.range(of: pattern, options: .backwards).map { $0.lowerBound - bytes.startIndex }
-    }
-
-    private static func darwinMemmemForward(_ bytes: Data, _ pattern: Data) -> Int? {
-        guard bytes.count >= pattern.count else { return nil }
-        return bytes.withUnsafeBytes { haystack in
-            pattern.withUnsafeBytes { needle in
-                guard let found = memmem(haystack.baseAddress, haystack.count,
-                                         needle.baseAddress, needle.count) else { return nil }
-                return haystack.baseAddress!.distance(to: UnsafeRawPointer(found))
-            }
-        }
     }
 }

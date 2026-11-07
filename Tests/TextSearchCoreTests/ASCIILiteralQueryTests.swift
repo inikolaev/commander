@@ -1,6 +1,19 @@
 import Foundation
 import Testing
-@_spi(Benchmark) import TextSearchCore
+@_spi(Benchmark) @testable import TextSearchCore
+
+private struct AlwaysNoHitByteMatcher: ByteLiteralMatching {
+    func find(in bytes: Data) -> Int? { nil }
+}
+
+@Test func asciiScannerAcceptsInjectedMatcherWithoutSelectorCase() {
+    let query = ASCIILiteralQuery(query: .init(text: "abc", caseSensitive: true),
+                                  maximumLength: 3)!
+    var scanner = ASCIILiteralScanner<Int>(query: query, direction: .forward,
+                                          preparedMatcher: AlwaysNoHitByteMatcher())
+    if case .advance = scanner.consume(Data("abc".utf8), startingAt: 0, requireASCII: true) {}
+    else { Issue.record("scanner did not delegate to injected matcher") }
+}
 
 @Test func asciiLiteralShortcutOnlyAcceptsEquivalentScalarSemantics() {
     #expect(ASCIILiteralQuery(query: .init(text: ""), maximumLength: 8)?.pattern == nil)
