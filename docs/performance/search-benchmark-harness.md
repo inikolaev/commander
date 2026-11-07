@@ -1,6 +1,7 @@
 # Reproducible document search benchmark
 
-Measured results and flame graphs are in the [search performance report](search-performance.md).
+Measured results and sampled profiling observations are in the
+[search performance report](search-performance.md).
 
 Build a release executable with `swift build -c release --product SearchBenchmark`.
 If SwiftPM cannot resolve remote dependencies but a release dependency build

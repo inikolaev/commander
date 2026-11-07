@@ -14,22 +14,35 @@ collected in separate runs, so profiler overhead does not affect the tables.
   A hit near the beginning reads far less data than an end hit or absent query.
 - **CI** means case-insensitive; **CS** means case-sensitive. The tables show
   warm-cache medians after discarding each process's first iteration.
-- **Interactive HTML flame graphs** are sampled call stacks from separate
-  100 MiB runs at 1 ms intervals. They show where samples accumulated, not
-  exact cycle counts. The links in the relevant sections below open them.
+- **Sampling profiles** came from separate 100 MiB runs at 1 ms intervals.
+  The table below records their main observations; sample shares are not
+  exact cycle counts.
 - **Builds and reproducibility:** the benchmark was compiled at release
   optimization with `scripts/build-search-benchmark-offline.sh` using cached
   external dependency objects. The [benchmark harness](search-benchmark-harness.md) documents the
   commands and fixture format. Fixtures are generated only if missing and
   reused on later runs. Raw JSONL, sampled stacks, and build hash manifests
-  were local working outputs; the tables and retained flame graphs are the
-  reviewable results.
+  were local working outputs; this Markdown report is the reviewable record.
 
-The eight HTML files under `profiles/` are the only search profiling artifacts
-kept in this branch: viewer and editor baseline end-hit profiles, scan-only
-controls, first SIMD end-hit profiles, and final high-bit-check profiles.
-They are linked from the sections below. The `editor-load-*` files in that
-folder belong to the separate editor-loading investigation on `main`.
+## Sampling profile summary
+
+`sample` collected call stacks during repeated 100 MiB case-insensitive
+end-short searches, separately from the latency measurements. Percentages are
+inclusive shares of samples within each run.
+
+| Search implementation | Viewer | Editor |
+| --- | --- | --- |
+| Baseline | 58.0% in ASCII block preparation; 13.7% in `Data.range(of:)` | 65.9% in block preparation; 17.0% in `Data.range(of:)` |
+| First SIMD step | Block preparation fell to 26.2%; an out-of-line `SIMD.min()` reduction appeared in 8.1% | Block preparation fell to 36.2%; `SIMD.min()` appeared in 11.5% |
+| Inline high-bit check | Block preparation fell to 13.2%; `SIMD.min()` no longer appeared | Block preparation fell to 16.5%; `SIMD.min()` no longer appeared |
+
+Separate scan-only profiles were dominated by `LocalFileContentSource.read`
+and `Data` copying in the viewer, and by `TextRope.content(in:)` and UTF-8
+materialization in the editor. In the final end-short profile, Foundation's
+substring matching accounted for 30.9% of viewer and 44.6% of editor search
+samples. These shares are diagnostic; differences between runs do not directly
+measure time saved. Whole-word and Unicode fallback use the scalar matcher
+and were outside this profile set.
 
 ## Baseline before SIMD
 
@@ -85,23 +98,6 @@ to avoid heavy swapping on this 48 GB machine. The viewer remains bounded in
 memory and was measured at 10 GiB. This is an editor storage limitation,
 separate from the search scanner.
 
-### Sampled profiles
-
-`sample` collected 1 ms stack samples during repeated 100 MiB runs, separate
-from the latency measurements. Representative flame graphs are clickable HTML.
-
-| Profile | Flame graph | Main observation |
-| --- | --- | --- |
-| Viewer CI end hit | [HTML](profiles/search-viewer-ci-baseline.html) | 58.0% of search samples in `ASCIILiteralQuery.preparedBlock`; 13.7% in `Data.range(of:)` |
-| Editor CI end hit | [HTML](profiles/search-editor-ci-baseline.html) | 65.9% in block preparation; 17.0% in `Data.range(of:)` |
-| Viewer scan only | [HTML](profiles/search-viewer-scan-baseline.html) | Dominated by `LocalFileContentSource.read` and `Data` copying |
-| Editor scan only | [HTML](profiles/search-editor-scan-baseline.html) | Dominated by `TextRope.content(in:)` and UTF-8 materialization |
-
-These are inclusive sample shares, not exact cycle attribution. The
-case-insensitive ASCII block preparation is the first optimization target.
-Whole-word and Unicode fallback use the scalar matcher; this baseline matrix
-does not claim to measure their speed.
-
 ## Step 1: SIMD block preparation
 
 This is the first implementation step after the baseline above.
@@ -139,20 +135,6 @@ The 10 GiB editor case remains unmeasured for the memory reason described in
 the baseline report. These measurements are warm-cache samples of the
 deterministic fixture, not a broad corpus or cold-disk estimate.
 
-### Post-change profiles
-
-The profiler was run separately from timing, using the same 100 MiB
-case-insensitive end-short query and 1 ms sampling interval. Interactive
-flame graphs: [viewer](profiles/search-viewer-ci-simd.html) and
-[editor](profiles/search-editor-ci-simd.html).
-
-Block preparation fell from 58.0% to 26.2% of inclusive viewer search
-samples, and from 65.9% to 36.2% of editor samples. Foundation byte matching
-and source traversal now have larger shares. The SIMD `any` reduction appears
-as an out-of-line `specialized SIMD<>.min()` call in 8.1% of viewer and 11.5%
-of editor samples. These shares describe samples in each separate profile;
-they cannot be subtracted to obtain exact time saved.
-
 ## Step 2: inline high-bit check
 
 The first SIMD implementation in Step 1 still called an
@@ -185,23 +167,10 @@ one deterministic ASCII corpus, not cold-disk or representative text-corpus
 measurements. The fixture generator checks file size and manifest metadata on
 normal reruns, and writes large files only when missing or explicitly forced.
 
-### Separate profiles
-
-The profiler sampled a separate 100 MiB case-insensitive end-short run at
-1 ms intervals. Interactive flame graphs: [viewer](profiles/search-viewer-ci-bitmask.html)
-and [editor](profiles/search-editor-ci-bitmask.html).
-
-`ASCIILiteralQuery.preparedBlock` accounted for 13.2% of inclusive viewer
-search samples and 16.5% of editor samples, down from 26.2% and 36.2% in the
-first-SIMD profiles. The out-of-line `SIMD.min()` reduction no longer appears.
-Sampling shares from separate runs are diagnostic and do not directly measure
-time saved. The largest remaining sampled costs include file reads and data
-matching in the viewer, and data matching and rope extraction in the editor.
-
 ### Commit sequence
 
 1. Establish the fixture generator, benchmark matrix, scan controls, baseline
-   numbers, and separate flame graphs.
+   numbers, and separate sampling profiles.
 2. Vectorize ASCII validation and folding in 16-byte blocks; run correctness
    checks, the full matrix, and profiles.
 3. Inline the high-bit check; repeat the same checks, matrix, and profiles.
