@@ -1,0 +1,357 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="405" viewBox="0 0 1600 405">
+<rect width="100%" height="100%" fill="#faf8f3"/>
+<style>text{font:12px monospace;pointer-events:none}rect.frame{stroke:white;stroke-width:.4}</style>
+<text x="16" y="25" style="font:bold 19px sans-serif">Commander · 100 MiB viewer scan-only baseline · sampled flame graph</text>
+<text x="16" y="49">3856 samples · 1 ms interval · release · width = inclusive samples</text>
+<text x="16" y="70">This is not a timeline or an allocation graph.</text>
+<g><title>scanViewer(_:size:chunkSize:direction:): 3856 samples (100.00%)</title><rect class="frame" x="16.00" y="375" width="1568.00" height="19" fill="hsl(37,85%,70%)"/>
+<text x="19.00" y="389">scanViewer(_:size:chunkSize:direction:)</text>
+</g>
+<g><title>LocalFileContentSource.read(at:count:): 3803 samples (98.63%)</title><rect class="frame" x="16.00" y="355" width="1546.45" height="19" fill="hsl(3,85%,70%)"/>
+<text x="19.00" y="369">LocalFileContentSource.read(at:count:)</text>
+</g>
+<g><title>Data._Representation.append(contentsOf:): 1959 samples (50.80%)</title><rect class="frame" x="16.00" y="335" width="796.61" height="19" fill="hsl(41,85%,70%)"/>
+<text x="19.00" y="349">Data._Representation.append(contentsOf:)</text>
+</g>
+<g><title>specialized Data._Representation.init(_:): 1957 samples (50.75%)</title><rect class="frame" x="16.00" y="315" width="795.79" height="19" fill="hsl(9,85%,70%)"/>
+<text x="19.00" y="329">specialized Data._Representation.init(_:)</text>
+</g>
+<g><title>__DataStorage.init(bytes:length:): 1954 samples (50.67%)</title><rect class="frame" x="16.00" y="295" width="794.57" height="19" fill="hsl(34,85%,70%)"/>
+<text x="19.00" y="309">__DataStorage.init(bytes:length:)</text>
+</g>
+<g><title>specialized static __DataStorage.move(_:_:_:): 1935 samples (50.18%)</title><rect class="frame" x="16.00" y="275" width="786.85" height="19" fill="hsl(10,85%,70%)"/>
+<text x="19.00" y="289">specialized static __DataStorage.move(_:_:_:)</text>
+</g>
+<g><title>vm_copy: 1934 samples (50.16%)</title><rect class="frame" x="16.00" y="255" width="786.44" height="19" fill="hsl(29,85%,70%)"/>
+<text x="19.00" y="269">vm_copy</text>
+</g>
+<g><title>mach_msg2_internal: 1933 samples (50.13%)</title><rect class="frame" x="16.00" y="235" width="786.03" height="19" fill="hsl(44,85%,70%)"/>
+<text x="19.00" y="249">mach_msg2_internal</text>
+</g>
+<g><title>mach_msg2_trap: 1931 samples (50.08%)</title><rect class="frame" x="16.00" y="215" width="785.22" height="19" fill="hsl(42,85%,70%)"/>
+<text x="19.00" y="229">mach_msg2_trap</text>
+</g>
+<g><title>mach_msg2_internal: 1 samples (0.03%)</title><rect class="frame" x="802.44" y="255" width="0.41" height="19" fill="hsl(44,85%,70%)"/>
+</g>
+<g><title>_xzm_malloc_large_huge: 14 samples (0.36%)</title><rect class="frame" x="802.85" y="275" width="5.69" height="19" fill="hsl(35,85%,70%)"/>
+</g>
+<g><title>xzm_segment_group_alloc_chunk: 12 samples (0.31%)</title><rect class="frame" x="802.85" y="255" width="4.88" height="19" fill="hsl(8,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_find_and_allocate_chunk: 10 samples (0.26%)</title><rect class="frame" x="802.85" y="235" width="4.07" height="19" fill="hsl(27,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_span_mark_smaller: 5 samples (0.13%)</title><rect class="frame" x="802.85" y="215" width="2.03" height="19" fill="hsl(41,85%,70%)"/>
+</g>
+<g><title>_xzm_reclaim_mark_used_locked: 4 samples (0.10%)</title><rect class="frame" x="802.85" y="195" width="1.63" height="19" fill="hsl(3,85%,70%)"/>
+</g>
+<g><title>mach_vm_reclaim_try_cancel: 3 samples (0.08%)</title><rect class="frame" x="802.85" y="175" width="1.22" height="19" fill="hsl(25,85%,70%)"/>
+</g>
+<g><title>mach_absolute_time: 3 samples (0.08%)</title><rect class="frame" x="802.85" y="155" width="1.22" height="19" fill="hsl(49,85%,70%)"/>
+</g>
+<g><title>DYLD-STUB$$mach_vm_reclaim_try_cancel: 1 samples (0.03%)</title><rect class="frame" x="804.07" y="175" width="0.41" height="19" fill="hsl(20,85%,70%)"/>
+</g>
+<g><title>xzm_reclaim_mark_free_locked: 1 samples (0.03%)</title><rect class="frame" x="804.47" y="195" width="0.41" height="19" fill="hsl(39,85%,70%)"/>
+</g>
+<g><title>???: 2 samples (0.05%)</title><rect class="frame" x="810.57" y="295" width="0.81" height="19" fill="hsl(44,85%,70%)"/>
+</g>
+<g><title>swift_allocObject: 1 samples (0.03%)</title><rect class="frame" x="811.39" y="295" width="0.41" height="19" fill="hsl(36,85%,70%)"/>
+</g>
+<g><title>???: 1 samples (0.03%)</title><rect class="frame" x="811.39" y="275" width="0.41" height="19" fill="hsl(44,85%,70%)"/>
+</g>
+<g><title>swift_allocObject: 1 samples (0.03%)</title><rect class="frame" x="811.79" y="315" width="0.41" height="19" fill="hsl(36,85%,70%)"/>
+</g>
+<g><title>pread: 1093 samples (28.35%)</title><rect class="frame" x="812.61" y="335" width="444.46" height="19" fill="hsl(37,85%,70%)"/>
+<text x="815.61" y="349">pread</text>
+</g>
+<g><title>specialized Data.init&lt;A&gt;(_:): 326 samples (8.45%)</title><rect class="frame" x="1257.06" y="335" width="132.56" height="19" fill="hsl(17,85%,70%)"/>
+<text x="1260.06" y="349">specialized Data.</text>
+</g>
+<g><title>closure #1 in Data.init&lt;A&gt;(_:): 272 samples (7.05%)</title><rect class="frame" x="1257.06" y="315" width="110.61" height="19" fill="hsl(14,85%,70%)"/>
+<text x="1260.06" y="329">closure #1 in </text>
+</g>
+<g><title>specialized Data.InlineSlice.init(_:): 270 samples (7.00%)</title><rect class="frame" x="1257.06" y="295" width="109.79" height="19" fill="hsl(40,85%,70%)"/>
+<text x="1260.06" y="309">specialized Da</text>
+</g>
+<g><title>__DataStorage.init(bytes:length:): 270 samples (7.00%)</title><rect class="frame" x="1257.06" y="275" width="109.79" height="19" fill="hsl(34,85%,70%)"/>
+<text x="1260.06" y="289">__DataStorage.</text>
+</g>
+<g><title>_platform_memmove: 238 samples (6.17%)</title><rect class="frame" x="1257.06" y="255" width="96.78" height="19" fill="hsl(53,85%,70%)"/>
+<text x="1260.06" y="269">_platform_me</text>
+</g>
+<g><title>_xzm_malloc_large_huge: 28 samples (0.73%)</title><rect class="frame" x="1353.84" y="255" width="11.39" height="19" fill="hsl(35,85%,70%)"/>
+</g>
+<g><title>xzm_segment_group_alloc_chunk: 27 samples (0.70%)</title><rect class="frame" x="1353.84" y="235" width="10.98" height="19" fill="hsl(8,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_find_and_allocate_chunk: 27 samples (0.70%)</title><rect class="frame" x="1353.84" y="215" width="10.98" height="19" fill="hsl(27,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_span_mark_smaller: 17 samples (0.44%)</title><rect class="frame" x="1353.84" y="195" width="6.91" height="19" fill="hsl(41,85%,70%)"/>
+</g>
+<g><title>_xzm_reclaim_mark_used_locked: 12 samples (0.31%)</title><rect class="frame" x="1353.84" y="175" width="4.88" height="19" fill="hsl(3,85%,70%)"/>
+</g>
+<g><title>mach_vm_reclaim_try_cancel: 12 samples (0.31%)</title><rect class="frame" x="1353.84" y="155" width="4.88" height="19" fill="hsl(25,85%,70%)"/>
+</g>
+<g><title>mach_absolute_time: 11 samples (0.29%)</title><rect class="frame" x="1353.84" y="135" width="4.47" height="19" fill="hsl(49,85%,70%)"/>
+</g>
+<g><title>xzm_reclaim_mark_free_locked: 4 samples (0.10%)</title><rect class="frame" x="1358.72" y="175" width="1.63" height="19" fill="hsl(39,85%,70%)"/>
+</g>
+<g><title>mach_vm_reclaim_try_enter: 4 samples (0.10%)</title><rect class="frame" x="1358.72" y="155" width="1.63" height="19" fill="hsl(34,85%,70%)"/>
+</g>
+<g><title>mach_absolute_time: 4 samples (0.10%)</title><rect class="frame" x="1358.72" y="135" width="1.63" height="19" fill="hsl(49,85%,70%)"/>
+</g>
+<g><title>mach_vm_reclaim_try_cancel: 1 samples (0.03%)</title><rect class="frame" x="1360.35" y="175" width="0.41" height="19" fill="hsl(25,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_segment_span_free: 1 samples (0.03%)</title><rect class="frame" x="1360.76" y="195" width="0.41" height="19" fill="hsl(23,85%,70%)"/>
+</g>
+<g><title>xzm_segment_group_alloc_chunk: 1 samples (0.03%)</title><rect class="frame" x="1365.23" y="255" width="0.41" height="19" fill="hsl(8,85%,70%)"/>
+</g>
+<g><title>swift::RefCounts&lt;swift::RefCountBitsT&lt;(swift::RefCountInlinedness)1&gt;&gt;::doDecrementSlow&lt;(swift::PerformDeinit)1&gt;(swift::RefCountBitsT&lt;(swift::RefCountInlinedness)1&gt;, unsigned int): 47 samples (1.22%)</title><rect class="frame" x="1367.67" y="315" width="19.11" height="19" fill="hsl(37,85%,70%)"/>
+</g>
+<g><title>_swift_release_dealloc: 35 samples (0.91%)</title><rect class="frame" x="1367.67" y="295" width="14.23" height="19" fill="hsl(27,85%,70%)"/>
+</g>
+<g><title>???: 30 samples (0.78%)</title><rect class="frame" x="1367.67" y="275" width="12.20" height="19" fill="hsl(44,85%,70%)"/>
+</g>
+<g><title>swift::RefCounts&lt;swift::RefCountBitsT&lt;(swift::RefCountInlinedness)1&gt;&gt;::doDecrementSlow&lt;(swift::PerformDeinit)1&gt;(swift::RefCountBitsT&lt;(swift::RefCountInlinedness)1&gt;, unsigned int): 29 samples (0.75%)</title><rect class="frame" x="1367.67" y="255" width="11.79" height="19" fill="hsl(37,85%,70%)"/>
+</g>
+<g><title>_swift_release_dealloc: 27 samples (0.70%)</title><rect class="frame" x="1367.67" y="235" width="10.98" height="19" fill="hsl(27,85%,70%)"/>
+</g>
+<g><title>xzm_segment_group_free_chunk: 23 samples (0.60%)</title><rect class="frame" x="1367.67" y="215" width="9.35" height="19" fill="hsl(27,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_segment_span_free_coalesce: 12 samples (0.31%)</title><rect class="frame" x="1367.67" y="195" width="4.88" height="19" fill="hsl(18,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_span_mark_used: 10 samples (0.26%)</title><rect class="frame" x="1367.67" y="175" width="4.07" height="19" fill="hsl(50,85%,70%)"/>
+</g>
+<g><title>_xzm_reclaim_mark_used: 10 samples (0.26%)</title><rect class="frame" x="1367.67" y="155" width="4.07" height="19" fill="hsl(30,85%,70%)"/>
+</g>
+<g><title>_xzm_reclaim_mark_used_locked: 9 samples (0.23%)</title><rect class="frame" x="1367.67" y="135" width="3.66" height="19" fill="hsl(3,85%,70%)"/>
+</g>
+<g><title>mach_vm_reclaim_try_cancel: 8 samples (0.21%)</title><rect class="frame" x="1367.67" y="115" width="3.25" height="19" fill="hsl(25,85%,70%)"/>
+</g>
+<g><title>mach_absolute_time: 7 samples (0.18%)</title><rect class="frame" x="1367.67" y="95" width="2.85" height="19" fill="hsl(49,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_segment_span_free: 1 samples (0.03%)</title><rect class="frame" x="1371.73" y="175" width="0.41" height="19" fill="hsl(23,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_span_mark_free: 7 samples (0.18%)</title><rect class="frame" x="1372.55" y="195" width="2.85" height="19" fill="hsl(37,85%,70%)"/>
+</g>
+<g><title>_xzm_reclaim_mark_free: 6 samples (0.16%)</title><rect class="frame" x="1372.55" y="175" width="2.44" height="19" fill="hsl(9,85%,70%)"/>
+</g>
+<g><title>xzm_reclaim_mark_free_locked: 5 samples (0.13%)</title><rect class="frame" x="1372.55" y="155" width="2.03" height="19" fill="hsl(39,85%,70%)"/>
+</g>
+<g><title>mach_vm_reclaim_try_enter: 5 samples (0.13%)</title><rect class="frame" x="1372.55" y="135" width="2.03" height="19" fill="hsl(34,85%,70%)"/>
+</g>
+<g><title>mach_absolute_time: 4 samples (0.10%)</title><rect class="frame" x="1372.55" y="115" width="1.63" height="19" fill="hsl(49,85%,70%)"/>
+</g>
+<g><title>_ContiguousArrayStorage.__deallocating_deinit: 3 samples (0.08%)</title><rect class="frame" x="1377.02" y="215" width="1.22" height="19" fill="hsl(37,85%,70%)"/>
+</g>
+<g><title>swift_arrayDestroy: 1 samples (0.03%)</title><rect class="frame" x="1377.02" y="195" width="0.41" height="19" fill="hsl(51,85%,70%)"/>
+</g>
+<g><title>_xzm_free_main: 1 samples (0.03%)</title><rect class="frame" x="1378.24" y="215" width="0.41" height="19" fill="hsl(12,85%,70%)"/>
+</g>
+<g><title>???: 1 samples (0.03%)</title><rect class="frame" x="1378.65" y="235" width="0.41" height="19" fill="hsl(44,85%,70%)"/>
+</g>
+<g><title>_xzm_free_main: 1 samples (0.03%)</title><rect class="frame" x="1379.05" y="235" width="0.41" height="19" fill="hsl(12,85%,70%)"/>
+</g>
+<g><title>swift_unknownObjectRelease: 1 samples (0.03%)</title><rect class="frame" x="1379.46" y="255" width="0.41" height="19" fill="hsl(27,85%,70%)"/>
+</g>
+<g><title>_free: 2 samples (0.05%)</title><rect class="frame" x="1379.87" y="275" width="0.81" height="19" fill="hsl(36,85%,70%)"/>
+</g>
+<g><title>_xzm_free_main: 2 samples (0.05%)</title><rect class="frame" x="1380.68" y="275" width="0.81" height="19" fill="hsl(12,85%,70%)"/>
+</g>
+<g><title>mach_absolute_time: 1 samples (0.03%)</title><rect class="frame" x="1380.68" y="255" width="0.41" height="19" fill="hsl(49,85%,70%)"/>
+</g>
+<g><title>swift_allocObject: 3 samples (0.08%)</title><rect class="frame" x="1386.78" y="315" width="1.22" height="19" fill="hsl(36,85%,70%)"/>
+</g>
+<g><title>swift::swift_slowAllocTyped(unsigned long, unsigned long, unsigned long long): 2 samples (0.05%)</title><rect class="frame" x="1386.78" y="295" width="0.81" height="19" fill="hsl(6,85%,70%)"/>
+</g>
+<g><title>_xzm_xzone_malloc_tiny: 2 samples (0.05%)</title><rect class="frame" x="1386.78" y="275" width="0.81" height="19" fill="hsl(26,85%,70%)"/>
+</g>
+<g><title>__swift_instantiateConcreteTypeFromMangledNameV2: 2 samples (0.05%)</title><rect class="frame" x="1388.00" y="315" width="0.81" height="19" fill="hsl(30,85%,70%)"/>
+</g>
+<g><title>&lt;deduplicated_symbol&gt;: 1 samples (0.03%)</title><rect class="frame" x="1388.81" y="315" width="0.41" height="19" fill="hsl(46,85%,70%)"/>
+</g>
+<g><title>__bzero: 209 samples (5.42%)</title><rect class="frame" x="1389.63" y="335" width="84.99" height="19" fill="hsl(5,85%,70%)"/>
+<text x="1392.63" y="349">__bzero</text>
+</g>
+<g><title>LocalFileContentSource.metadata(): 125 samples (3.24%)</title><rect class="frame" x="1474.61" y="335" width="50.83" height="19" fill="hsl(16,85%,70%)"/>
+<text x="1477.61" y="349">LocalF</text>
+</g>
+<g><title>fstat: 120 samples (3.11%)</title><rect class="frame" x="1474.61" y="315" width="48.80" height="19" fill="hsl(38,85%,70%)"/>
+<text x="1477.61" y="329">fstat</text>
+</g>
+<g><title>static Task&lt;&gt;.checkCancellation(): 4 samples (0.10%)</title><rect class="frame" x="1523.41" y="315" width="1.63" height="19" fill="hsl(17,85%,70%)"/>
+</g>
+<g><title>swift_retain: 2 samples (0.05%)</title><rect class="frame" x="1523.41" y="295" width="0.81" height="19" fill="hsl(37,85%,70%)"/>
+</g>
+<g><title>__isPlatformOrVariantPlatformVersionAtLeast: 1 samples (0.03%)</title><rect class="frame" x="1524.22" y="295" width="0.41" height="19" fill="hsl(39,85%,70%)"/>
+</g>
+<g><title>_availability_version_check: 1 samples (0.03%)</title><rect class="frame" x="1524.22" y="275" width="0.41" height="19" fill="hsl(9,85%,70%)"/>
+</g>
+<g><title>DYLD-STUB$$static Task&lt;&gt;.checkCancellation(): 1 samples (0.03%)</title><rect class="frame" x="1525.04" y="315" width="0.41" height="19" fill="hsl(24,85%,70%)"/>
+</g>
+<g><title>_ContiguousArrayBuffer.init(_uninitializedCount:minimumCapacity:): 54 samples (1.40%)</title><rect class="frame" x="1525.44" y="335" width="21.96" height="19" fill="hsl(7,85%,70%)"/>
+</g>
+<g><title>swift_allocObject: 31 samples (0.80%)</title><rect class="frame" x="1525.44" y="315" width="12.61" height="19" fill="hsl(36,85%,70%)"/>
+</g>
+<g><title>swift::swift_slowAllocTyped(unsigned long, unsigned long, unsigned long long): 31 samples (0.80%)</title><rect class="frame" x="1525.44" y="295" width="12.61" height="19" fill="hsl(6,85%,70%)"/>
+</g>
+<g><title>_xzm_malloc_large_huge: 29 samples (0.75%)</title><rect class="frame" x="1525.44" y="275" width="11.79" height="19" fill="hsl(35,85%,70%)"/>
+</g>
+<g><title>xzm_segment_group_alloc_chunk: 28 samples (0.73%)</title><rect class="frame" x="1525.44" y="255" width="11.39" height="19" fill="hsl(8,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_find_and_allocate_chunk: 26 samples (0.67%)</title><rect class="frame" x="1525.44" y="235" width="10.57" height="19" fill="hsl(27,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_span_mark_smaller: 22 samples (0.57%)</title><rect class="frame" x="1525.44" y="215" width="8.95" height="19" fill="hsl(41,85%,70%)"/>
+</g>
+<g><title>_xzm_reclaim_mark_used_locked: 18 samples (0.47%)</title><rect class="frame" x="1525.44" y="195" width="7.32" height="19" fill="hsl(3,85%,70%)"/>
+</g>
+<g><title>mach_vm_reclaim_try_cancel: 16 samples (0.41%)</title><rect class="frame" x="1525.44" y="175" width="6.51" height="19" fill="hsl(25,85%,70%)"/>
+</g>
+<g><title>mach_absolute_time: 13 samples (0.34%)</title><rect class="frame" x="1525.44" y="155" width="5.29" height="19" fill="hsl(49,85%,70%)"/>
+</g>
+<g><title>DYLD-STUB$$mach_vm_reclaim_try_cancel: 2 samples (0.05%)</title><rect class="frame" x="1531.95" y="175" width="0.81" height="19" fill="hsl(20,85%,70%)"/>
+</g>
+<g><title>xzm_reclaim_mark_free_locked: 2 samples (0.05%)</title><rect class="frame" x="1532.76" y="195" width="0.81" height="19" fill="hsl(39,85%,70%)"/>
+</g>
+<g><title>mach_vm_reclaim_try_enter: 2 samples (0.05%)</title><rect class="frame" x="1532.76" y="175" width="0.81" height="19" fill="hsl(34,85%,70%)"/>
+</g>
+<g><title>mach_absolute_time: 2 samples (0.05%)</title><rect class="frame" x="1532.76" y="155" width="0.81" height="19" fill="hsl(49,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_segment_span_mark_allocated: 1 samples (0.03%)</title><rect class="frame" x="1534.39" y="215" width="0.41" height="19" fill="hsl(18,85%,70%)"/>
+</g>
+<g><title>malloc_type_malloc: 1 samples (0.03%)</title><rect class="frame" x="1537.24" y="275" width="0.41" height="19" fill="hsl(50,85%,70%)"/>
+</g>
+<g><title>__swift_instantiateCanonicalPrespecializedGenericMetadata: 18 samples (0.47%)</title><rect class="frame" x="1538.05" y="315" width="7.32" height="19" fill="hsl(41,85%,70%)"/>
+</g>
+<g><title>_swift_getGenericMetadata(swift::MetadataRequest, void const* const*, swift::TargetTypeContextDescriptor&lt;swift::InProcess&gt; const*): 16 samples (0.41%)</title><rect class="frame" x="1538.05" y="295" width="6.51" height="19" fill="hsl(31,85%,70%)"/>
+</g>
+<g><title>swift::LockingConcurrentMap&lt;swift::GenericCacheEntry, swift::LockingConcurrentMapStorage&lt;swift::GenericCacheEntry, (unsigned short)14&gt;&gt;::getOrInsert&lt;swift::MetadataCacheKey, swift::MetadataRequest&amp;, swift::TargetTypeContextDescriptor&lt;swift::InProcess&gt; const*&amp;, void const* const*&amp;&gt;(swift::MetadataCacheKey, swift::MetadataRequest&amp;, swift::TargetTypeContextDescriptor&lt;swift::InProcess&gt; const*&amp;, void const* const*&amp;): 9 samples (0.23%)</title><rect class="frame" x="1538.05" y="275" width="3.66" height="19" fill="hsl(27,85%,70%)"/>
+</g>
+<g><title>swift::StableAddressConcurrentReadableHashMap&lt;swift::GenericCacheEntry, swift::TaggedMetadataAllocator&lt;(unsigned short)14&gt;, swift::Mutex&gt;::getOrInsert&lt;swift::MetadataCacheKey, swift::MetadataWaitQueue::Worker&amp;, swift::MetadataRequest&amp;, swift::TargetTypeContextDescriptor&lt;swift::InProcess&gt; const*&amp;, void const* const*&amp;&gt;(swift::MetadataCacheKey, swift::MetadataWaitQueue::Worker&amp;, swift::MetadataRequest&amp;, swift::TargetTypeContextDescriptor&lt;swift::InProcess&gt; const*&amp;, void const* const*&amp;): 6 samples (0.16%)</title><rect class="frame" x="1538.05" y="255" width="2.44" height="19" fill="hsl(41,85%,70%)"/>
+</g>
+<g><title>swift::MetadataCacheKey::operator==(swift::MetadataCacheKey const&amp;) const: 5 samples (0.13%)</title><rect class="frame" x="1538.05" y="235" width="2.03" height="19" fill="hsl(27,85%,70%)"/>
+</g>
+<g><title>swift::MetadataCacheKey::operator==(swift::MetadataCacheKey const&amp;) const: 1 samples (0.03%)</title><rect class="frame" x="1538.05" y="215" width="0.41" height="19" fill="hsl(27,85%,70%)"/>
+</g>
+<g><title>???: 1 samples (0.03%)</title><rect class="frame" x="1540.08" y="235" width="0.41" height="19" fill="hsl(44,85%,70%)"/>
+</g>
+<g><title>swift::MetadataCacheEntryBase&lt;swift::GenericCacheEntry, void const*&gt;::awaitSatisfyingState(swift::ConcurrencyControl&amp;, swift::MetadataRequest): 1 samples (0.03%)</title><rect class="frame" x="1540.49" y="255" width="0.41" height="19" fill="hsl(52,85%,70%)"/>
+</g>
+<g><title>getCache(swift::TargetTypeContextDescriptor&lt;swift::InProcess&gt; const&amp;): 7 samples (0.18%)</title><rect class="frame" x="1541.71" y="275" width="2.85" height="19" fill="hsl(5,85%,70%)"/>
+</g>
+<g><title>swift::TargetContextDescriptor&lt;swift::InProcess&gt;::getGenericContext() const: 3 samples (0.08%)</title><rect class="frame" x="1541.71" y="255" width="1.22" height="19" fill="hsl(45,85%,70%)"/>
+</g>
+<g><title>swift_getCanonicalPrespecializedGenericMetadata: 2 samples (0.05%)</title><rect class="frame" x="1544.56" y="295" width="0.81" height="19" fill="hsl(42,85%,70%)"/>
+</g>
+<g><title>__isPlatformOrVariantPlatformVersionAtLeast: 4 samples (0.10%)</title><rect class="frame" x="1545.37" y="315" width="1.63" height="19" fill="hsl(39,85%,70%)"/>
+</g>
+<g><title>_availability_version_check: 1 samples (0.03%)</title><rect class="frame" x="1545.37" y="295" width="0.41" height="19" fill="hsl(9,85%,70%)"/>
+</g>
+<g><title>malloc_size: 1 samples (0.03%)</title><rect class="frame" x="1547.00" y="315" width="0.41" height="19" fill="hsl(45,85%,70%)"/>
+</g>
+<g><title>static Task&lt;&gt;.checkCancellation(): 20 samples (0.52%)</title><rect class="frame" x="1547.40" y="335" width="8.13" height="19" fill="hsl(17,85%,70%)"/>
+</g>
+<g><title>__isPlatformOrVariantPlatformVersionAtLeast: 11 samples (0.29%)</title><rect class="frame" x="1547.40" y="315" width="4.47" height="19" fill="hsl(39,85%,70%)"/>
+</g>
+<g><title>_availability_version_check: 9 samples (0.23%)</title><rect class="frame" x="1547.40" y="295" width="3.66" height="19" fill="hsl(9,85%,70%)"/>
+</g>
+<g><title>dispatch_once_f: 1 samples (0.03%)</title><rect class="frame" x="1551.06" y="295" width="0.41" height="19" fill="hsl(16,85%,70%)"/>
+</g>
+<g><title>swift_release: 5 samples (0.13%)</title><rect class="frame" x="1551.88" y="315" width="2.03" height="19" fill="hsl(52,85%,70%)"/>
+</g>
+<g><title>_stdlib_isOSVersionAtLeastOrVariantVersionAtLeast(_:_:_:_:_:_:): 2 samples (0.05%)</title><rect class="frame" x="1553.91" y="315" width="0.81" height="19" fill="hsl(52,85%,70%)"/>
+</g>
+<g><title>__isPlatformOrVariantPlatformVersionAtLeast: 1 samples (0.03%)</title><rect class="frame" x="1553.91" y="295" width="0.41" height="19" fill="hsl(39,85%,70%)"/>
+</g>
+<g><title>???: 1 samples (0.03%)</title><rect class="frame" x="1554.72" y="315" width="0.41" height="19" fill="hsl(44,85%,70%)"/>
+</g>
+<g><title>swift::RefCounts&lt;swift::RefCountBitsT&lt;(swift::RefCountInlinedness)1&gt;&gt;::doDecrementSlow&lt;(swift::PerformDeinit)1&gt;(swift::RefCountBitsT&lt;(swift::RefCountInlinedness)1&gt;, unsigned int): 11 samples (0.29%)</title><rect class="frame" x="1555.54" y="335" width="4.47" height="19" fill="hsl(37,85%,70%)"/>
+</g>
+<g><title>_swift_release_dealloc: 11 samples (0.29%)</title><rect class="frame" x="1555.54" y="315" width="4.47" height="19" fill="hsl(27,85%,70%)"/>
+</g>
+<g><title>__DataStorage.__deallocating_deinit: 11 samples (0.29%)</title><rect class="frame" x="1555.54" y="295" width="4.47" height="19" fill="hsl(30,85%,70%)"/>
+</g>
+<g><title>xzm_segment_group_free_chunk: 10 samples (0.26%)</title><rect class="frame" x="1555.54" y="275" width="4.07" height="19" fill="hsl(27,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_segment_span_free_coalesce: 6 samples (0.16%)</title><rect class="frame" x="1555.54" y="255" width="2.44" height="19" fill="hsl(18,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_span_mark_used: 4 samples (0.10%)</title><rect class="frame" x="1555.54" y="235" width="1.63" height="19" fill="hsl(50,85%,70%)"/>
+</g>
+<g><title>_xzm_reclaim_mark_used: 3 samples (0.08%)</title><rect class="frame" x="1555.54" y="215" width="1.22" height="19" fill="hsl(30,85%,70%)"/>
+</g>
+<g><title>_xzm_reclaim_mark_used_locked: 3 samples (0.08%)</title><rect class="frame" x="1555.54" y="195" width="1.22" height="19" fill="hsl(3,85%,70%)"/>
+</g>
+<g><title>mach_vm_reclaim_try_cancel: 3 samples (0.08%)</title><rect class="frame" x="1555.54" y="175" width="1.22" height="19" fill="hsl(25,85%,70%)"/>
+</g>
+<g><title>mach_absolute_time: 3 samples (0.08%)</title><rect class="frame" x="1555.54" y="155" width="1.22" height="19" fill="hsl(49,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_span_mark_free: 4 samples (0.10%)</title><rect class="frame" x="1557.98" y="255" width="1.63" height="19" fill="hsl(37,85%,70%)"/>
+</g>
+<g><title>_xzm_reclaim_mark_free: 3 samples (0.08%)</title><rect class="frame" x="1557.98" y="235" width="1.22" height="19" fill="hsl(9,85%,70%)"/>
+</g>
+<g><title>xzm_reclaim_mark_free_locked: 3 samples (0.08%)</title><rect class="frame" x="1557.98" y="215" width="1.22" height="19" fill="hsl(39,85%,70%)"/>
+</g>
+<g><title>mach_vm_reclaim_try_enter: 3 samples (0.08%)</title><rect class="frame" x="1557.98" y="195" width="1.22" height="19" fill="hsl(34,85%,70%)"/>
+</g>
+<g><title>mach_absolute_time: 3 samples (0.08%)</title><rect class="frame" x="1557.98" y="175" width="1.22" height="19" fill="hsl(49,85%,70%)"/>
+</g>
+<g><title>DYLD-STUB$$static Task&lt;&gt;.checkCancellation(): 1 samples (0.03%)</title><rect class="frame" x="1560.01" y="335" width="0.41" height="19" fill="hsl(24,85%,70%)"/>
+</g>
+<g><title>Data._Representation.subscript.getter: 1 samples (0.03%)</title><rect class="frame" x="1560.41" y="335" width="0.41" height="19" fill="hsl(40,85%,70%)"/>
+</g>
+<g><title>swift_retain: 1 samples (0.03%)</title><rect class="frame" x="1560.41" y="315" width="0.41" height="19" fill="hsl(37,85%,70%)"/>
+</g>
+<g><title>Data.append(_:): 1 samples (0.03%)</title><rect class="frame" x="1560.82" y="335" width="0.41" height="19" fill="hsl(48,85%,70%)"/>
+</g>
+<g><title>_stdlib_isOSVersionAtLeastOrVariantVersionAtLeast(_:_:_:_:_:_:): 1 samples (0.03%)</title><rect class="frame" x="1561.23" y="335" width="0.41" height="19" fill="hsl(52,85%,70%)"/>
+</g>
+<g><title>static Array._allocateBufferUninitialized(minimumCapacity:): 1 samples (0.03%)</title><rect class="frame" x="1561.63" y="335" width="0.41" height="19" fill="hsl(39,85%,70%)"/>
+</g>
+<g><title>swift_retain: 1 samples (0.03%)</title><rect class="frame" x="1562.04" y="335" width="0.41" height="19" fill="hsl(37,85%,70%)"/>
+</g>
+<g><title>swift::RefCounts&lt;swift::RefCountBitsT&lt;(swift::RefCountInlinedness)1&gt;&gt;::doDecrementSlow&lt;(swift::PerformDeinit)1&gt;(swift::RefCountBitsT&lt;(swift::RefCountInlinedness)1&gt;, unsigned int): 39 samples (1.01%)</title><rect class="frame" x="1562.45" y="355" width="15.86" height="19" fill="hsl(37,85%,70%)"/>
+</g>
+<g><title>_swift_release_dealloc: 38 samples (0.99%)</title><rect class="frame" x="1562.45" y="335" width="15.45" height="19" fill="hsl(27,85%,70%)"/>
+</g>
+<g><title>__DataStorage.__deallocating_deinit: 37 samples (0.96%)</title><rect class="frame" x="1562.45" y="315" width="15.05" height="19" fill="hsl(30,85%,70%)"/>
+</g>
+<g><title>xzm_segment_group_free_chunk: 31 samples (0.80%)</title><rect class="frame" x="1562.45" y="295" width="12.61" height="19" fill="hsl(27,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_segment_span_free_coalesce: 18 samples (0.47%)</title><rect class="frame" x="1562.45" y="275" width="7.32" height="19" fill="hsl(18,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_span_mark_used: 8 samples (0.21%)</title><rect class="frame" x="1562.45" y="255" width="3.25" height="19" fill="hsl(50,85%,70%)"/>
+</g>
+<g><title>_xzm_reclaim_mark_used: 8 samples (0.21%)</title><rect class="frame" x="1562.45" y="235" width="3.25" height="19" fill="hsl(30,85%,70%)"/>
+</g>
+<g><title>_xzm_reclaim_mark_used_locked: 8 samples (0.21%)</title><rect class="frame" x="1562.45" y="215" width="3.25" height="19" fill="hsl(3,85%,70%)"/>
+</g>
+<g><title>mach_vm_reclaim_try_cancel: 8 samples (0.21%)</title><rect class="frame" x="1562.45" y="195" width="3.25" height="19" fill="hsl(25,85%,70%)"/>
+</g>
+<g><title>mach_absolute_time: 8 samples (0.21%)</title><rect class="frame" x="1562.45" y="175" width="3.25" height="19" fill="hsl(49,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_segment_span_free: 1 samples (0.03%)</title><rect class="frame" x="1565.70" y="255" width="0.41" height="19" fill="hsl(23,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_span_mark_free: 9 samples (0.23%)</title><rect class="frame" x="1569.77" y="275" width="3.66" height="19" fill="hsl(37,85%,70%)"/>
+</g>
+<g><title>_xzm_reclaim_mark_free: 8 samples (0.21%)</title><rect class="frame" x="1569.77" y="255" width="3.25" height="19" fill="hsl(9,85%,70%)"/>
+</g>
+<g><title>xzm_reclaim_mark_free_locked: 8 samples (0.21%)</title><rect class="frame" x="1569.77" y="235" width="3.25" height="19" fill="hsl(39,85%,70%)"/>
+</g>
+<g><title>mach_vm_reclaim_try_enter: 8 samples (0.21%)</title><rect class="frame" x="1569.77" y="215" width="3.25" height="19" fill="hsl(34,85%,70%)"/>
+</g>
+<g><title>mach_absolute_time: 7 samples (0.18%)</title><rect class="frame" x="1569.77" y="195" width="2.85" height="19" fill="hsl(49,85%,70%)"/>
+</g>
+<g><title>_xzm_free_large_huge: 3 samples (0.08%)</title><rect class="frame" x="1575.05" y="295" width="1.22" height="19" fill="hsl(18,85%,70%)"/>
+</g>
+<g><title>_free: 2 samples (0.05%)</title><rect class="frame" x="1576.27" y="295" width="0.81" height="19" fill="hsl(36,85%,70%)"/>
+</g>
+<g><title>_xzm_segment_group_segment_span_free_coalesce: 1 samples (0.03%)</title><rect class="frame" x="1577.09" y="295" width="0.41" height="19" fill="hsl(18,85%,70%)"/>
+</g>
+<g><title>_xzm_free_main: 1 samples (0.03%)</title><rect class="frame" x="1577.49" y="315" width="0.41" height="19" fill="hsl(12,85%,70%)"/>
+</g>
+<g><title>__DataStorage._bytes.getter: 2 samples (0.05%)</title><rect class="frame" x="1578.31" y="355" width="0.81" height="19" fill="hsl(27,85%,70%)"/>
+</g>
+<g><title>swift_release: 2 samples (0.05%)</title><rect class="frame" x="1579.12" y="355" width="0.81" height="19" fill="hsl(52,85%,70%)"/>
+</g>
+<g><title>DYLD-STUB$$__DataStorage._bytes.getter: 1 samples (0.03%)</title><rect class="frame" x="1579.93" y="355" width="0.41" height="19" fill="hsl(0,85%,70%)"/>
+</g>
+<g><title>Data._Representation.subscript.getter: 1 samples (0.03%)</title><rect class="frame" x="1580.34" y="355" width="0.41" height="19" fill="hsl(40,85%,70%)"/>
+</g>
+</svg>

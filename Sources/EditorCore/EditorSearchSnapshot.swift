@@ -31,6 +31,38 @@ public struct EditorSearchSnapshot: Sendable {
         self.length = buffer.range.length
     }
 
+    /// A search-free read control for performance measurements. It follows the
+    /// ASCII search path's rope slices and UTF-8 materialization, omitting only
+    /// query preparation and matching. The checksum samples block boundaries
+    /// so it does not add a second byte-by-byte pass.
+    @_spi(Benchmark)
+    @inline(never)
+    public func scanBlocks(direction: SearchDirection, chunkSize: Int = 65_536) -> (units: Int, checksum: UInt64) {
+        precondition(chunkSize > 0)
+        var cursor = direction == .forward ? 0 : length
+        var units = 0
+        var checksum: UInt64 = 0xcbf29ce484222325
+        while direction == .forward ? cursor < length : cursor > 0 {
+            let start: Int
+            let end: Int
+            if direction == .forward {
+                start = cursor
+                end = forwardChunkEnd(from: cursor, target: cursor + min(chunkSize, length - cursor))
+            } else {
+                start = reverseChunkStart(to: cursor, target: cursor - min(chunkSize, cursor))
+                end = cursor
+            }
+            let bytes = Data(buffer.rope.content(in: start..<end).utf8)
+            if let first = bytes.first, let last = bytes.last {
+                checksum = (checksum &* 0x100000001b3) ^ UInt64(first)
+                    ^ (UInt64(last) << 8) ^ UInt64(bytes.count)
+            }
+            units += end - start
+            cursor = direction == .forward ? end : start
+        }
+        return (units, checksum)
+    }
+
     /// The anchor is an inclusive match-start offset. Navigation advances it
     /// by one UTF-16 unit to find overlapping matches. There is no wrap here.
     public func search(

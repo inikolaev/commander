@@ -1,0 +1,1402 @@
+{
+  "name": "EditorSearchSnapshot.scanBlocks(direction:chunkSize:)",
+  "count": 3994,
+  "children": [
+    {
+      "name": "TextRope.content(in:)",
+      "count": 3120,
+      "children": [
+        {
+          "name": "specialized collect #1 (_:) in TextRope.content(in:)",
+          "count": 3104,
+          "children": [
+            {
+              "name": "specialized collect #1 (_:) in TextRope.content(in:)",
+              "count": 3086,
+              "children": [
+                {
+                  "name": "specialized collect #1 (_:) in TextRope.content(in:)",
+                  "count": 3059,
+                  "children": [
+                    {
+                      "name": "specialized collect #1 (_:) in TextRope.content(in:)",
+                      "count": 2984,
+                      "children": [
+                        {
+                          "name": "specialized collect #1 (_:) in TextRope.content(in:)",
+                          "count": 2948,
+                          "children": [
+                            {
+                              "name": "specialized collect #1 (_:) in TextRope.content(in:)",
+                              "count": 2877,
+                              "children": [
+                                {
+                                  "name": "specialized collect #1 (_:) in TextRope.content(in:)",
+                                  "count": 2605,
+                                  "children": [
+                                    {
+                                      "name": "_StringGuts.append(_:)",
+                                      "count": 1865,
+                                      "children": [
+                                        {
+                                          "name": "_StringGuts.prepareForAppendInPlace(totalCount:otherUTF8Count:)",
+                                          "count": 1295,
+                                          "children": [
+                                            {
+                                              "name": "_platform_memmove",
+                                              "count": 895,
+                                              "children": []
+                                            },
+                                            {
+                                              "name": "_allocateStringStorage(codeUnitCapacity:precalculatedUTF16Count:)",
+                                              "count": 177,
+                                              "children": [
+                                                {
+                                                  "name": "swift_allocObject",
+                                                  "count": 139,
+                                                  "children": [
+                                                    {
+                                                      "name": "swift::swift_slowAllocTyped(unsigned long, unsigned long, unsigned long long)",
+                                                      "count": 138,
+                                                      "children": [
+                                                        {
+                                                          "name": "_xzm_malloc_large_huge",
+                                                          "count": 105,
+                                                          "children": [
+                                                            {
+                                                              "name": "xzm_segment_group_alloc_chunk",
+                                                              "count": 100,
+                                                              "children": [
+                                                                {
+                                                                  "name": "_xzm_segment_group_find_and_allocate_chunk",
+                                                                  "count": 97,
+                                                                  "children": [
+                                                                    {
+                                                                      "name": "_xzm_segment_group_span_mark_smaller",
+                                                                      "count": 72,
+                                                                      "children": [
+                                                                        {
+                                                                          "name": "_xzm_reclaim_mark_used_locked",
+                                                                          "count": 42,
+                                                                          "children": [
+                                                                            {
+                                                                              "name": "mach_vm_reclaim_try_cancel",
+                                                                              "count": 41,
+                                                                              "children": [
+                                                                                {
+                                                                                  "name": "mach_absolute_time",
+                                                                                  "count": 36,
+                                                                                  "children": []
+                                                                                }
+                                                                              ]
+                                                                            }
+                                                                          ]
+                                                                        },
+                                                                        {
+                                                                          "name": "xzm_reclaim_mark_free_locked",
+                                                                          "count": 25,
+                                                                          "children": [
+                                                                            {
+                                                                              "name": "mach_vm_reclaim_try_enter",
+                                                                              "count": 24,
+                                                                              "children": [
+                                                                                {
+                                                                                  "name": "mach_absolute_time",
+                                                                                  "count": 15,
+                                                                                  "children": []
+                                                                                }
+                                                                              ]
+                                                                            }
+                                                                          ]
+                                                                        }
+                                                                      ]
+                                                                    },
+                                                                    {
+                                                                      "name": "_xzm_segment_group_segment_span_mark_allocated",
+                                                                      "count": 1,
+                                                                      "children": []
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "name": "_xzm_xzone_malloc_small_freelist",
+                                                          "count": 14,
+                                                          "children": []
+                                                        },
+                                                        {
+                                                          "name": "<deduplicated_symbol>",
+                                                          "count": 10,
+                                                          "children": []
+                                                        },
+                                                        {
+                                                          "name": "malloc_type_malloc",
+                                                          "count": 3,
+                                                          "children": []
+                                                        },
+                                                        {
+                                                          "name": "xzm_segment_group_alloc_chunk",
+                                                          "count": 1,
+                                                          "children": []
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "name": "???",
+                                                      "count": 1,
+                                                      "children": []
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "name": "malloc_size",
+                                                  "count": 32,
+                                                  "children": [
+                                                    {
+                                                      "name": "xzm_malloc_zone_size",
+                                                      "count": 24,
+                                                      "children": []
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "name": "???",
+                                                  "count": 2,
+                                                  "children": []
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "name": "swift::RefCounts<swift::RefCountBitsT<(swift::RefCountInlinedness)1>>::doDecrementSlow<(swift::PerformDeinit)1>(swift::RefCountBitsT<(swift::RefCountInlinedness)1>, unsigned int)",
+                                              "count": 152,
+                                              "children": [
+                                                {
+                                                  "name": "_swift_release_dealloc",
+                                                  "count": 137,
+                                                  "children": [
+                                                    {
+                                                      "name": "_xzm_xzone_free_freelist",
+                                                      "count": 48,
+                                                      "children": [
+                                                        {
+                                                          "name": "mach_absolute_time",
+                                                          "count": 33,
+                                                          "children": []
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "name": "xzm_segment_group_free_chunk",
+                                                      "count": 34,
+                                                      "children": [
+                                                        {
+                                                          "name": "_xzm_segment_group_span_mark_free",
+                                                          "count": 28,
+                                                          "children": [
+                                                            {
+                                                              "name": "_xzm_reclaim_mark_free",
+                                                              "count": 27,
+                                                              "children": [
+                                                                {
+                                                                  "name": "xzm_reclaim_mark_free_locked",
+                                                                  "count": 26,
+                                                                  "children": [
+                                                                    {
+                                                                      "name": "mach_vm_reclaim_try_enter",
+                                                                      "count": 24,
+                                                                      "children": [
+                                                                        {
+                                                                          "name": "mach_absolute_time",
+                                                                          "count": 18,
+                                                                          "children": []
+                                                                        }
+                                                                      ]
+                                                                    }
+                                                                  ]
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        },
+                                                        {
+                                                          "name": "_xzm_segment_group_segment_span_free_coalesce",
+                                                          "count": 3,
+                                                          "children": []
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "name": "_xzm_free_outlined",
+                                                      "count": 28,
+                                                      "children": []
+                                                    },
+                                                    {
+                                                      "name": "__StringStorage.__deallocating_deinit",
+                                                      "count": 12,
+                                                      "children": [
+                                                        {
+                                                          "name": "outlined destroy of (AnyHashable?, AnyHashable?)",
+                                                          "count": 10,
+                                                          "children": [
+                                                            {
+                                                              "name": "__swift_instantiateConcreteTypeFromMangledNameV2",
+                                                              "count": 6,
+                                                              "children": []
+                                                            },
+                                                            {
+                                                              "name": "destroy for ClosedRange<>.Index",
+                                                              "count": 4,
+                                                              "children": [
+                                                                {
+                                                                  "name": "swift::metadataimpl::FixedSizeBufferValueWitnesses<swift::metadataimpl::ValueWitnesses<swift::metadataimpl::SwiftRetainableBox>, true, 8ul, 8ul, true>::getEnumTagSinglePayload(swift::OpaqueValue const*, unsigned int, swift::TargetMetadata<swift::InProcess> const*)",
+                                                                  "count": 1,
+                                                                  "children": []
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    },
+                                                    {
+                                                      "name": "_free",
+                                                      "count": 4,
+                                                      "children": []
+                                                    },
+                                                    {
+                                                      "name": "_xzm_free_large_huge",
+                                                      "count": 3,
+                                                      "children": []
+                                                    },
+                                                    {
+                                                      "name": "_xzm_free_main",
+                                                      "count": 3,
+                                                      "children": []
+                                                    },
+                                                    {
+                                                      "name": "swift_deallocClassInstance",
+                                                      "count": 3,
+                                                      "children": []
+                                                    },
+                                                    {
+                                                      "name": "_xzm_segment_group_segment_span_free_coalesce",
+                                                      "count": 1,
+                                                      "children": []
+                                                    }
+                                                  ]
+                                                },
+                                                {
+                                                  "name": "_xzm_xzone_free_freelist",
+                                                  "count": 5,
+                                                  "children": []
+                                                },
+                                                {
+                                                  "name": "???",
+                                                  "count": 1,
+                                                  "children": []
+                                                },
+                                                {
+                                                  "name": "__StringStorage.__deallocating_deinit",
+                                                  "count": 1,
+                                                  "children": []
+                                                },
+                                                {
+                                                  "name": "_xzm_free_outlined",
+                                                  "count": 1,
+                                                  "children": []
+                                                },
+                                                {
+                                                  "name": "swift_deallocClassInstance",
+                                                  "count": 1,
+                                                  "children": []
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "name": "_StringGuts.nativeUnusedCapacity.getter",
+                                              "count": 13,
+                                              "children": []
+                                            },
+                                            {
+                                              "name": "swift_isUniquelyReferenced_nonNull_native",
+                                              "count": 9,
+                                              "children": []
+                                            },
+                                            {
+                                              "name": "swift_release",
+                                              "count": 6,
+                                              "children": []
+                                            },
+                                            {
+                                              "name": "_StringGuts.nativeCapacity.getter",
+                                              "count": 4,
+                                              "children": []
+                                            },
+                                            {
+                                              "name": "swift_allocObject",
+                                              "count": 3,
+                                              "children": []
+                                            },
+                                            {
+                                              "name": "???",
+                                              "count": 2,
+                                              "children": []
+                                            },
+                                            {
+                                              "name": "specialized UnsafeMutablePointer.initialize(from:count:)",
+                                              "count": 2,
+                                              "children": []
+                                            },
+                                            {
+                                              "name": "_StringGuts.uniqueNativeCapacity.getter",
+                                              "count": 1,
+                                              "children": []
+                                            },
+                                            {
+                                              "name": "_swift_release_dealloc",
+                                              "count": 1,
+                                              "children": []
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "name": "_platform_memmove",
+                                          "count": 437,
+                                          "children": []
+                                        },
+                                        {
+                                          "name": "__StringStorage._updateCountAndFlags(newCount:newIsASCII:)",
+                                          "count": 37,
+                                          "children": []
+                                        },
+                                        {
+                                          "name": "swift_release",
+                                          "count": 18,
+                                          "children": []
+                                        },
+                                        {
+                                          "name": "_StringGuts.nativeUnusedCapacity.getter",
+                                          "count": 8,
+                                          "children": []
+                                        },
+                                        {
+                                          "name": "swift_isUniquelyReferenced_nonNull_native",
+                                          "count": 6,
+                                          "children": []
+                                        },
+                                        {
+                                          "name": "specialized UnsafeMutablePointer.initialize(from:count:)",
+                                          "count": 4,
+                                          "children": []
+                                        },
+                                        {
+                                          "name": "_allocateStringStorage(codeUnitCapacity:precalculatedUTF16Count:)",
+                                          "count": 3,
+                                          "children": []
+                                        },
+                                        {
+                                          "name": "???",
+                                          "count": 2,
+                                          "children": []
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "name": "swift_release",
+                                      "count": 115,
+                                      "children": []
+                                    },
+                                    {
+                                      "name": "swift_beginAccess",
+                                      "count": 90,
+                                      "children": [
+                                        {
+                                          "name": "<deduplicated_symbol>",
+                                          "count": 16,
+                                          "children": []
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "name": "String.subscript.getter",
+                                      "count": 76,
+                                      "children": [
+                                        {
+                                          "name": "_StringGuts.validateScalarRange(_:)",
+                                          "count": 33,
+                                          "children": []
+                                        },
+                                        {
+                                          "name": "swift_retain",
+                                          "count": 30,
+                                          "children": []
+                                        },
+                                        {
+                                          "name": "swift_bridgeObjectRetain",
+                                          "count": 8,
+                                          "children": []
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "name": "String.UTF16View.index(_:offsetBy:)",
+                                      "count": 65,
+                                      "children": []
+                                    },
+                                    {
+                                      "name": "Substring.description.getter",
+                                      "count": 61,
+                                      "children": [
+                                        {
+                                          "name": "swift_retain",
+                                          "count": 20,
+                                          "children": []
+                                        },
+                                        {
+                                          "name": "swift_bridgeObjectRetain",
+                                          "count": 17,
+                                          "children": []
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "name": "swift_retain",
+                                      "count": 56,
+                                      "children": []
+                                    },
+                                    {
+                                      "name": "DefaultStringInterpolation.appendLiteral(_:)",
+                                      "count": 35,
+                                      "children": [
+                                        {
+                                          "name": "swift_bridgeObjectRelease",
+                                          "count": 1,
+                                          "children": []
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "name": "swift_bridgeObjectRelease",
+                                      "count": 33,
+                                      "children": []
+                                    },
+                                    {
+                                      "name": "DYLD-STUB$$swift_bridgeObjectRelease",
+                                      "count": 29,
+                                      "children": []
+                                    },
+                                    {
+                                      "name": "DYLD-STUB$$String.UTF16View.index(_:offsetBy:)",
+                                      "count": 17,
+                                      "children": []
+                                    },
+                                    {
+                                      "name": "<deduplicated_symbol>",
+                                      "count": 16,
+                                      "children": []
+                                    },
+                                    {
+                                      "name": "swift_bridgeObjectRetain",
+                                      "count": 13,
+                                      "children": []
+                                    },
+                                    {
+                                      "name": "DYLD-STUB$$swift_beginAccess",
+                                      "count": 12,
+                                      "children": []
+                                    },
+                                    {
+                                      "name": "DYLD-STUB$$static String._fromSubstring(_:)",
+                                      "count": 9,
+                                      "children": []
+                                    },
+                                    {
+                                      "name": "DYLD-STUB$$swift_bridgeObjectRetain",
+                                      "count": 9,
+                                      "children": []
+                                    },
+                                    {
+                                      "name": "_StringGuts.prepareForAppendInPlace(totalCount:otherUTF8Count:)",
+                                      "count": 5,
+                                      "children": []
+                                    },
+                                    {
+                                      "name": "???",
+                                      "count": 4,
+                                      "children": []
+                                    },
+                                    {
+                                      "name": "DYLD-STUB$$String.subscript.getter",
+                                      "count": 3,
+                                      "children": []
+                                    },
+                                    {
+                                      "name": "specialized UnsafeMutablePointer.initialize(from:count:)",
+                                      "count": 3,
+                                      "children": []
+                                    },
+                                    {
+                                      "name": "DYLD-STUB$$String.append(_:)",
+                                      "count": 2,
+                                      "children": []
+                                    },
+                                    {
+                                      "name": "static String._fromSubstring(_:)",
+                                      "count": 2,
+                                      "children": []
+                                    },
+                                    {
+                                      "name": "specialized static String._copying(_:)",
+                                      "count": 1,
+                                      "children": [
+                                        {
+                                          "name": "_allASCII(_:)",
+                                          "count": 1,
+                                          "children": []
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "name": "swift_beginAccess",
+                                  "count": 59,
+                                  "children": [
+                                    {
+                                      "name": "<deduplicated_symbol>",
+                                      "count": 6,
+                                      "children": []
+                                    }
+                                  ]
+                                },
+                                {
+                                  "name": "swift_retain",
+                                  "count": 29,
+                                  "children": []
+                                },
+                                {
+                                  "name": "_StringGuts.append(_:)",
+                                  "count": 28,
+                                  "children": []
+                                },
+                                {
+                                  "name": "swift_release",
+                                  "count": 26,
+                                  "children": []
+                                },
+                                {
+                                  "name": "DefaultStringInterpolation.appendLiteral(_:)",
+                                  "count": 20,
+                                  "children": []
+                                },
+                                {
+                                  "name": "String.subscript.getter",
+                                  "count": 14,
+                                  "children": []
+                                },
+                                {
+                                  "name": "DYLD-STUB$$swift_release",
+                                  "count": 12,
+                                  "children": []
+                                },
+                                {
+                                  "name": "DYLD-STUB$$swift_retain",
+                                  "count": 10,
+                                  "children": []
+                                },
+                                {
+                                  "name": "DYLD-STUB$$swift_beginAccess",
+                                  "count": 6,
+                                  "children": []
+                                },
+                                {
+                                  "name": "<deduplicated_symbol>",
+                                  "count": 5,
+                                  "children": []
+                                },
+                                {
+                                  "name": "String.UTF16View.index(_:offsetBy:)",
+                                  "count": 1,
+                                  "children": []
+                                }
+                              ]
+                            },
+                            {
+                              "name": "swift_beginAccess",
+                              "count": 26,
+                              "children": [
+                                {
+                                  "name": "<deduplicated_symbol>",
+                                  "count": 5,
+                                  "children": []
+                                }
+                              ]
+                            },
+                            {
+                              "name": "swift_retain",
+                              "count": 13,
+                              "children": []
+                            },
+                            {
+                              "name": "swift_release",
+                              "count": 5,
+                              "children": []
+                            },
+                            {
+                              "name": "DYLD-STUB$$swift_beginAccess",
+                              "count": 3,
+                              "children": []
+                            },
+                            {
+                              "name": "DYLD-STUB$$swift_release",
+                              "count": 3,
+                              "children": []
+                            },
+                            {
+                              "name": "DYLD-STUB$$swift_retain",
+                              "count": 3,
+                              "children": []
+                            },
+                            {
+                              "name": "<deduplicated_symbol>",
+                              "count": 1,
+                              "children": []
+                            }
+                          ]
+                        },
+                        {
+                          "name": "swift_beginAccess",
+                          "count": 6,
+                          "children": []
+                        },
+                        {
+                          "name": "swift_retain",
+                          "count": 5,
+                          "children": []
+                        },
+                        {
+                          "name": "DYLD-STUB$$swift_release",
+                          "count": 4,
+                          "children": []
+                        },
+                        {
+                          "name": "swift_release",
+                          "count": 4,
+                          "children": []
+                        },
+                        {
+                          "name": "DYLD-STUB$$swift_beginAccess",
+                          "count": 3,
+                          "children": []
+                        },
+                        {
+                          "name": "DYLD-STUB$$swift_retain",
+                          "count": 3,
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "name": "swift_beginAccess",
+                      "count": 12,
+                      "children": [
+                        {
+                          "name": "<deduplicated_symbol>",
+                          "count": 2,
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "name": "swift_release",
+                      "count": 12,
+                      "children": []
+                    },
+                    {
+                      "name": "DYLD-STUB$$swift_release",
+                      "count": 3,
+                      "children": []
+                    },
+                    {
+                      "name": "swift_retain",
+                      "count": 3,
+                      "children": []
+                    },
+                    {
+                      "name": "<deduplicated_symbol>",
+                      "count": 1,
+                      "children": []
+                    },
+                    {
+                      "name": "DYLD-STUB$$swift_beginAccess",
+                      "count": 1,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "name": "swift_beginAccess",
+                  "count": 10,
+                  "children": [
+                    {
+                      "name": "<deduplicated_symbol>",
+                      "count": 1,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "name": "swift_retain",
+                  "count": 4,
+                  "children": []
+                },
+                {
+                  "name": "swift_release",
+                  "count": 3,
+                  "children": []
+                },
+                {
+                  "name": "<deduplicated_symbol>",
+                  "count": 2,
+                  "children": []
+                },
+                {
+                  "name": "DYLD-STUB$$swift_release",
+                  "count": 2,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "swift_beginAccess",
+              "count": 9,
+              "children": [
+                {
+                  "name": "<deduplicated_symbol>",
+                  "count": 1,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "swift_retain",
+              "count": 2,
+              "children": []
+            },
+            {
+              "name": "<deduplicated_symbol>",
+              "count": 1,
+              "children": []
+            },
+            {
+              "name": "swift_release",
+              "count": 1,
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "swift_beginAccess",
+          "count": 16,
+          "children": [
+            {
+              "name": "<deduplicated_symbol>",
+              "count": 3,
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "specialized Data.init<A>(_:)",
+      "count": 828,
+      "children": [
+        {
+          "name": "specialized Data._Representation.init(_:)",
+          "count": 683,
+          "children": [
+            {
+              "name": "specialized Data.InlineSlice.init(_:)",
+              "count": 673,
+              "children": [
+                {
+                  "name": "__DataStorage.init(bytes:length:)",
+                  "count": 662,
+                  "children": [
+                    {
+                      "name": "_platform_memmove",
+                      "count": 578,
+                      "children": []
+                    },
+                    {
+                      "name": "_xzm_malloc_large_huge",
+                      "count": 57,
+                      "children": [
+                        {
+                          "name": "xzm_segment_group_alloc_chunk",
+                          "count": 56,
+                          "children": [
+                            {
+                              "name": "_xzm_segment_group_find_and_allocate_chunk",
+                              "count": 53,
+                              "children": [
+                                {
+                                  "name": "_xzm_segment_group_span_mark_smaller",
+                                  "count": 40,
+                                  "children": [
+                                    {
+                                      "name": "_xzm_reclaim_mark_used_locked",
+                                      "count": 23,
+                                      "children": [
+                                        {
+                                          "name": "mach_vm_reclaim_try_cancel",
+                                          "count": 23,
+                                          "children": [
+                                            {
+                                              "name": "mach_absolute_time",
+                                              "count": 13,
+                                              "children": []
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "name": "xzm_reclaim_mark_free_locked",
+                                      "count": 15,
+                                      "children": [
+                                        {
+                                          "name": "mach_vm_reclaim_try_enter",
+                                          "count": 13,
+                                          "children": [
+                                            {
+                                              "name": "mach_absolute_time",
+                                              "count": 9,
+                                              "children": []
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "name": "_xzm_reclaim_mark_used_locked",
+                                  "count": 1,
+                                  "children": []
+                                },
+                                {
+                                  "name": "_xzm_segment_group_segment_span_mark_allocated",
+                                  "count": 1,
+                                  "children": []
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "name": "_xzm_segment_group_find_and_allocate_chunk",
+                          "count": 1,
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "name": "$So33malloc_type_layout_semantics_v0_ta$contains_generic_data$setter",
+                      "count": 1,
+                      "children": []
+                    },
+                    {
+                      "name": "malloc_type_malloc",
+                      "count": 1,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "name": "swift_allocObject",
+                  "count": 7,
+                  "children": [
+                    {
+                      "name": "swift::swift_slowAllocTyped(unsigned long, unsigned long, unsigned long long)",
+                      "count": 7,
+                      "children": [
+                        {
+                          "name": "_xzm_xzone_malloc_tiny",
+                          "count": 3,
+                          "children": []
+                        },
+                        {
+                          "name": "<deduplicated_symbol>",
+                          "count": 2,
+                          "children": []
+                        },
+                        {
+                          "name": "malloc_type_malloc",
+                          "count": 1,
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "???",
+                  "count": 1,
+                  "children": []
+                },
+                {
+                  "name": "DYLD-STUB$$type metadata accessor for __DataStorage",
+                  "count": 1,
+                  "children": []
+                },
+                {
+                  "name": "_xzm_malloc_large_huge",
+                  "count": 1,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "swift::RefCounts<swift::RefCountBitsT<(swift::RefCountInlinedness)1>>::doDecrementSlow<(swift::PerformDeinit)1>(swift::RefCountBitsT<(swift::RefCountInlinedness)1>, unsigned int)",
+          "count": 98,
+          "children": [
+            {
+              "name": "_swift_release_dealloc",
+              "count": 84,
+              "children": [
+                {
+                  "name": "xzm_segment_group_free_chunk",
+                  "count": 58,
+                  "children": [
+                    {
+                      "name": "_xzm_segment_group_segment_span_free_coalesce",
+                      "count": 41,
+                      "children": [
+                        {
+                          "name": "_xzm_segment_group_span_mark_used",
+                          "count": 40,
+                          "children": [
+                            {
+                              "name": "_xzm_reclaim_mark_used",
+                              "count": 40,
+                              "children": [
+                                {
+                                  "name": "_xzm_reclaim_mark_used_locked",
+                                  "count": 36,
+                                  "children": [
+                                    {
+                                      "name": "mach_vm_reclaim_try_cancel",
+                                      "count": 35,
+                                      "children": [
+                                        {
+                                          "name": "mach_absolute_time",
+                                          "count": 32,
+                                          "children": []
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "_xzm_segment_group_span_mark_free",
+                      "count": 16,
+                      "children": [
+                        {
+                          "name": "_xzm_reclaim_mark_free",
+                          "count": 16,
+                          "children": [
+                            {
+                              "name": "xzm_reclaim_mark_free_locked",
+                              "count": 15,
+                              "children": [
+                                {
+                                  "name": "mach_vm_reclaim_try_enter",
+                                  "count": 14,
+                                  "children": [
+                                    {
+                                      "name": "mach_absolute_time",
+                                      "count": 12,
+                                      "children": []
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "_free",
+                  "count": 11,
+                  "children": []
+                },
+                {
+                  "name": "__StringStorage.__deallocating_deinit",
+                  "count": 7,
+                  "children": [
+                    {
+                      "name": "outlined destroy of (AnyHashable?, AnyHashable?)",
+                      "count": 7,
+                      "children": [
+                        {
+                          "name": "destroy for ClosedRange<>.Index",
+                          "count": 4,
+                          "children": []
+                        },
+                        {
+                          "name": "__swift_instantiateConcreteTypeFromMangledNameV2",
+                          "count": 2,
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "_xzm_free_large_huge",
+                  "count": 5,
+                  "children": []
+                },
+                {
+                  "name": "_xzm_free_outlined",
+                  "count": 2,
+                  "children": []
+                },
+                {
+                  "name": "_xzm_free_main",
+                  "count": 1,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "_xzm_free_large_huge",
+              "count": 1,
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "swift_dynamicCast",
+          "count": 35,
+          "children": [
+            {
+              "name": "tryCast(swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*, swift::TargetMetadata<swift::InProcess> const*&, swift::TargetMetadata<swift::InProcess> const*&, bool, bool, bool)",
+              "count": 32,
+              "children": [
+                {
+                  "name": "tryCastToConstrainedOpaqueExistential(swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*, swift::TargetMetadata<swift::InProcess> const*&, swift::TargetMetadata<swift::InProcess> const*&, bool, bool, bool)",
+                  "count": 31,
+                  "children": [
+                    {
+                      "name": "_conformsToProtocols(swift::OpaqueValue const*, swift::TargetMetadata<swift::InProcess> const*, swift::TargetExistentialTypeMetadata<swift::InProcess> const*, swift::TargetWitnessTable<swift::InProcess> const**, bool)",
+                      "count": 30,
+                      "children": [
+                        {
+                          "name": "swift::_conformsToProtocolInContext(swift::OpaqueValue const*, swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptorRef<swift::InProcess>, swift::TargetWitnessTable<swift::InProcess> const**, bool)",
+                          "count": 29,
+                          "children": [
+                            {
+                              "name": "swift::_conformsToProtocol(swift::OpaqueValue const*, swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptorRef<swift::InProcess>, swift::TargetWitnessTable<swift::InProcess> const**, swift::ConformanceExecutionContext*)",
+                              "count": 28,
+                              "children": [
+                                {
+                                  "name": "swift_conformsToProtocolWithExecutionContext",
+                                  "count": 27,
+                                  "children": [
+                                    {
+                                      "name": "swift_conformsToProtocolMaybeInstantiateSuperclasses(swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptor<swift::InProcess> const*, bool)",
+                                      "count": 25,
+                                      "children": [
+                                        {
+                                          "name": "_dyld_find_protocol_conformance_on_disk",
+                                          "count": 5,
+                                          "children": []
+                                        },
+                                        {
+                                          "name": "dyld4::APIs::_dyld_find_protocol_conformance(void const*, void const*, void const*) const",
+                                          "count": 5,
+                                          "children": [
+                                            {
+                                              "name": "<deduplicated_symbol>",
+                                              "count": 5,
+                                              "children": [
+                                                {
+                                                  "name": "<deduplicated_symbol>",
+                                                  "count": 5,
+                                                  "children": [
+                                                    {
+                                                      "name": "<deduplicated_symbol>",
+                                                      "count": 2,
+                                                      "children": [
+                                                        {
+                                                          "name": "objc::lookup8(unsigned char const*, unsigned long, unsigned long long)",
+                                                          "count": 2,
+                                                          "children": []
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "name": "swift::ConcurrentReadableHashMap<(anonymous namespace)::ConformanceCacheEntry, swift::LazyMutex>::find<(anonymous namespace)::ConformanceCacheKey>((anonymous namespace)::ConformanceCacheKey const&, swift::ConcurrentReadableHashMap<(anonymous namespace)::ConformanceCacheEntry, swift::LazyMutex>::IndexStorage, unsigned long, (anonymous namespace)::ConformanceCacheEntry*)",
+                                          "count": 3,
+                                          "children": [
+                                            {
+                                              "name": "__swift::__runtime::llvm::hash_combine<void*, swift::TargetProtocolDescriptor<swift::InProcess> const*>(void* const&, swift::TargetProtocolDescriptor<swift::InProcess> const* const&)",
+                                              "count": 2,
+                                              "children": [
+                                                {
+                                                  "name": "__swift::__runtime::llvm::hashing::detail::hash_short(char const*, unsigned long, unsigned long long)",
+                                                  "count": 2,
+                                                  "children": []
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "name": "__swift::__runtime::llvm::hash_combine<void*, swift::TargetProtocolDescriptor<swift::InProcess> const*>(void* const&, swift::TargetProtocolDescriptor<swift::InProcess> const* const&)",
+                                          "count": 1,
+                                          "children": []
+                                        },
+                                        {
+                                          "name": "_dyld_find_protocol_conformance",
+                                          "count": 1,
+                                          "children": []
+                                        },
+                                        {
+                                          "name": "getContextDescriptor(swift::TargetMetadata<swift::InProcess> const*)",
+                                          "count": 1,
+                                          "children": [
+                                            {
+                                              "name": "swift::TargetMetadata<swift::InProcess>::getTypeContextDescriptor() const",
+                                              "count": 1,
+                                              "children": []
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "name": "swift::ConcurrentReadableHashMap<(anonymous namespace)::ConformanceCacheEntry, swift::LazyMutex>::find<(anonymous namespace)::ConformanceCacheKey>((anonymous namespace)::ConformanceCacheKey const&, swift::ConcurrentReadableHashMap<(anonymous namespace)::ConformanceCacheEntry, swift::LazyMutex>::IndexStorage, unsigned long, (anonymous namespace)::ConformanceCacheEntry*)",
+                                      "count": 1,
+                                      "children": []
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "swift::_conformsToProtocolInContext(swift::OpaqueValue const*, swift::TargetMetadata<swift::InProcess> const*, swift::TargetProtocolDescriptorRef<swift::InProcess>, swift::TargetWitnessTable<swift::InProcess> const**, bool)",
+                      "count": 1,
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "tryCastToConstrainedOpaqueExistential(swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*, swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*, swift::TargetMetadata<swift::InProcess> const*&, swift::TargetMetadata<swift::InProcess> const*&, bool, bool, bool)",
+              "count": 1,
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "<deduplicated_symbol>",
+          "count": 4,
+          "children": [
+            {
+              "name": "destroy for ClosedRange<>.Index",
+              "count": 2,
+              "children": []
+            },
+            {
+              "name": "__swift_instantiateConcreteTypeFromMangledNameV2",
+              "count": 1,
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "DYLD-STUB$$swift_dynamicCast",
+          "count": 1,
+          "children": []
+        },
+        {
+          "name": "_swift_release_dealloc",
+          "count": 1,
+          "children": []
+        },
+        {
+          "name": "destroy for ClosedRange<>.Index",
+          "count": 1,
+          "children": []
+        },
+        {
+          "name": "outlined consume of Data._Representation",
+          "count": 1,
+          "children": []
+        },
+        {
+          "name": "swift_bridgeObjectRetain",
+          "count": 1,
+          "children": []
+        },
+        {
+          "name": "swift_release",
+          "count": 1,
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "swift::RefCounts<swift::RefCountBitsT<(swift::RefCountInlinedness)1>>::doDecrementSlow<(swift::PerformDeinit)1>(swift::RefCountBitsT<(swift::RefCountInlinedness)1>, unsigned int)",
+      "count": 38,
+      "children": [
+        {
+          "name": "_swift_release_dealloc",
+          "count": 37,
+          "children": [
+            {
+              "name": "__DataStorage.__deallocating_deinit",
+              "count": 36,
+              "children": [
+                {
+                  "name": "xzm_segment_group_free_chunk",
+                  "count": 33,
+                  "children": [
+                    {
+                      "name": "_xzm_segment_group_segment_span_free_coalesce",
+                      "count": 20,
+                      "children": [
+                        {
+                          "name": "_xzm_segment_group_span_mark_used",
+                          "count": 20,
+                          "children": [
+                            {
+                              "name": "_xzm_reclaim_mark_used",
+                              "count": 20,
+                              "children": [
+                                {
+                                  "name": "_xzm_reclaim_mark_used_locked",
+                                  "count": 19,
+                                  "children": [
+                                    {
+                                      "name": "mach_vm_reclaim_try_cancel",
+                                      "count": 18,
+                                      "children": [
+                                        {
+                                          "name": "mach_absolute_time",
+                                          "count": 14,
+                                          "children": []
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "_xzm_segment_group_span_mark_free",
+                      "count": 11,
+                      "children": [
+                        {
+                          "name": "_xzm_reclaim_mark_free",
+                          "count": 11,
+                          "children": [
+                            {
+                              "name": "xzm_reclaim_mark_free_locked",
+                              "count": 11,
+                              "children": [
+                                {
+                                  "name": "mach_vm_reclaim_try_enter",
+                                  "count": 11,
+                                  "children": [
+                                    {
+                                      "name": "mach_absolute_time",
+                                      "count": 11,
+                                      "children": []
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "_xzm_free_large_huge",
+                  "count": 1,
+                  "children": []
+                },
+                {
+                  "name": "_xzm_free_main",
+                  "count": 1,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "__DataStorage.__deallocating_deinit",
+          "count": 1,
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "specialized collect #1 (_:) in TextRope.content(in:)",
+      "count": 3,
+      "children": []
+    },
+    {
+      "name": "__DataStorage._bytes.getter",
+      "count": 1,
+      "children": []
+    },
+    {
+      "name": "swift_bridgeObjectRelease",
+      "count": 1,
+      "children": []
+    },
+    {
+      "name": "swift_dynamicCast",
+      "count": 1,
+      "children": []
+    }
+  ]
+}
