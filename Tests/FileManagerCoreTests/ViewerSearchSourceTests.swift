@@ -286,6 +286,26 @@ private func found(_ result: ViewerSearchResult) -> ViewerSearchHit? {
     }
 }
 
+@Test func viewerSIMDBlocksFallBackBeforeLaterASCIIHitsInBothDirections() async throws {
+    let text = String(repeating: "x", count: 32) + "ßSS" + String(repeating: "x", count: 40)
+    let source = SearchBytes(Array(text.utf8))
+    let fast = ViewerSearchSource(source: source, chunkSize: 64)
+    let scalar = ViewerSearchSource(source: source, chunkSize: 1)
+    let folded = TextSearchQuery(text: "ss")
+    for (direction, anchor) in [(SearchDirection.forward, Int64(0)),
+                                (.backward, Int64(text.utf8.count - 1)),
+                                (.backward, Int64(32))] {
+        let actual = try await fast.search(folded, direction: direction, fromByteOffset: anchor)
+        let expected = try await scalar.search(folded, direction: direction, fromByteOffset: anchor)
+        #expect(actual == expected)
+    }
+    #expect(found(try await fast.search(folded, direction: .forward, fromByteOffset: 0))?.lowerBound == 32)
+    #expect(found(try await fast.search(folded, direction: .backward,
+                                        fromByteOffset: Int64(text.utf8.count - 1)))?.lowerBound == 34)
+    let sensitive = TextSearchQuery(text: "SS", caseSensitive: true)
+    #expect(found(try await fast.search(sensitive, direction: .forward, fromByteOffset: 0))?.lowerBound == 34)
+}
+
 @Test func viewerASCIIPathHandlesUnknownLengthAndLargeByteOffsets() async throws {
     let base: Int64 = 4_294_967_296
     let source = SearchBytes(Array("xneedle".utf8), origin: base, knownSize: false)

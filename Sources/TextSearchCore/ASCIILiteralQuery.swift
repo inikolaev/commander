@@ -23,8 +23,17 @@ public struct ASCIILiteralQuery: Sendable {
         if !requireASCII && !isCaseInsensitive { return bytes }
         if !isCaseInsensitive {
             let isASCII = bytes.withUnsafeBytes { raw in
-                for byte in raw.bindMemory(to: UInt8.self) {
-                    if byte >= 0x80 { return false }
+                let highBit = SIMD16<UInt8>(repeating: 0x80)
+                let vectorEnd = raw.count - raw.count % 16
+                var index = 0
+                while index < vectorEnd {
+                    let block = raw.loadUnaligned(fromByteOffset: index, as: SIMD16<UInt8>.self)
+                    if any(block .>= highBit) { return false }
+                    index += 16
+                }
+                while index < raw.count {
+                    if raw[index] >= 0x80 { return false }
+                    index += 1
                 }
                 return true
             }
@@ -33,12 +42,25 @@ public struct ASCIILiteralQuery: Sendable {
         var folded = Data(count: bytes.count)
         let isASCII = bytes.withUnsafeBytes { source in
             folded.withUnsafeMutableBytes { destination -> Bool in
-                let source = source.bindMemory(to: UInt8.self)
-                let destination = destination.bindMemory(to: UInt8.self)
-                for index in source.indices {
+                let highBit = SIMD16<UInt8>(repeating: 0x80)
+                let upperA = SIMD16<UInt8>(repeating: 65)
+                let upperZ = SIMD16<UInt8>(repeating: 90)
+                let lowercaseBit = SIMD16<UInt8>(repeating: 32)
+                let vectorEnd = source.count - source.count % 16
+                var index = 0
+                while index < vectorEnd {
+                    let block = source.loadUnaligned(fromByteOffset: index, as: SIMD16<UInt8>.self)
+                    if any(block .>= highBit) { return false }
+                    let uppercase = (block .>= upperA) .& (block .<= upperZ)
+                    let lowered = block.replacing(with: block | lowercaseBit, where: uppercase)
+                    destination.storeBytes(of: lowered, toByteOffset: index, as: SIMD16<UInt8>.self)
+                    index += 16
+                }
+                while index < source.count {
                     let byte = source[index]
                     if byte >= 0x80 { return false }
                     destination[index] = Self.lowercase(byte)
+                    index += 1
                 }
                 return true
             }
