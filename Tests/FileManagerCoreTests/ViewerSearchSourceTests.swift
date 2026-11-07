@@ -306,7 +306,7 @@ private func found(_ result: ViewerSearchResult) -> ViewerSearchHit? {
     #expect(found(try await fast.search(sensitive, direction: .forward, fromByteOffset: 0))?.lowerBound == 34)
 }
 
-@Test func viewerDarwinMemmemMatchesDefaultAcrossDirectionAndUnicodeFallback() async throws {
+@Test func viewerAlternateMatchersMatchDefaultAcrossDirectionAndUnicodeFallback() async throws {
     let text = String(repeating: "x", count: 32) + "ßSS" + String(repeating: "x", count: 40)
     let source = SearchBytes(Array(text.utf8))
     let search = ViewerSearchSource(source: source, chunkSize: 64)
@@ -315,13 +315,17 @@ private func found(_ result: ViewerSearchResult) -> ViewerSearchHit? {
                                     (.backward, Int64(text.utf8.count - 1)),
                                     (.backward, Int64(32))] {
             let ordinary = try await search.search(query, direction: direction, fromByteOffset: anchor)
-            let candidate = try await search.search(query, direction: direction, fromByteOffset: anchor,
-                                                    matcher: .darwinMemmem)
-            #expect(candidate == ordinary)
+            for matcher in [ASCIILiteralMatcher.darwinMemmem, .simdShort] {
+                let candidate = try await search.search(query, direction: direction, fromByteOffset: anchor,
+                                                        matcher: matcher)
+                #expect(candidate == ordinary)
+            }
         }
     }
     #expect(found(try await search.search(.init(text: "ss"), direction: .forward,
                                           fromByteOffset: 0, matcher: .darwinMemmem))?.lowerBound == 32)
+    #expect(found(try await search.search(.init(text: "SS", caseSensitive: true), direction: .forward,
+                                          fromByteOffset: 0, matcher: .simdShort))?.lowerBound == 34)
 }
 
 @Test func viewerASCIIPathHandlesUnknownLengthAndLargeByteOffsets() async throws {

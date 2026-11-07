@@ -40,7 +40,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--sizes", nargs="+", choices=CASES, default=list(CASES))
     parser.add_argument("--surfaces", nargs="+", choices=("viewer", "editor"), default=["viewer", "editor"])
-    parser.add_argument("--matcher", choices=("foundation", "darwin-memmem"), default="foundation")
+    parser.add_argument("--matcher", choices=("foundation", "darwin-memmem", "simd-short"), default="foundation")
     parser.add_argument("--iterations", type=int, help="Override per-size iteration count (first is warmup)")
     args = parser.parse_args()
     if args.iterations is not None and args.iterations < 2:

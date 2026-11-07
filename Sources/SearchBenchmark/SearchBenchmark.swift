@@ -87,7 +87,8 @@ private struct Options {
         switch matcherName {
         case "foundation": matcher = .foundation
         case "darwin-memmem": matcher = .darwinMemmem
-        default: throw BenchmarkError("--matcher must be foundation or darwin-memmem")
+        case "simd-short": matcher = .simdShort
+        default: throw BenchmarkError("--matcher must be foundation, darwin-memmem, or simd-short")
         }
         let iterations = try positiveInt(values["--iterations"] ?? "3", "--iterations")
         let chunkSize = try positiveInt(values["--chunk-size"] ?? "65536", "--chunk-size")

@@ -12,11 +12,17 @@ MIXED_SIZE = 16 * 1024 * 1024
 MARKER = "SEARCH_SENTINEL_7qZ_2026"
 CASES = (
     ("mixed-end", "mixed", MARKER, MIXED_SIZE - 128, len(MARKER)),
+    ("mixed-short-end", "mixed", "7qZ_2026",
+     MIXED_SIZE - 128 + MARKER.index("7qZ_2026"), len("7qZ_2026")),
     ("mixed-absent", "mixed", "ABSENT_9xQ_LITERAL", None, 0),
+    ("mixed-short-absent", "mixed", "NOHIT9!", None, 0),
+    ("mixed-byte-absent", "mixed", "~", None, 0),
     ("mixed-common-miss", "mixed", "status=500", None, 0),
     ("mixed-long-miss", "mixed", "Z" * 64, None, 0),
     ("repeated-near-miss", "repeated", "xxxyxx", None, 0),
     ("repeated-short-miss", "repeated", "@", None, 0),
+    ("periodic-near-miss", "periodic", "ababacab", None, 0),
+    ("periodic-long-near-miss", "periodic", "ababababababacab", None, 0),
 )
 
 
@@ -33,6 +39,7 @@ def main() -> None:
     files = {
         "mixed": args.fixtures / "search-mixed-16mib.txt",
         "repeated": args.fixtures / "search-100mib.txt",
+        "periodic": args.fixtures / "search-periodic-16mib.txt",
     }
     for file in files.values():
         if not file.is_file():

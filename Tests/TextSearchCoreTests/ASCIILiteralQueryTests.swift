@@ -194,3 +194,106 @@ private func scannedHit(_ result: ASCIILiteralScanResult<Int>) -> TextMatch<Int>
         else { Issue.record("Unicode block must trigger scalar fallback") }
     }
 }
+
+@Test func simdShortMatchesFoundationAcrossLengthsSlicesAndPartitions() {
+    for length in [1, 2, 6, 16, 17, 32, 33, 64] {
+        let pattern = length == 1 ? "z" : "a" + String(repeating: "x", count: length - 2) + "z"
+        let nearMiss = length > 2
+            ? "a" + "q" + String(repeating: "x", count: length - 3) + "z"
+            : String(repeating: "a", count: length)
+        let texts = [
+            pattern + String(repeating: "_", count: 97),
+            String(repeating: "_", count: 97) + pattern,
+            String(repeating: "_", count: 97),
+            String(repeating: nearMiss, count: 12) + pattern,
+            String(repeating: nearMiss, count: 12),
+        ]
+        for sensitive in [false, true] {
+            let query = ASCIILiteralQuery(query: .init(text: pattern, caseSensitive: sensitive),
+                                          maximumLength: 64)!
+            for text in texts {
+                let bytes = Array(text.utf8)
+                for direction in [SearchDirection.forward, .backward] {
+                    for partition in [1, 15, 16, 17, 32, 64, 128] {
+                        var foundation = ASCIILiteralScanner<Int>(query: query, direction: direction,
+                                                                  matcher: .foundation)
+                        var candidate = ASCIILiteralScanner<Int>(query: query, direction: direction,
+                                                                 matcher: .simdShort)
+                        let starts = stride(from: 0, to: bytes.count, by: partition).map { $0 }
+                        var found: TextMatch<Int>?
+                        for start in direction == .forward ? starts : starts.reversed() {
+                            let end = min(start + partition, bytes.count)
+                            let storage = Data([0xFF, 0xFF, 0xFF] + bytes[start..<end])
+                            let slice = storage[3..<storage.count]
+                            #expect(slice.startIndex == 3)
+                            let left = foundation.consume(slice, startingAt: start, requireASCII: true)
+                            let right = candidate.consume(slice, startingAt: start, requireASCII: true)
+                            #expect(scannedHit(left) == scannedHit(right))
+                            found = scannedHit(left)
+                            if found != nil { break }
+                        }
+                        let expected = Data(bytes).range(of: Data(pattern.utf8),
+                                                           options: direction == .backward ? .backwards : [])
+                        #expect(found?.lowerBound == expected?.lowerBound)
+                        #expect(found?.upperBound == expected?.upperBound)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Test func simdShortDenseNearMissesAndUnicodeFallback() {
+    let query = ASCIILiteralQuery(query: .init(text: "abc"), maximumLength: 64)!
+    for text in [String(repeating: "axc", count: 40) + "abc",
+                 String(repeating: "axc", count: 40)] {
+        let bytes = Data(text.utf8)
+        var foundation = ASCIILiteralScanner<Int>(query: query, direction: .forward,
+                                                  matcher: .foundation)
+        var candidate = ASCIILiteralScanner<Int>(query: query, direction: .forward,
+                                                 matcher: .simdShort)
+        #expect(scannedHit(foundation.consume(bytes, startingAt: 0, requireASCII: true))
+                == scannedHit(candidate.consume(bytes, startingAt: 0, requireASCII: true)))
+    }
+    for direction in [SearchDirection.forward, .backward] {
+        var scanner = ASCIILiteralScanner<Int>(query: query, direction: direction,
+                                              matcher: .simdShort)
+        if case .requiresUnicode = scanner.consume(Data("ßabc".utf8), startingAt: 0,
+                                                   requireASCII: true) {}
+        else { Issue.record("Unicode block must trigger scalar fallback") }
+    }
+}
+
+@Test func simdShortFindsEarliestHitInEveryCandidateLane() {
+    let query = ASCIILiteralQuery(query: .init(text: "abc", caseSensitive: true),
+                                  maximumLength: 16)!
+    for lane in 0..<32 {
+        let text = String(repeating: "x", count: lane) + "abc"
+            + String(repeating: "x", count: 64)
+        let storage = Data([0xFF, 0xFF]) + Data(text.utf8)
+        let slice = storage[2..<storage.count]
+        var scanner = ASCIILiteralScanner<Int>(query: query, direction: .forward,
+                                              matcher: .simdShort)
+        #expect(scannedHit(scanner.consume(slice, startingAt: 100, requireASCII: true))?.lowerBound
+                == 100 + lane)
+    }
+}
+
+@Test func simdShortResumesAfterEighthRejectedCandidate() {
+    let query = ASCIILiteralQuery(query: .init(text: "abc", caseSensitive: true),
+                                  maximumLength: 16)!
+    let nearMisses = String(repeating: "axc", count: 8)
+    let text = nearMisses + "abc" + String(repeating: "x", count: 64)
+    var scanner = ASCIILiteralScanner<Int>(query: query, direction: .forward,
+                                          matcher: .simdShort)
+    #expect(scannedHit(scanner.consume(Data(text.utf8), startingAt: 0,
+                                       requireASCII: true))?.lowerBound == 24)
+
+    var continued = ASCIILiteralScanner<Int>(query: query, direction: .forward,
+                                            matcher: .simdShort)
+    if case .advance = continued.consume(Data(nearMisses.utf8), startingAt: 0,
+                                         requireASCII: true) {}
+    else { Issue.record("near misses must not match") }
+    #expect(scannedHit(continued.consume(Data(("abc" + String(repeating: "x", count: 32)).utf8),
+                                         startingAt: 24, requireASCII: true))?.lowerBound == 24)
+}

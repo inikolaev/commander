@@ -35,6 +35,8 @@ def make_block() -> bytes:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--periodic-output", type=Path,
+                        help="Also create an all-'ab' adversarial corpus if missing")
     args = parser.parse_args()
     path = args.output.resolve()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -53,6 +55,26 @@ def main() -> None:
         reused = False
     print(json.dumps({"file": str(path), "bytes": SIZE, "marker": MARKER.decode("ascii"),
                       "markerOffset": MARKER_OFFSET, "reused": reused}, sort_keys=True))
+    if args.periodic_output is not None:
+        periodic = args.periodic_output.resolve()
+        periodic.parent.mkdir(parents=True, exist_ok=True)
+        if periodic.exists():
+            if periodic.stat().st_size != SIZE:
+                parser.error(f"Existing periodic corpus has the wrong size: {periodic}")
+            expected = b"ab" * (BLOCK // 2)
+            with periodic.open("rb") as source:
+                for offset in range(0, SIZE, BLOCK):
+                    if source.read(BLOCK) != expected:
+                        parser.error(f"Existing periodic corpus content differs at byte {offset}: {periodic}")
+            periodic_reused = True
+        else:
+            with periodic.open("xb") as output:
+                block = b"ab" * (BLOCK // 2)
+                for _ in range(SIZE // BLOCK):
+                    output.write(block)
+            periodic_reused = False
+        print(json.dumps({"file": str(periodic), "bytes": SIZE,
+                          "reused": periodic_reused}, sort_keys=True))
 
 
 if __name__ == "__main__":

@@ -86,7 +86,7 @@ private final class CancellationProbe: @unchecked Sendable {
                                   fromUTF16Offset: 0, chunkSize: 64))?.exactRange.location == 33)
 }
 
-@Test @MainActor func editorDarwinMemmemMatchesDefaultAcrossDirectionAndUnicodeFallback() {
+@Test @MainActor func editorAlternateMatchersMatchDefaultAcrossDirectionAndUnicodeFallback() {
     let text = String(repeating: "x", count: 32) + "ßSS" + String(repeating: "x", count: 40)
     let snapshot = EditorDocuments.make(text: text).makeSearchSnapshot()
     for query in [TextSearchQuery(text: "ss"), TextSearchQuery(text: "SS", caseSensitive: true)] {
@@ -94,14 +94,19 @@ private final class CancellationProbe: @unchecked Sendable {
                                     (.backward, snapshot.length - 1),
                                     (.backward, 32)] {
             let ordinary = snapshot.search(query, direction: direction, fromUTF16Offset: anchor, chunkSize: 64)
-            let candidate = snapshot.search(query, direction: direction, fromUTF16Offset: anchor,
-                                            chunkSize: 64, matcher: .darwinMemmem)
-            #expect(candidate == ordinary)
+            for matcher in [ASCIILiteralMatcher.darwinMemmem, .simdShort] {
+                let candidate = snapshot.search(query, direction: direction, fromUTF16Offset: anchor,
+                                                chunkSize: 64, matcher: matcher)
+                #expect(candidate == ordinary)
+            }
         }
     }
     #expect(found(snapshot.search(.init(text: "ss"), direction: .forward,
                                   fromUTF16Offset: 0, chunkSize: 64,
                                   matcher: .darwinMemmem))?.exactRange.location == 32)
+    #expect(found(snapshot.search(.init(text: "SS", caseSensitive: true), direction: .forward,
+                                  fromUTF16Offset: 0, chunkSize: 64,
+                                  matcher: .simdShort))?.exactRange.location == 33)
 }
 
 @Test @MainActor func editorASCIIPathAgreesWithScalarScannerForGeneratedUnicodeInputs() {

@@ -91,6 +91,13 @@ public enum ASCIILiteralScanResult<Offset: FixedWidthInteger & Sendable>: Sendab
 public enum ASCIILiteralMatcher: Sendable {
     case foundation
     case darwinMemmem
+    case simdShort
+}
+
+private struct SIMDShortFilter {
+    let first: SIMD16<UInt8>
+    let second: SIMD16<UInt8>
+    let secondOffset: Int?
 }
 
 /// The byte matcher shared by viewer and editor. Call with contiguous blocks
@@ -101,7 +108,10 @@ public struct ASCIILiteralScanner<Offset: FixedWidthInteger & Sendable> {
     private let query: ASCIILiteralQuery
     private let direction: SearchDirection
     private let matcher: ASCIILiteralMatcher
+    private let simdFilter: SIMDShortFilter?
     private var carry = Data()
+    private var simdFailedCandidates = 0
+    private var simdUseFoundation = false
 
     public init(query: ASCIILiteralQuery, direction: SearchDirection) {
         self.init(query: query, direction: direction, matcher: .foundation)
@@ -112,6 +122,25 @@ public struct ASCIILiteralScanner<Offset: FixedWidthInteger & Sendable> {
         self.query = query
         self.direction = direction
         self.matcher = matcher
+        if case .simdShort = matcher, direction == .forward,
+           (1...16).contains(query.pattern.count) {
+            let first = query.pattern[query.pattern.startIndex]
+            let secondOffset = (1..<query.pattern.count).last {
+                query.pattern[query.pattern.startIndex + $0] != first
+            }
+            if query.pattern.count == 1 || secondOffset != nil {
+                simdFilter = SIMDShortFilter(
+                    first: SIMD16<UInt8>(repeating: first),
+                    second: SIMD16<UInt8>(repeating: secondOffset.map {
+                        query.pattern[query.pattern.startIndex + $0]
+                    } ?? first),
+                    secondOffset: secondOffset)
+            } else {
+                simdFilter = nil
+            }
+        } else {
+            simdFilter = nil
+        }
     }
 
     public mutating func consume(_ bytes: Data, startingAt start: Offset,
@@ -162,10 +191,68 @@ public struct ASCIILiteralScanner<Offset: FixedWidthInteger & Sendable> {
                          upperBound: start + Offset(query.pattern.count))!)
     }
 
-    private func findForward(_ bytes: Data) -> Int? {
+    private mutating func findForward(_ bytes: Data) -> Int? {
         switch matcher {
         case .foundation: Self.foundationForward(bytes, query.pattern)
         case .darwinMemmem: Self.darwinMemmemForward(bytes, query.pattern)
+        case .simdShort: simdShortForward(bytes)
+        }
+    }
+
+    private mutating func simdShortForward(_ bytes: Data) -> Int? {
+        let pattern = query.pattern
+        let length = pattern.count
+        // Small ranges and longer or uniform needles are better left to Foundation.
+        guard !simdUseFoundation, let simdFilter, bytes.count >= length + 15 else {
+            return Self.foundationForward(bytes, pattern)
+        }
+
+        return bytes.withUnsafeBytes { haystack in
+            pattern.withUnsafeBytes { needle in
+                let base = haystack.baseAddress!
+                let needleBase = needle.baseAddress!
+                let candidateCount = haystack.count - length + 1
+                var window = 0
+                while window + 16 <= candidateCount {
+                    let leading = haystack.loadUnaligned(fromByteOffset: window, as: SIMD16<UInt8>.self)
+                    let matches: SIMDMask<SIMD16<UInt8>.MaskStorage>
+                    if let secondOffset = simdFilter.secondOffset {
+                        let trailing = haystack.loadUnaligned(fromByteOffset: window + secondOffset,
+                                                              as: SIMD16<UInt8>.self)
+                        matches = (leading .== simdFilter.first) .& (trailing .== simdFilter.second)
+                    } else {
+                        matches = leading .== simdFilter.first
+                    }
+                    // A true lane contributes bit 0 of its byte; each 64-bit word holds eight lanes.
+                    let laneBytes = SIMD16<UInt8>.zero.replacing(with: SIMD16<UInt8>(repeating: 1),
+                                                                 where: matches)
+                    let words = unsafeBitCast(laneBytes, to: SIMD2<UInt64>.self)
+                    for wordIndex in 0..<2 {
+                        var bits = UInt64(littleEndian: words[wordIndex]) & 0x0101_0101_0101_0101
+                        while bits != 0 {
+                            let lane = wordIndex * 8 + bits.trailingZeroBitCount / 8
+                            let candidate = window + lane
+                            if memcmp(base.advanced(by: candidate), needleBase, length) == 0 {
+                                return candidate
+                            }
+                            // Count across this scan; repeated misses make later blocks use Foundation.
+                            simdFailedCandidates += 1
+                            if simdFailedCandidates >= 8 {
+                                simdUseFoundation = true
+                                let remaining = bytes[(bytes.startIndex + candidate + 1)..<bytes.endIndex]
+                                return Self.foundationForward(remaining, pattern).map { candidate + 1 + $0 }
+                            }
+                            bits &= bits - 1
+                        }
+                    }
+                    window += 16
+                }
+                if window < candidateCount {
+                    let remaining = bytes[(bytes.startIndex + window)..<bytes.endIndex]
+                    return Self.foundationForward(remaining, pattern).map { window + $0 }
+                }
+                return nil
+            }
         }
     }
 
