@@ -58,6 +58,9 @@ Run each case in a separate process. Examples:
 `--file` allow other corpora. For an arbitrary query, `--expect-offset` plus
 `--expect-length` checks a hit, while `--expect-length 0` checks an exhausted
 result. Other options are `--whole-word` and `--chunk-size` (default 65,536).
+`--matcher foundation|darwin-memmem` selects the internal byte matcher for
+search runs; Foundation is the default, and Darwin memmem uses Foundation for
+reverse matching. The selector is included in every JSONL record.
 The fixture tokens are embedded in `x`, so whole-word searches for them are
 expected to be exhausted. When combining `--whole-word` with `--case`, pass
 `--expect-length 0` to override the manifest's ordinary hit expectation. A

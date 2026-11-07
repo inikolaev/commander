@@ -1,7 +1,7 @@
 import Foundation
 import Testing
-import EditorCore
-import TextSearchCore
+@_spi(Benchmark) import EditorCore
+@_spi(Benchmark) import TextSearchCore
 
 private func found(_ result: EditorSearchResult) -> EditorSearchHit? {
     if case .found(let hit) = result { return hit }
@@ -84,6 +84,24 @@ private final class CancellationProbe: @unchecked Sendable {
     let sensitive = TextSearchQuery(text: "SS", caseSensitive: true)
     #expect(found(snapshot.search(sensitive, direction: .forward,
                                   fromUTF16Offset: 0, chunkSize: 64))?.exactRange.location == 33)
+}
+
+@Test @MainActor func editorDarwinMemmemMatchesDefaultAcrossDirectionAndUnicodeFallback() {
+    let text = String(repeating: "x", count: 32) + "ßSS" + String(repeating: "x", count: 40)
+    let snapshot = EditorDocuments.make(text: text).makeSearchSnapshot()
+    for query in [TextSearchQuery(text: "ss"), TextSearchQuery(text: "SS", caseSensitive: true)] {
+        for (direction, anchor) in [(SearchDirection.forward, 0),
+                                    (.backward, snapshot.length - 1),
+                                    (.backward, 32)] {
+            let ordinary = snapshot.search(query, direction: direction, fromUTF16Offset: anchor, chunkSize: 64)
+            let candidate = snapshot.search(query, direction: direction, fromUTF16Offset: anchor,
+                                            chunkSize: 64, matcher: .darwinMemmem)
+            #expect(candidate == ordinary)
+        }
+    }
+    #expect(found(snapshot.search(.init(text: "ss"), direction: .forward,
+                                  fromUTF16Offset: 0, chunkSize: 64,
+                                  matcher: .darwinMemmem))?.exactRange.location == 32)
 }
 
 @Test @MainActor func editorASCIIPathAgreesWithScalarScannerForGeneratedUnicodeInputs() {

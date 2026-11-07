@@ -1,5 +1,5 @@
 import Foundation
-import TextSearchCore
+@_spi(Benchmark) import TextSearchCore
 
 /// A match in original file bytes. Offsets are half-open and remain valid in
 /// both text and hex presentation, subject to `validate` before reveal.
@@ -46,6 +46,33 @@ public struct ViewerSearchSource: Sendable {
         exclusiveStartLimit: Int64? = nil,
         isCancelled: @Sendable () -> Bool = { false }
     ) async throws -> ViewerSearchResult {
+        try await searchImpl(query, direction: direction, fromByteOffset: fromByteOffset,
+                             exclusiveStartLimit: exclusiveStartLimit, matcher: .foundation,
+                             isCancelled: isCancelled)
+    }
+
+    @_spi(Benchmark)
+    public func search(
+        _ query: TextSearchQuery,
+        direction: SearchDirection,
+        fromByteOffset: Int64,
+        exclusiveStartLimit: Int64? = nil,
+        matcher: ASCIILiteralMatcher,
+        isCancelled: @Sendable () -> Bool = { false }
+    ) async throws -> ViewerSearchResult {
+        try await searchImpl(query, direction: direction, fromByteOffset: fromByteOffset,
+                             exclusiveStartLimit: exclusiveStartLimit, matcher: matcher,
+                             isCancelled: isCancelled)
+    }
+
+    private func searchImpl(
+        _ query: TextSearchQuery,
+        direction: SearchDirection,
+        fromByteOffset: Int64,
+        exclusiveStartLimit: Int64?,
+        matcher: ASCIILiteralMatcher,
+        isCancelled: @Sendable () -> Bool
+    ) async throws -> ViewerSearchResult {
         guard !query.isEmpty else { return .exhausted }
         guard fromByteOffset >= 0 else { throw ContentSourceError.invalidRange }
         if let exclusiveStartLimit, exclusiveStartLimit < 0 { throw ContentSourceError.invalidRange }
@@ -59,7 +86,8 @@ public struct ViewerSearchSource: Sendable {
                let result = try await searchASCII(ascii,
                                                   direction: direction, anchor: fromByteOffset,
                                                   exclusiveStartLimit: exclusiveStartLimit,
-                                                  initial: initial, isCancelled: isCancelled) {
+                                                  initial: initial, matcher: matcher,
+                                                  isCancelled: isCancelled) {
                 return result
             }
             guard var machine = LiteralSearchMachine<Int64>(query: query, direction: direction) else {
@@ -236,11 +264,12 @@ public struct ViewerSearchSource: Sendable {
         anchor: Int64,
         exclusiveStartLimit: Int64?,
         initial: ContentMetadata,
+        matcher: ASCIILiteralMatcher,
         isCancelled: @Sendable () -> Bool
     ) async throws -> ViewerSearchResult? {
         let pattern = ascii.pattern
         let overlap = pattern.count - 1
-        var scanner = ASCIILiteralScanner<Int64>(query: ascii, direction: direction)
+        var scanner = ASCIILiteralScanner<Int64>(query: ascii, direction: direction, matcher: matcher)
         if direction == .forward {
             var offset = anchor
             let stopAfter = exclusiveStartLimit.map { limit -> Int64 in

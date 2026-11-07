@@ -1,7 +1,7 @@
 import Foundation
 @_spi(Benchmark) import EditorCore
-import FileManagerCore
-import TextSearchCore
+@_spi(Benchmark) import FileManagerCore
+@_spi(Benchmark) import TextSearchCore
 
 // JSON Lines on stdout; diagnostics and usage go to stderr. Timings use a
 // monotonic clock and exclude document construction and output serialization.
@@ -32,6 +32,8 @@ private struct Options {
     let directionName: String
     let caseSensitive: Bool
     let wholeWord: Bool
+    let matcher: ASCIILiteralMatcher
+    let matcherName: String
     let anchor: Int64?
     let iterations: Int
     let chunkSize: Int
@@ -54,7 +56,7 @@ private struct Options {
             values[key] = arguments[index + 1]
             index += 2
         }
-        let allowed: Set<String> = ["--file", "--surface", "--operation", "--query", "--manifest", "--case", "--expect-offset", "--expect-length", "--direction", "--anchor", "--iterations", "--chunk-size"]
+        let allowed: Set<String> = ["--file", "--surface", "--operation", "--query", "--manifest", "--case", "--expect-offset", "--expect-length", "--direction", "--anchor", "--iterations", "--chunk-size", "--matcher"]
         guard Set(values.keys).isSubset(of: allowed) else {
             throw BenchmarkError("Unknown option: \(Set(values.keys).subtracting(allowed).sorted().joined(separator: ", "))")
         }
@@ -80,6 +82,13 @@ private struct Options {
         case "backward": direction = .backward
         default: throw BenchmarkError("--direction must be forward or backward")
         }
+        let matcherName = values["--matcher"] ?? "foundation"
+        let matcher: ASCIILiteralMatcher
+        switch matcherName {
+        case "foundation": matcher = .foundation
+        case "darwin-memmem": matcher = .darwinMemmem
+        default: throw BenchmarkError("--matcher must be foundation or darwin-memmem")
+        }
         let iterations = try positiveInt(values["--iterations"] ?? "3", "--iterations")
         let chunkSize = try positiveInt(values["--chunk-size"] ?? "65536", "--chunk-size")
         let anchor = try values["--anchor"].map { try nonnegativeInt64($0, "--anchor") }
@@ -102,6 +111,7 @@ private struct Options {
                     query: query, caseName: values["--case"], expectedOffset: expectedOffset,
                     expectedLength: expectedLength, direction: direction, directionName: directionName,
                     caseSensitive: flags.contains("--case-sensitive"), wholeWord: flags.contains("--whole-word"),
+                    matcher: matcher, matcherName: matcherName,
                     anchor: anchor, iterations: iterations, chunkSize: chunkSize)
     }
 
@@ -139,6 +149,7 @@ private struct Record: Encodable {
     let direction: String?
     let caseSensitive: Bool?
     let wholeWord: Bool?
+    let matcher: String
     let anchor: Int64?
     let result: String?
     let offset: Int64?
@@ -232,7 +243,8 @@ private enum SearchBenchmark {
                         file: options.file.path, fileBytes: size, chunkSize: options.chunkSize,
                         documentLength: snapshot?.length, iteration: nil, elapsedNs: setupNs,
                         query: options.query, caseName: options.caseName, direction: options.directionName,
-                        caseSensitive: options.caseSensitive, wholeWord: options.wholeWord, anchor: resolvedAnchor,
+                        caseSensitive: options.caseSensitive, wholeWord: options.wholeWord,
+                        matcher: options.matcherName, anchor: resolvedAnchor,
                         result: nil, offset: nil, length: nil, checksum: nil, bytesTraversed: nil,
                         expectedOffset: options.expectedOffset, expectedLength: options.expectedLength, correct: nil))
 
@@ -258,7 +270,7 @@ private enum SearchBenchmark {
             } else {
                 if let viewerSearch {
                     let found = try await viewerSearch.search(query!, direction: options.direction,
-                                                               fromByteOffset: resolvedAnchor!)
+                                                               fromByteOffset: resolvedAnchor!, matcher: options.matcher)
                     switch found {
                     case .found(let hit): result = "found"; offset = hit.lowerBound; length = Int(hit.upperBound - hit.lowerBound)
                     case .exhausted: result = "exhausted"
@@ -270,7 +282,8 @@ private enum SearchBenchmark {
                     let anchor = resolvedAnchor!
                     guard anchor <= Int.max else { throw BenchmarkError("Editor anchor exceeds Int.max") }
                     let found = value.search(query!, direction: options.direction,
-                                             fromUTF16Offset: Int(anchor), chunkSize: options.chunkSize)
+                                             fromUTF16Offset: Int(anchor), chunkSize: options.chunkSize,
+                                             matcher: options.matcher)
                     switch found {
                     case .found(let hit): result = "found"; offset = Int64(hit.exactRange.location); length = hit.exactRange.length
                     case .exhausted: result = "exhausted"
@@ -290,7 +303,8 @@ private enum SearchBenchmark {
                             file: options.file.path, fileBytes: size, chunkSize: options.chunkSize,
                             documentLength: snapshot?.length, iteration: iteration, elapsedNs: elapsed,
                             query: options.query, caseName: options.caseName, direction: options.directionName,
-                            caseSensitive: options.caseSensitive, wholeWord: options.wholeWord, anchor: resolvedAnchor,
+                            caseSensitive: options.caseSensitive, wholeWord: options.wholeWord,
+                            matcher: options.matcherName, anchor: resolvedAnchor,
                             result: result, offset: offset, length: length, checksum: digest,
                             bytesTraversed: traversed, expectedOffset: options.expectedOffset,
                             expectedLength: options.expectedLength, correct: correct))

@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-import TextSearchCore
+@_spi(Benchmark) import TextSearchCore
 
 @Test func asciiLiteralShortcutOnlyAcceptsEquivalentScalarSemantics() {
     #expect(ASCIILiteralQuery(query: .init(text: ""), maximumLength: 8)?.pattern == nil)
@@ -141,5 +141,56 @@ private func scalarPrepared(_ input: Data, caseSensitive: Bool, requireASCII: Bo
                 else { #expect(query.preparedBlock(input, requireASCII: false) == input) }
             }
         }
+    }
+}
+
+private func scannedHit(_ result: ASCIILiteralScanResult<Int>) -> TextMatch<Int>? {
+    if case .match(let hit) = result { return hit }
+    return nil
+}
+
+@Test func darwinMemmemMatchesFoundationForSlicesAndBlockBoundaries() {
+    let cases = [
+        ("a", "--a--", [2, 3]),
+        ("abc", "--aBc--abc--", [1, 3, 5, 7]),
+        ("aaa", "aaaaa", [1, 2, 3]),
+        ("needle", String(repeating: "x", count: 31) + "needle", [15, 16, 17, 31, 32]),
+    ]
+    for (pattern, text, partitions) in cases {
+        for sensitive in [false, true] {
+            let query = ASCIILiteralQuery(query: .init(text: pattern, caseSensitive: sensitive),
+                                          maximumLength: 64)!
+            for direction in [SearchDirection.forward, .backward] {
+                for partition in partitions {
+                    let bytes = Array(text.utf8)
+                    var foundation = ASCIILiteralScanner<Int>(query: query, direction: direction,
+                                                              matcher: .foundation)
+                    var candidate = ASCIILiteralScanner<Int>(query: query, direction: direction,
+                                                             matcher: .darwinMemmem)
+                    let starts = stride(from: 0, to: bytes.count, by: partition).map { $0 }
+                    let ordered = direction == .forward ? starts : starts.reversed()
+                    for start in ordered {
+                        let end = min(start + partition, bytes.count)
+                        let storage = Data([0xFF, 0xFF, 0xFF] + bytes[start..<end])
+                        let slice = storage[3..<(storage.count)]
+                        let left = foundation.consume(slice, startingAt: start, requireASCII: true)
+                        let right = candidate.consume(slice, startingAt: start, requireASCII: true)
+                        #expect(scannedHit(left) == scannedHit(right))
+                        if scannedHit(left) != nil { break }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Test func darwinMemmemPreservesUnicodeFallbackBeforeApparentASCIIHit() {
+    let query = ASCIILiteralQuery(query: .init(text: "ss"), maximumLength: 64)!
+    let bytes = Data(Array("ßSS".utf8))
+    for direction in [SearchDirection.forward, .backward] {
+        var scanner = ASCIILiteralScanner<Int>(query: query, direction: direction,
+                                              matcher: .darwinMemmem)
+        if case .requiresUnicode = scanner.consume(bytes, startingAt: 0, requireASCII: true) {}
+        else { Issue.record("Unicode block must trigger scalar fallback") }
     }
 }

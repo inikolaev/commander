@@ -1,4 +1,5 @@
 import Foundation
+import Darwin
 
 /// A byte-search shortcut for literals whose UTF-8 bytes have the same
 /// positions as their source scalars. Adapters still own source validation
@@ -84,6 +85,14 @@ public enum ASCIILiteralScanResult<Offset: FixedWidthInteger & Sendable>: Sendab
     case requiresUnicode
 }
 
+/// Internal benchmark selector. The ordinary scanner initializer always uses
+/// Foundation; opt-in strategies are exposed only to benchmark clients.
+@_spi(Benchmark)
+public enum ASCIILiteralMatcher: Sendable {
+    case foundation
+    case darwinMemmem
+}
+
 /// The byte matcher shared by viewer and editor. Call with contiguous blocks
 /// in traversal order; source reads, offset validation, and fallback belong to
 /// the adapter. Only a query-length boundary is copied between blocks. Stop
@@ -91,11 +100,18 @@ public enum ASCIILiteralScanResult<Offset: FixedWidthInteger & Sendable>: Sendab
 public struct ASCIILiteralScanner<Offset: FixedWidthInteger & Sendable> {
     private let query: ASCIILiteralQuery
     private let direction: SearchDirection
+    private let matcher: ASCIILiteralMatcher
     private var carry = Data()
 
     public init(query: ASCIILiteralQuery, direction: SearchDirection) {
+        self.init(query: query, direction: direction, matcher: .foundation)
+    }
+
+    @_spi(Benchmark)
+    public init(query: ASCIILiteralQuery, direction: SearchDirection, matcher: ASCIILiteralMatcher) {
         self.query = query
         self.direction = direction
+        self.matcher = matcher
     }
 
     public mutating func consume(_ bytes: Data, startingAt start: Offset,
@@ -107,11 +123,11 @@ public struct ASCIILiteralScanner<Offset: FixedWidthInteger & Sendable> {
         if direction == .forward {
             var boundary = carry
             boundary.append(block.prefix(overlap))
-            if let range = boundary.range(of: query.pattern) {
-                return match(start - Offset(carry.count) + Offset(range.lowerBound - boundary.startIndex))
+            if let offset = findForward(boundary) {
+                return match(start - Offset(carry.count) + Offset(offset))
             }
-            if let range = block.range(of: query.pattern) {
-                return match(start + Offset(range.lowerBound - block.startIndex))
+            if let offset = findForward(block) {
+                return match(start + Offset(offset))
             }
             if block.count >= overlap {
                 carry = Data(block.suffix(overlap))
@@ -123,12 +139,12 @@ public struct ASCIILiteralScanner<Offset: FixedWidthInteger & Sendable> {
             let suffix = block.suffix(overlap)
             var boundary = Data(suffix)
             boundary.append(carry)
-            if let range = boundary.range(of: query.pattern, options: .backwards) {
+            if let offset = Self.foundationBackward(boundary, query.pattern) {
                 return match(start + Offset(block.count - suffix.count)
-                             + Offset(range.lowerBound - boundary.startIndex))
+                             + Offset(offset))
             }
-            if let range = block.range(of: query.pattern, options: .backwards) {
-                return match(start + Offset(range.lowerBound - block.startIndex))
+            if let offset = Self.foundationBackward(block, query.pattern) {
+                return match(start + Offset(offset))
             }
             if block.count >= overlap {
                 carry = Data(block.prefix(overlap))
@@ -144,5 +160,31 @@ public struct ASCIILiteralScanner<Offset: FixedWidthInteger & Sendable> {
     private func match(_ start: Offset) -> ASCIILiteralScanResult<Offset> {
         .match(TextMatch(lowerBound: start,
                          upperBound: start + Offset(query.pattern.count))!)
+    }
+
+    private func findForward(_ bytes: Data) -> Int? {
+        switch matcher {
+        case .foundation: Self.foundationForward(bytes, query.pattern)
+        case .darwinMemmem: Self.darwinMemmemForward(bytes, query.pattern)
+        }
+    }
+
+    private static func foundationForward(_ bytes: Data, _ pattern: Data) -> Int? {
+        bytes.range(of: pattern).map { $0.lowerBound - bytes.startIndex }
+    }
+
+    private static func foundationBackward(_ bytes: Data, _ pattern: Data) -> Int? {
+        bytes.range(of: pattern, options: .backwards).map { $0.lowerBound - bytes.startIndex }
+    }
+
+    private static func darwinMemmemForward(_ bytes: Data, _ pattern: Data) -> Int? {
+        guard bytes.count >= pattern.count else { return nil }
+        return bytes.withUnsafeBytes { haystack in
+            pattern.withUnsafeBytes { needle in
+                guard let found = memmem(haystack.baseAddress, haystack.count,
+                                         needle.baseAddress, needle.count) else { return nil }
+                return haystack.baseAddress!.distance(to: UnsafeRawPointer(found))
+            }
+        }
     }
 }

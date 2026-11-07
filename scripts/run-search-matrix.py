@@ -40,6 +40,7 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--sizes", nargs="+", choices=CASES, default=list(CASES))
     parser.add_argument("--surfaces", nargs="+", choices=("viewer", "editor"), default=["viewer", "editor"])
+    parser.add_argument("--matcher", choices=("foundation", "darwin-memmem"), default="foundation")
     parser.add_argument("--iterations", type=int, help="Override per-size iteration count (first is warmup)")
     args = parser.parse_args()
     if args.iterations is not None and args.iterations < 2:
@@ -58,7 +59,7 @@ def main():
                 for operation, name, sensitive, direction in scenarios:
                     command = [str(args.binary), "--manifest", str(manifest), "--surface", surface,
                                "--operation", operation, "--direction", direction,
-                               "--iterations", str(count)]
+                               "--iterations", str(count), "--matcher", args.matcher]
                     if name is not None:
                         command += ["--case", name]
                     if sensitive:
@@ -68,7 +69,9 @@ def main():
                         sys.stderr.write(result.stderr)
                         raise RuntimeError(f"Benchmark failed: {' '.join(command)}")
                     records = [json.loads(line) for line in result.stdout.splitlines()]
-                    if len(records) != count + 1 or any(record.get("correct") is False for record in records):
+                    if (len(records) != count + 1
+                            or any(record.get("correct") is False or record.get("matcher") != args.matcher
+                                   for record in records)):
                         raise RuntimeError(f"Invalid benchmark output: {' '.join(command)}")
                     for record in records:
                         record["fixtureSize"] = size
