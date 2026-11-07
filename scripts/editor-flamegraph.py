@@ -11,6 +11,8 @@ import re
 parser = argparse.ArgumentParser()
 parser.add_argument("sample", type=Path)
 parser.add_argument("output", type=Path, help="Output prefix")
+parser.add_argument("--root", default="benchmarkLoad(_:)", help="Sampled function at the root of the flame graph")
+parser.add_argument("--title", default="Commander · 100 MiB editor load")
 args = parser.parse_args()
 text = args.sample.read_text()
 graph = text.split("Call graph:\n", 1)[1].split("\nTotal number", 1)[0]
@@ -34,16 +36,16 @@ def visit(node, path):
     children = sum(child["count"] for child in node["children"])
     assert children <= node["count"], (node["name"], children, node["count"])
     own = node["count"] - children
-    if own and "benchmarkLoad(_:)" in path:
-        path = path[path.index("benchmarkLoad(_:)"):]
+    if own and args.root in path:
+        path = path[path.index(args.root):]
         folded[tuple(path)] += own
     for child in node["children"]:
         visit(child, path)
 for node in roots:
     visit(node, [])
 
-assert folded, "No benchmarkLoad samples found"
-tree = dict(name="benchmarkLoad(_:)", count=0, children={})
+assert folded, f"No {args.root} samples found"
+tree = dict(name=args.root, count=0, children={})
 for stack, count in folded.items():
     node = tree
     node["count"] += count
@@ -77,9 +79,9 @@ height = 105 + row * depth(tree)
 parts = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {width} {height}">',
          '<rect width="100%" height="100%" fill="#faf8f3"/>',
          '<style>text{font:12px monospace;pointer-events:none}rect.frame{stroke:white;stroke-width:.4}</style>',
-         '<text x="16" y="25" style="font:bold 19px sans-serif">Commander · 100 MiB editor load · sampled flame graph</text>',
-         f'<text x="16" y="49">{tree["count"]} load-cycle samples · 1 ms interval · release · width = inclusive samples · startup excluded</text>',
-         '<text x="16" y="70">Includes document teardown between repeated loads. Not a timeline or an allocation graph.</text>']
+         f'<text x="16" y="25" style="font:bold 19px sans-serif">{html.escape(args.title)} · sampled flame graph</text>',
+         f'<text x="16" y="49">{tree["count"]} samples · 1 ms interval · release · width = inclusive samples</text>',
+         '<text x="16" y="70">This is not a timeline or an allocation graph.</text>']
 def draw(node, x, level):
     w = (width - 32) * node["count"] / tree["count"]
     y = height - 10 - (level + 1) * row
@@ -103,9 +105,9 @@ page = """<!doctype html><meta charset="utf-8"><title>Commander editor flame gra
 button,input{font:inherit;padding:6px;margin-right:10px}#detail{min-height:44px;font-family:monospace}
 svg{width:100%;min-width:900px}svg text{font:12px monospace;pointer-events:none}
 .frame{stroke:#fff;stroke-width:.5;cursor:pointer}.frame:hover{stroke:#222;stroke-width:2}</style>
-<h1>Commander · 100 MiB editor load</h1>
-<p>Release build, repeated warm-cache loads, 1 ms stack sampling. Width = inclusive sample count.
-Startup excluded; document teardown included. This is not a timeline. Click a frame to zoom.</p>
+<h1>TITLE</h1>
+<p>Release build, 1 ms stack sampling. Width = inclusive sample count.
+This is not a timeline. Click a frame to zoom.</p>
 <button id="reset">Reset</button><button id="back">Back</button><input id="search" placeholder="Highlight function…">
 <p id="detail"></p><div id="graph"></div>
 <script>
@@ -120,13 +122,13 @@ function render(){
  const width=1600,height=30+20*dep(current);
  const svg=el('svg',{viewBox:'0 0 '+width+' '+height},host);
  const query=document.getElementById('search').value.toLowerCase();
- document.getElementById('detail').textContent=current.name+' — '+current.count+' samples; '+(100*current.count/total).toFixed(2)+'% of load cycle';
+ document.getElementById('detail').textContent=current.name+' — '+current.count+' samples; '+(100*current.count/total).toFixed(2)+'% of selected profile';
  function draw(n,x,level){
   const w=width*n.count/current.count,y=height-25-level*20;
   let hash=0;for(const c of n.name)hash=(hash*31+c.charCodeAt(0))>>>0;
   const match=query&&n.name.toLowerCase().includes(query);
   const r=el('rect',{x,y,width:w,height:19,class:'frame',fill:match?'#ec7dcb':'hsl('+(hash%55)+',85%,70%)'},svg);
-  el('title',{},r).textContent=n.name+' — '+n.count+' samples ('+(100*n.count/total).toFixed(2)+'% of full load cycle)';
+  el('title',{},r).textContent=n.name+' — '+n.count+' samples ('+(100*n.count/total).toFixed(2)+'% of selected profile)';
   r.onclick=()=>{history.push(current);current=n;render();};
   if(w>28)el('text',{x:x+3,y:y+14},svg).textContent=n.name.slice(0,Math.max(1,Math.floor((w-8)/7)));
   let next=x;for(const c of n.children){draw(c,next,level+1);next+=width*c.count/current.count;}
@@ -137,4 +139,5 @@ document.getElementById('back').onclick=()=>{if(history.length){current=history.
 document.getElementById('search').oninput=render;
 render();
 </script>"""
-prefix.with_suffix(".html").write_text(page.replace("DATA", json.dumps(tree).replace("<", "\\u003c")))
+prefix.with_suffix(".html").write_text(
+    page.replace("TITLE", html.escape(args.title)).replace("DATA", json.dumps(tree).replace("<", "\\u003c")))

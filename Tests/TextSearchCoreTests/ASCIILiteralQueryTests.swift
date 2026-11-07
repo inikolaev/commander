@@ -78,3 +78,68 @@ import TextSearchCore
         } else { Issue.record("sliced block did not match") }
     }
 }
+private func scalarPrepared(_ input: Data, caseSensitive: Bool, requireASCII: Bool) -> Data? {
+    if caseSensitive && !requireASCII { return input }
+    var result = Data()
+    result.reserveCapacity(input.count)
+    for byte in input {
+        if byte >= 0x80 { return nil }
+        result.append(!caseSensitive && (65...90).contains(byte) ? byte + 32 : byte)
+    }
+    return result
+}
+
+@Test func preparedBlockSIMDAgreesWithScalarForEveryByteAndLane() {
+    for caseSensitive in [false, true] {
+        let query = ASCIILiteralQuery(query: .init(text: "AZ", caseSensitive: caseSensitive),
+                                      maximumLength: 64)!
+        for requireASCII in [false, true] {
+            for byte in UInt8.min...UInt8.max {
+                for lane in 0..<33 {
+                    var source = [UInt8](repeating: 0x78, count: 33)
+                    source[lane] = byte
+                    let data = Data(source)
+                    let expected = scalarPrepared(data, caseSensitive: caseSensitive,
+                                                  requireASCII: requireASCII)
+                    #expect(query.preparedBlock(data, requireASCII: requireASCII) == expected)
+                }
+            }
+        }
+    }
+}
+
+@Test func preparedBlockSIMDHandlesLengthsSlicesAndPunctuationEdges() {
+    let punctuation = Array("@AZ[\\]`az{|}~0123456789 \t\r\n".utf8)
+    for caseSensitive in [false, true] {
+        let query = ASCIILiteralQuery(query: .init(text: "AZ", caseSensitive: caseSensitive),
+                                      maximumLength: 64)!
+        for requireASCII in [false, true] {
+            for length in [0, 1, 15, 16, 17, 31, 32, 33, 47, 48, 49] {
+                for prefix in [0, 1, 3, 15] {
+                    let content = (0..<length).map { punctuation[$0 % punctuation.count] }
+                    let storage = Data(repeating: 0xFF, count: prefix) + Data(content)
+                    let slice = storage[prefix..<(prefix + length)]
+                    #expect(query.preparedBlock(slice, requireASCII: requireASCII)
+                            == scalarPrepared(slice, caseSensitive: caseSensitive, requireASCII: requireASCII))
+                }
+            }
+        }
+    }
+}
+
+@Test func preparedBlockRejectsHighByteInEveryVectorLaneAndTail() {
+    for caseSensitive in [false, true] {
+        let query = ASCIILiteralQuery(query: .init(text: "a", caseSensitive: caseSensitive),
+                                      maximumLength: 64)!
+        for length in [16, 17, 31, 32, 33, 48, 49] {
+            for lane in 0..<length {
+                var source = [UInt8](repeating: 65, count: length)
+                source[lane] = lane.isMultiple(of: 2) ? 0x80 : 0xFF
+                let input = Data(source)
+                #expect(query.preparedBlock(input, requireASCII: true) == nil)
+                if !caseSensitive { #expect(query.preparedBlock(input, requireASCII: false) == nil) }
+                else { #expect(query.preparedBlock(input, requireASCII: false) == input) }
+            }
+        }
+    }
+}

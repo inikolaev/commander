@@ -75,6 +75,7 @@ let package = Package(
         .testTarget(name: "EditorCoreTests", dependencies: ["EditorCore"]),
         .testTarget(name: "SyntaxCoreTests", dependencies: ["SyntaxCore"]),
         .executableTarget(name: "EditorBenchmark", dependencies: ["EditorCore"]),
+        .executableTarget(name: "SearchBenchmark", dependencies: ["FileManagerCore", "EditorCore", "TextSearchCore"]),
         .executableTarget(
             name: "Commander",
             dependencies: ["CommanderUI"],

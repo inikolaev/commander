@@ -66,6 +66,26 @@ private final class CancellationProbe: @unchecked Sendable {
             == emoji.search(exact, direction: .backward, fromUTF16Offset: 2, chunkSize: 2))
 }
 
+@Test @MainActor func editorSIMDBlocksFallBackBeforeLaterASCIIHitsInBothDirections() {
+    let text = String(repeating: "x", count: 32) + "ßSS" + String(repeating: "x", count: 40)
+    let snapshot = EditorDocuments.make(text: text).makeSearchSnapshot()
+    let folded = TextSearchQuery(text: "ss")
+    for (direction, anchor) in [(SearchDirection.forward, 0),
+                                (.backward, snapshot.length - 1),
+                                (.backward, 32)] {
+        let fast = snapshot.search(folded, direction: direction, fromUTF16Offset: anchor, chunkSize: 64)
+        let scalar = snapshot.search(folded, direction: direction, fromUTF16Offset: anchor, chunkSize: 1)
+        #expect(fast == scalar)
+    }
+    #expect(found(snapshot.search(folded, direction: .forward,
+                                  fromUTF16Offset: 0, chunkSize: 64))?.exactRange.location == 32)
+    #expect(found(snapshot.search(folded, direction: .backward,
+                                  fromUTF16Offset: snapshot.length - 1, chunkSize: 64))?.exactRange.location == 33)
+    let sensitive = TextSearchQuery(text: "SS", caseSensitive: true)
+    #expect(found(snapshot.search(sensitive, direction: .forward,
+                                  fromUTF16Offset: 0, chunkSize: 64))?.exactRange.location == 33)
+}
+
 @Test @MainActor func editorASCIIPathAgreesWithScalarScannerForGeneratedUnicodeInputs() {
     let pieces = ["a", "b", "C", "ﬀ", "😀", "e\u{301}", "K", "\r\n"]
     var state: UInt64 = 0xA11CE

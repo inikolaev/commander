@@ -1,0 +1,1302 @@
+{
+  "name": "ViewerSearchSource.search(_:direction:fromByteOffset:exclusiveStartLimit:isCancelled:)",
+  "count": 4084,
+  "children": [
+    {
+      "name": "ViewerSearchSource.searchASCII(_:direction:anchor:exclusiveStartLimit:initial:isCancelled:)",
+      "count": 4067,
+      "children": [
+        {
+          "name": "ASCIILiteralScanner.consume(_:startingAt:requireASCII:)",
+          "count": 2132,
+          "children": [
+            {
+              "name": "ASCIILiteralQuery.preparedBlock(_:requireASCII:)",
+              "count": 1071,
+              "children": [
+                {
+                  "name": "specialized Data._Representation.withUnsafeMutableBytes<A>(_:)",
+                  "count": 990,
+                  "children": [
+                    {
+                      "name": "specialized __DataStorage.withUnsafeMutableBytes<A>(in:apply:)",
+                      "count": 986,
+                      "children": [
+                        {
+                          "name": "closure #1 in closure #2 in ASCIILiteralQuery.preparedBlock(_:requireASCII:)",
+                          "count": 985,
+                          "children": [
+                            {
+                              "name": "specialized SIMD<>.min()",
+                              "count": 331,
+                              "children": []
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "swift_release",
+                      "count": 2,
+                      "children": []
+                    },
+                    {
+                      "name": "outlined consume of Data._Representation",
+                      "count": 1,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "name": "<deduplicated_symbol>",
+                  "count": 74,
+                  "children": [
+                    {
+                      "name": "__DataStorage.init(length:)",
+                      "count": 68,
+                      "children": [
+                        {
+                          "name": "__DataStorage.length.setter",
+                          "count": 59,
+                          "children": [
+                            {
+                              "name": "__bzero",
+                              "count": 59,
+                              "children": []
+                            }
+                          ]
+                        },
+                        {
+                          "name": "_xzm_malloc_large_huge",
+                          "count": 9,
+                          "children": [
+                            {
+                              "name": "xzm_segment_group_alloc_chunk",
+                              "count": 7,
+                              "children": [
+                                {
+                                  "name": "_xzm_segment_group_find_and_allocate_chunk",
+                                  "count": 7,
+                                  "children": [
+                                    {
+                                      "name": "_xzm_segment_group_span_mark_smaller",
+                                      "count": 5,
+                                      "children": [
+                                        {
+                                          "name": "_xzm_reclaim_mark_used_locked",
+                                          "count": 5,
+                                          "children": [
+                                            {
+                                              "name": "mach_vm_reclaim_try_cancel",
+                                              "count": 5,
+                                              "children": [
+                                                {
+                                                  "name": "mach_absolute_time",
+                                                  "count": 5,
+                                                  "children": []
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "swift_allocObject",
+                      "count": 4,
+                      "children": [
+                        {
+                          "name": "swift::swift_slowAllocTyped(unsigned long, unsigned long, unsigned long long)",
+                          "count": 3,
+                          "children": [
+                            {
+                              "name": "<deduplicated_symbol>",
+                              "count": 1,
+                              "children": []
+                            },
+                            {
+                              "name": "_xzm_xzone_malloc_tiny",
+                              "count": 1,
+                              "children": []
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "???",
+                      "count": 1,
+                      "children": []
+                    },
+                    {
+                      "name": "DYLD-STUB$$type metadata accessor for __DataStorage",
+                      "count": 1,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "name": "DYLD-STUB$$__DataStorage._offset.getter",
+                  "count": 1,
+                  "children": []
+                },
+                {
+                  "name": "DYLD-STUB$$swift_retain",
+                  "count": 1,
+                  "children": []
+                },
+                {
+                  "name": "type metadata accessor for __DataStorage",
+                  "count": 1,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "Data.range(of:options:in:)",
+              "count": 1030,
+              "children": [
+                {
+                  "name": "Data._searchBoyerMoore(_:in:backwards:)",
+                  "count": 1022,
+                  "children": [
+                    {
+                      "name": "static Data._computeGoodSubstringShift(for:shift:suffixLengths:)",
+                      "count": 6,
+                      "children": []
+                    },
+                    {
+                      "name": "Data._rangeRelativeToStartIndex(_:)",
+                      "count": 3,
+                      "children": []
+                    },
+                    {
+                      "name": "static Data._computeBadCharacterShift(for:backwards:into:)",
+                      "count": 2,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "name": "Data._Representation.bytes.getter",
+                  "count": 6,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "swift_cvw_destroyImpl(swift::OpaqueValue*, swift::TargetMetadata<swift::InProcess> const*)",
+              "count": 16,
+              "children": [
+                {
+                  "name": "multiPayloadEnumFN<&handleRefCountsDestroy(swift::TargetMetadata<swift::InProcess> const*, swift::LayoutStringReader1&, unsigned long&, unsigned char*)>(swift::TargetMetadata<swift::InProcess> const*, swift::LayoutStringReader1&, unsigned long&, unsigned char*)",
+                  "count": 16,
+                  "children": [
+                    {
+                      "name": "swift::RefCounts<swift::RefCountBitsT<(swift::RefCountInlinedness)1>>::doDecrementSlow<(swift::PerformDeinit)1>(swift::RefCountBitsT<(swift::RefCountInlinedness)1>, unsigned int)",
+                      "count": 16,
+                      "children": [
+                        {
+                          "name": "_swift_release_dealloc",
+                          "count": 16,
+                          "children": [
+                            {
+                              "name": "__DataStorage.__deallocating_deinit",
+                              "count": 14,
+                              "children": [
+                                {
+                                  "name": "xzm_segment_group_free_chunk",
+                                  "count": 11,
+                                  "children": [
+                                    {
+                                      "name": "_xzm_segment_group_segment_span_free_coalesce",
+                                      "count": 8,
+                                      "children": [
+                                        {
+                                          "name": "_xzm_segment_group_span_mark_used",
+                                          "count": 6,
+                                          "children": [
+                                            {
+                                              "name": "_xzm_reclaim_mark_used",
+                                              "count": 6,
+                                              "children": [
+                                                {
+                                                  "name": "_xzm_reclaim_mark_used_locked",
+                                                  "count": 6,
+                                                  "children": [
+                                                    {
+                                                      "name": "mach_vm_reclaim_try_cancel",
+                                                      "count": 6,
+                                                      "children": [
+                                                        {
+                                                          "name": "mach_absolute_time",
+                                                          "count": 6,
+                                                          "children": []
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "name": "_xzm_segment_group_span_mark_free",
+                                      "count": 1,
+                                      "children": [
+                                        {
+                                          "name": "_xzm_reclaim_mark_free",
+                                          "count": 1,
+                                          "children": [
+                                            {
+                                              "name": "xzm_reclaim_mark_free_locked",
+                                              "count": 1,
+                                              "children": [
+                                                {
+                                                  "name": "mach_vm_reclaim_try_enter",
+                                                  "count": 1,
+                                                  "children": [
+                                                    {
+                                                      "name": "mach_absolute_time",
+                                                      "count": 1,
+                                                      "children": []
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "name": "_free",
+                                  "count": 1,
+                                  "children": []
+                                },
+                                {
+                                  "name": "_xzm_free_large_huge",
+                                  "count": 1,
+                                  "children": []
+                                }
+                              ]
+                            },
+                            {
+                              "name": "_xzm_free_main",
+                              "count": 1,
+                              "children": []
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "__swift_instantiateGenericMetadata",
+              "count": 4,
+              "children": [
+                {
+                  "name": "_swift_getGenericMetadata(swift::MetadataRequest, void const* const*, swift::TargetTypeContextDescriptor<swift::InProcess> const*)",
+                  "count": 3,
+                  "children": [
+                    {
+                      "name": "swift::LockingConcurrentMap<swift::GenericCacheEntry, swift::LockingConcurrentMapStorage<swift::GenericCacheEntry, (unsigned short)14>>::getOrInsert<swift::MetadataCacheKey, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&>(swift::MetadataCacheKey, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&)",
+                      "count": 3,
+                      "children": [
+                        {
+                          "name": "swift::StableAddressConcurrentReadableHashMap<swift::GenericCacheEntry, swift::TaggedMetadataAllocator<(unsigned short)14>, swift::Mutex>::getOrInsert<swift::MetadataCacheKey, swift::MetadataWaitQueue::Worker&, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&>(swift::MetadataCacheKey, swift::MetadataWaitQueue::Worker&, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&)",
+                          "count": 2,
+                          "children": [
+                            {
+                              "name": "swift::StableAddressConcurrentReadableHashMap<swift::GenericCacheEntry, swift::TaggedMetadataAllocator<(unsigned short)14>, swift::Mutex>::getOrInsert<swift::MetadataCacheKey, swift::MetadataWaitQueue::Worker&, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&>(swift::MetadataCacheKey, swift::MetadataWaitQueue::Worker&, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&)",
+                              "count": 1,
+                              "children": [
+                                {
+                                  "name": "swift::MetadataCacheKey::operator==(swift::MetadataCacheKey const&) const",
+                                  "count": 1,
+                                  "children": []
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "swift_getGenericMetadata",
+                  "count": 1,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "closure #1 in Data.init<A>(_:)",
+              "count": 4,
+              "children": [
+                {
+                  "name": "specialized Data.InlineData.init(_:)",
+                  "count": 2,
+                  "children": [
+                    {
+                      "name": "_platform_memmove",
+                      "count": 1,
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "name": "<deduplicated_symbol>",
+              "count": 1,
+              "children": []
+            },
+            {
+              "name": "DYLD-STUB$$swift_release",
+              "count": 1,
+              "children": []
+            },
+            {
+              "name": "outlined copy of Data._Representation",
+              "count": 1,
+              "children": []
+            },
+            {
+              "name": "specialized BidirectionalCollection.suffix(_:)",
+              "count": 1,
+              "children": [
+                {
+                  "name": "Data._Representation.subscript.getter",
+                  "count": 1,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "specialized Data._Representation.withUnsafeMutableBytes<A>(_:)",
+              "count": 1,
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "protocol witness for FileContentSource.read(at:count:) in conformance LocalFileContentSource",
+          "count": 1843,
+          "children": [
+            {
+              "name": "LocalFileContentSource.read(at:count:)",
+              "count": 1840,
+              "children": [
+                {
+                  "name": "Data._Representation.append(contentsOf:)",
+                  "count": 1020,
+                  "children": [
+                    {
+                      "name": "specialized Data._Representation.init(_:)",
+                      "count": 1020,
+                      "children": [
+                        {
+                          "name": "__DataStorage.init(bytes:length:)",
+                          "count": 1020,
+                          "children": [
+                            {
+                              "name": "specialized static __DataStorage.move(_:_:_:)",
+                              "count": 1010,
+                              "children": [
+                                {
+                                  "name": "vm_copy",
+                                  "count": 1010,
+                                  "children": [
+                                    {
+                                      "name": "mach_msg2_internal",
+                                      "count": 1007,
+                                      "children": [
+                                        {
+                                          "name": "mach_msg2_trap",
+                                          "count": 1005,
+                                          "children": []
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "name": "_xzm_malloc_large_huge",
+                              "count": 6,
+                              "children": [
+                                {
+                                  "name": "xzm_segment_group_alloc_chunk",
+                                  "count": 5,
+                                  "children": [
+                                    {
+                                      "name": "_xzm_segment_group_find_and_allocate_chunk",
+                                      "count": 5,
+                                      "children": [
+                                        {
+                                          "name": "_xzm_segment_group_span_mark_smaller",
+                                          "count": 3,
+                                          "children": [
+                                            {
+                                              "name": "_xzm_reclaim_mark_used_locked",
+                                              "count": 2,
+                                              "children": [
+                                                {
+                                                  "name": "mach_vm_reclaim_try_cancel",
+                                                  "count": 2,
+                                                  "children": [
+                                                    {
+                                                      "name": "mach_absolute_time",
+                                                      "count": 2,
+                                                      "children": []
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "name": "xzm_reclaim_mark_free_locked",
+                                              "count": 1,
+                                              "children": [
+                                                {
+                                                  "name": "mach_vm_reclaim_try_enter",
+                                                  "count": 1,
+                                                  "children": [
+                                                    {
+                                                      "name": "mach_absolute_time",
+                                                      "count": 1,
+                                                      "children": []
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "pread",
+                  "count": 491,
+                  "children": []
+                },
+                {
+                  "name": "specialized Data.init<A>(_:)",
+                  "count": 162,
+                  "children": [
+                    {
+                      "name": "closure #1 in Data.init<A>(_:)",
+                      "count": 138,
+                      "children": [
+                        {
+                          "name": "specialized Data.InlineSlice.init(_:)",
+                          "count": 138,
+                          "children": [
+                            {
+                              "name": "__DataStorage.init(bytes:length:)",
+                              "count": 134,
+                              "children": [
+                                {
+                                  "name": "_platform_memmove",
+                                  "count": 119,
+                                  "children": []
+                                },
+                                {
+                                  "name": "_xzm_malloc_large_huge",
+                                  "count": 15,
+                                  "children": [
+                                    {
+                                      "name": "xzm_segment_group_alloc_chunk",
+                                      "count": 13,
+                                      "children": [
+                                        {
+                                          "name": "_xzm_segment_group_find_and_allocate_chunk",
+                                          "count": 13,
+                                          "children": [
+                                            {
+                                              "name": "_xzm_segment_group_span_mark_smaller",
+                                              "count": 7,
+                                              "children": [
+                                                {
+                                                  "name": "_xzm_reclaim_mark_used_locked",
+                                                  "count": 6,
+                                                  "children": [
+                                                    {
+                                                      "name": "mach_vm_reclaim_try_cancel",
+                                                      "count": 5,
+                                                      "children": [
+                                                        {
+                                                          "name": "mach_absolute_time",
+                                                          "count": 5,
+                                                          "children": []
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            },
+                            {
+                              "name": "swift_allocObject",
+                              "count": 4,
+                              "children": [
+                                {
+                                  "name": "swift::swift_slowAllocTyped(unsigned long, unsigned long, unsigned long long)",
+                                  "count": 2,
+                                  "children": [
+                                    {
+                                      "name": "_xzm_xzone_malloc_tiny",
+                                      "count": 2,
+                                      "children": []
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "swift::RefCounts<swift::RefCountBitsT<(swift::RefCountInlinedness)1>>::doDecrementSlow<(swift::PerformDeinit)1>(swift::RefCountBitsT<(swift::RefCountInlinedness)1>, unsigned int)",
+                      "count": 22,
+                      "children": [
+                        {
+                          "name": "_swift_release_dealloc",
+                          "count": 21,
+                          "children": [
+                            {
+                              "name": "???",
+                              "count": 20,
+                              "children": [
+                                {
+                                  "name": "swift::RefCounts<swift::RefCountBitsT<(swift::RefCountInlinedness)1>>::doDecrementSlow<(swift::PerformDeinit)1>(swift::RefCountBitsT<(swift::RefCountInlinedness)1>, unsigned int)",
+                                  "count": 19,
+                                  "children": [
+                                    {
+                                      "name": "_swift_release_dealloc",
+                                      "count": 18,
+                                      "children": [
+                                        {
+                                          "name": "xzm_segment_group_free_chunk",
+                                          "count": 16,
+                                          "children": [
+                                            {
+                                              "name": "_xzm_segment_group_segment_span_free_coalesce",
+                                              "count": 11,
+                                              "children": [
+                                                {
+                                                  "name": "_xzm_segment_group_span_mark_used",
+                                                  "count": 10,
+                                                  "children": [
+                                                    {
+                                                      "name": "_xzm_reclaim_mark_used",
+                                                      "count": 10,
+                                                      "children": [
+                                                        {
+                                                          "name": "_xzm_reclaim_mark_used_locked",
+                                                          "count": 10,
+                                                          "children": [
+                                                            {
+                                                              "name": "mach_vm_reclaim_try_cancel",
+                                                              "count": 9,
+                                                              "children": [
+                                                                {
+                                                                  "name": "mach_absolute_time",
+                                                                  "count": 8,
+                                                                  "children": []
+                                                                }
+                                                              ]
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "name": "_xzm_segment_group_span_mark_free",
+                                              "count": 4,
+                                              "children": [
+                                                {
+                                                  "name": "_xzm_reclaim_mark_free",
+                                                  "count": 4,
+                                                  "children": [
+                                                    {
+                                                      "name": "xzm_reclaim_mark_free_locked",
+                                                      "count": 4,
+                                                      "children": [
+                                                        {
+                                                          "name": "mach_vm_reclaim_try_enter",
+                                                          "count": 4,
+                                                          "children": [
+                                                            {
+                                                              "name": "mach_absolute_time",
+                                                              "count": 3,
+                                                              "children": []
+                                                            }
+                                                          ]
+                                                        }
+                                                      ]
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        },
+                                        {
+                                          "name": "_free",
+                                          "count": 1,
+                                          "children": []
+                                        },
+                                        {
+                                          "name": "swift_arrayDestroy",
+                                          "count": 1,
+                                          "children": []
+                                        }
+                                      ]
+                                    },
+                                    {
+                                      "name": "_xzm_free_large_huge",
+                                      "count": 1,
+                                      "children": []
+                                    }
+                                  ]
+                                },
+                                {
+                                  "name": "swift_unknownObjectRelease",
+                                  "count": 1,
+                                  "children": []
+                                }
+                              ]
+                            },
+                            {
+                              "name": "_xzm_free_main",
+                              "count": 1,
+                              "children": [
+                                {
+                                  "name": "mach_absolute_time",
+                                  "count": 1,
+                                  "children": []
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "__swift_instantiateConcreteTypeFromMangledNameV2",
+                      "count": 1,
+                      "children": []
+                    },
+                    {
+                      "name": "swift_allocObject",
+                      "count": 1,
+                      "children": [
+                        {
+                          "name": "swift::swift_slowAllocTyped(unsigned long, unsigned long, unsigned long long)",
+                          "count": 1,
+                          "children": [
+                            {
+                              "name": "_xzm_xzone_malloc_tiny",
+                              "count": 1,
+                              "children": []
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "LocalFileContentSource.metadata()",
+                  "count": 64,
+                  "children": [
+                    {
+                      "name": "fstat",
+                      "count": 62,
+                      "children": []
+                    },
+                    {
+                      "name": "static Task<>.checkCancellation()",
+                      "count": 2,
+                      "children": [
+                        {
+                          "name": "_stdlib_isOSVersionAtLeastOrVariantVersionAtLeast(_:_:_:_:_:_:)",
+                          "count": 1,
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "__bzero",
+                  "count": 53,
+                  "children": []
+                },
+                {
+                  "name": "_ContiguousArrayBuffer.init(_uninitializedCount:minimumCapacity:)",
+                  "count": 23,
+                  "children": [
+                    {
+                      "name": "swift_allocObject",
+                      "count": 20,
+                      "children": [
+                        {
+                          "name": "swift::swift_slowAllocTyped(unsigned long, unsigned long, unsigned long long)",
+                          "count": 20,
+                          "children": [
+                            {
+                              "name": "_xzm_malloc_large_huge",
+                              "count": 20,
+                              "children": [
+                                {
+                                  "name": "xzm_segment_group_alloc_chunk",
+                                  "count": 20,
+                                  "children": [
+                                    {
+                                      "name": "_xzm_segment_group_find_and_allocate_chunk",
+                                      "count": 19,
+                                      "children": [
+                                        {
+                                          "name": "_xzm_segment_group_span_mark_smaller",
+                                          "count": 15,
+                                          "children": [
+                                            {
+                                              "name": "_xzm_reclaim_mark_used_locked",
+                                              "count": 13,
+                                              "children": [
+                                                {
+                                                  "name": "mach_vm_reclaim_try_cancel",
+                                                  "count": 13,
+                                                  "children": [
+                                                    {
+                                                      "name": "mach_absolute_time",
+                                                      "count": 13,
+                                                      "children": []
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            },
+                                            {
+                                              "name": "xzm_reclaim_mark_free_locked",
+                                              "count": 2,
+                                              "children": [
+                                                {
+                                                  "name": "mach_vm_reclaim_try_enter",
+                                                  "count": 2,
+                                                  "children": [
+                                                    {
+                                                      "name": "mach_absolute_time",
+                                                      "count": 2,
+                                                      "children": []
+                                                    }
+                                                  ]
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "__swift_instantiateCanonicalPrespecializedGenericMetadata",
+                      "count": 2,
+                      "children": [
+                        {
+                          "name": "_swift_getGenericMetadata(swift::MetadataRequest, void const* const*, swift::TargetTypeContextDescriptor<swift::InProcess> const*)",
+                          "count": 2,
+                          "children": [
+                            {
+                              "name": "getCache(swift::TargetTypeContextDescriptor<swift::InProcess> const&)",
+                              "count": 1,
+                              "children": [
+                                {
+                                  "name": "swift::TargetContextDescriptor<swift::InProcess>::getGenericContext() const",
+                                  "count": 1,
+                                  "children": []
+                                }
+                              ]
+                            },
+                            {
+                              "name": "swift::LockingConcurrentMap<swift::GenericCacheEntry, swift::LockingConcurrentMapStorage<swift::GenericCacheEntry, (unsigned short)14>>::getOrInsert<swift::MetadataCacheKey, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&>(swift::MetadataCacheKey, swift::MetadataRequest&, swift::TargetTypeContextDescriptor<swift::InProcess> const*&, void const* const*&)",
+                              "count": 1,
+                              "children": [
+                                {
+                                  "name": "swift::MetadataCacheEntryBase<swift::GenericCacheEntry, void const*>::awaitSatisfyingState(swift::ConcurrencyControl&, swift::MetadataRequest)",
+                                  "count": 1,
+                                  "children": []
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "malloc_size",
+                      "count": 1,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "name": "swift::RefCounts<swift::RefCountBitsT<(swift::RefCountInlinedness)1>>::doDecrementSlow<(swift::PerformDeinit)1>(swift::RefCountBitsT<(swift::RefCountInlinedness)1>, unsigned int)",
+                  "count": 9,
+                  "children": [
+                    {
+                      "name": "_swift_release_dealloc",
+                      "count": 8,
+                      "children": [
+                        {
+                          "name": "__DataStorage.__deallocating_deinit",
+                          "count": 7,
+                          "children": [
+                            {
+                              "name": "xzm_segment_group_free_chunk",
+                              "count": 7,
+                              "children": [
+                                {
+                                  "name": "_xzm_segment_group_segment_span_free_coalesce",
+                                  "count": 3,
+                                  "children": [
+                                    {
+                                      "name": "_xzm_segment_group_span_mark_used",
+                                      "count": 3,
+                                      "children": [
+                                        {
+                                          "name": "_xzm_reclaim_mark_used",
+                                          "count": 3,
+                                          "children": [
+                                            {
+                                              "name": "_xzm_reclaim_mark_used_locked",
+                                              "count": 1,
+                                              "children": [
+                                                {
+                                                  "name": "mach_vm_reclaim_try_cancel",
+                                                  "count": 1,
+                                                  "children": []
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                },
+                                {
+                                  "name": "_xzm_segment_group_span_mark_free",
+                                  "count": 3,
+                                  "children": [
+                                    {
+                                      "name": "_xzm_reclaim_mark_free",
+                                      "count": 3,
+                                      "children": [
+                                        {
+                                          "name": "xzm_reclaim_mark_free_locked",
+                                          "count": 3,
+                                          "children": [
+                                            {
+                                              "name": "mach_vm_reclaim_try_enter",
+                                              "count": 3,
+                                              "children": [
+                                                {
+                                                  "name": "mach_absolute_time",
+                                                  "count": 3,
+                                                  "children": []
+                                                }
+                                              ]
+                                            }
+                                          ]
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        },
+                        {
+                          "name": "_xzm_free_main",
+                          "count": 1,
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "static Task<>.checkCancellation()",
+                  "count": 6,
+                  "children": [
+                    {
+                      "name": "__isPlatformOrVariantPlatformVersionAtLeast",
+                      "count": 5,
+                      "children": [
+                        {
+                          "name": "_availability_version_check",
+                          "count": 3,
+                          "children": []
+                        }
+                      ]
+                    },
+                    {
+                      "name": "swift_retain",
+                      "count": 1,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "name": "Data._Representation.subscript.getter",
+                  "count": 2,
+                  "children": [
+                    {
+                      "name": "swift_retain",
+                      "count": 2,
+                      "children": []
+                    }
+                  ]
+                },
+                {
+                  "name": "outlined copy of Data._Representation",
+                  "count": 2,
+                  "children": []
+                },
+                {
+                  "name": "<deduplicated_symbol>",
+                  "count": 1,
+                  "children": []
+                },
+                {
+                  "name": "DYLD-STUB$$static Array._allocateBufferUninitialized(minimumCapacity:)",
+                  "count": 1,
+                  "children": []
+                },
+                {
+                  "name": "DYLD-STUB$$static Task<>.checkCancellation()",
+                  "count": 1,
+                  "children": []
+                },
+                {
+                  "name": "DYLD-STUB$$swift_beginAccess",
+                  "count": 1,
+                  "children": []
+                },
+                {
+                  "name": "Data.append(_:)",
+                  "count": 1,
+                  "children": []
+                },
+                {
+                  "name": "_stdlib_isOSVersionAtLeastOrVariantVersionAtLeast(_:_:_:_:_:_:)",
+                  "count": 1,
+                  "children": []
+                },
+                {
+                  "name": "swift_release",
+                  "count": 1,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "swift_beginAccess",
+              "count": 2,
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "protocol witness for FileContentSource.metadata() in conformance LocalFileContentSource",
+          "count": 61,
+          "children": [
+            {
+              "name": "LocalFileContentSource.metadata()",
+              "count": 61,
+              "children": [
+                {
+                  "name": "fstat",
+                  "count": 59,
+                  "children": []
+                },
+                {
+                  "name": "static Task<>.checkCancellation()",
+                  "count": 2,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "swift_task_switchImpl(swift::AsyncContext*, void (swift::AsyncContext* swift_async_context) swiftasynccall*, swift::SerialExecutorRef)",
+          "count": 14,
+          "children": [
+            {
+              "name": "swift::concurrency::trace::task_switch_executor(swift::AsyncTask*, swift::SerialExecutorRef, swift::TaskExecutorRef)",
+              "count": 6,
+              "children": [
+                {
+                  "name": "os_signpost_enabled",
+                  "count": 1,
+                  "children": []
+                },
+                {
+                  "name": "swift::SerialExecutorRef::isMainExecutor() const",
+                  "count": 1,
+                  "children": []
+                },
+                {
+                  "name": "swift::TargetMetadata<swift::InProcess>::getTypeContextDescriptor() const",
+                  "count": 1,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "(anonymous namespace)::DefaultActorImpl::tryLock(bool)",
+              "count": 4,
+              "children": [
+                {
+                  "name": "swift::concurrency::trace::actor_state_changed(swift::HeapObject*, swift::Job*, unsigned char, bool, bool, unsigned char)",
+                  "count": 2,
+                  "children": [
+                    {
+                      "name": "os_signpost_id_make_with_pointer",
+                      "count": 2,
+                      "children": [
+                        {
+                          "name": "os_signpost_enabled",
+                          "count": 1,
+                          "children": []
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "name": "dispatch_thread_get_current_override_qos_floor",
+                  "count": 1,
+                  "children": []
+                }
+              ]
+            },
+            {
+              "name": "swift::AsyncTask::getPreferredTaskExecutor(bool)",
+              "count": 1,
+              "children": []
+            },
+            {
+              "name": "swift::concurrency::trace::actor_state_changed(swift::HeapObject*, swift::Job*, unsigned char, bool, bool, unsigned char)",
+              "count": 1,
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "swift::RefCounts<swift::RefCountBitsT<(swift::RefCountInlinedness)1>>::doDecrementSlow<(swift::PerformDeinit)1>(swift::RefCountBitsT<(swift::RefCountInlinedness)1>, unsigned int)",
+          "count": 9,
+          "children": [
+            {
+              "name": "_swift_release_dealloc",
+              "count": 9,
+              "children": [
+                {
+                  "name": "__DataStorage.__deallocating_deinit",
+                  "count": 9,
+                  "children": [
+                    {
+                      "name": "xzm_segment_group_free_chunk",
+                      "count": 6,
+                      "children": [
+                        {
+                          "name": "_xzm_segment_group_segment_span_free_coalesce",
+                          "count": 3,
+                          "children": [
+                            {
+                              "name": "_xzm_segment_group_segment_span_free",
+                              "count": 1,
+                              "children": []
+                            }
+                          ]
+                        },
+                        {
+                          "name": "_xzm_segment_group_span_mark_free",
+                          "count": 3,
+                          "children": [
+                            {
+                              "name": "_xzm_reclaim_mark_free",
+                              "count": 3,
+                              "children": [
+                                {
+                                  "name": "xzm_reclaim_mark_free_locked",
+                                  "count": 3,
+                                  "children": [
+                                    {
+                                      "name": "mach_vm_reclaim_try_enter",
+                                      "count": 3,
+                                      "children": [
+                                        {
+                                          "name": "mach_absolute_time",
+                                          "count": 3,
+                                          "children": []
+                                        }
+                                      ]
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "name": "_free",
+                      "count": 1,
+                      "children": []
+                    },
+                    {
+                      "name": "_xzm_free_outlined",
+                      "count": 1,
+                      "children": []
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "DYLD-STUB$$swift_task_dealloc",
+          "count": 2,
+          "children": []
+        },
+        {
+          "name": "Data.range(of:options:in:)",
+          "count": 1,
+          "children": []
+        },
+        {
+          "name": "storeEnumTagSinglePayload for TextMatch",
+          "count": 1,
+          "children": []
+        },
+        {
+          "name": "swift_task_alloc",
+          "count": 1,
+          "children": [
+            {
+              "name": "swift_task_getCurrent",
+              "count": 1,
+              "children": []
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "swift_task_switchImpl(swift::AsyncContext*, void (swift::AsyncContext* swift_async_context) swiftasynccall*, swift::SerialExecutorRef)",
+      "count": 16,
+      "children": [
+        {
+          "name": "swift::concurrency::trace::task_switch_executor(swift::AsyncTask*, swift::SerialExecutorRef, swift::TaskExecutorRef)",
+          "count": 3,
+          "children": [
+            {
+              "name": "os_signpost_id_make_with_pointer",
+              "count": 1,
+              "children": [
+                {
+                  "name": "os_signpost_enabled",
+                  "count": 1,
+                  "children": []
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "name": "(anonymous namespace)::DefaultActorImpl::unlock(bool)",
+          "count": 2,
+          "children": [
+            {
+              "name": "???",
+              "count": 1,
+              "children": []
+            },
+            {
+              "name": "os_signpost_id_make_with_pointer",
+              "count": 1,
+              "children": []
+            }
+          ]
+        },
+        {
+          "name": "swift::AsyncTask::getPreferredTaskExecutor(bool)",
+          "count": 2,
+          "children": []
+        }
+      ]
+    },
+    {
+      "name": "(anonymous namespace)::DefaultActorImpl::unlock(bool)",
+      "count": 1,
+      "children": []
+    }
+  ]
+}
