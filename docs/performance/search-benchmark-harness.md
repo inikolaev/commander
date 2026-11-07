@@ -1,5 +1,7 @@
 # Reproducible document search benchmark
 
+Measured results and flame graphs are in the [search performance report](search-performance.md).
+
 Build a release executable with `swift build -c release --product SearchBenchmark`.
 If SwiftPM cannot resolve remote dependencies but a release dependency build
 already exists, the offline builder recompiles the three current search
