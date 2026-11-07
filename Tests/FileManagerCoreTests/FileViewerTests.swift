@@ -7,7 +7,6 @@ private func viewerFixture(_ data: Data) throws -> URL {
     try data.write(to: url)
     return url
 }
-
 @Test func viewerWrappedShortLineCrossesReadBoundaries() async throws {
     let line = "          const index = +e.target.dataset.index;"
     for boundary in [4096, 8192, 65_536] {
@@ -468,4 +467,67 @@ private func viewerFixture(_ data: Data) throws -> URL {
             #expect(reportedTarget == target)
         }
     }
+}
+@Test func viewerRevealHighlightsOriginalBytesInTextAndHex() async throws {
+    let bytes: [UInt8] = Array("x\tA\r\n".utf8) + [0xFF] + Array("B\n".utf8)
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try Data(bytes).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try FileViewerDocument(url: url)
+    let tab = try await document.page(.reveal(byteOffset: 1), rows: 3, wrapColumns: 20,
+                                      activeRange: 1..<3)
+    #expect(tab.lines.first?.text == "x   A")
+    #expect(tab.lines.first?.searchColumns == [1..<4, 4..<5])
+    let malformed = try await document.page(.reveal(byteOffset: 5), rows: 3, wrapColumns: 20,
+                                            activeRange: 5..<6)
+    #expect(malformed.lines.first?.text == "�B")
+    #expect(malformed.lines.first?.searchColumns == [0..<1])
+    let hex = try await document.page(.reveal(byteOffset: 5), rows: 3, mode: .hex,
+                                      activeRange: 5..<6)
+    let columns = HexRowFormatter.columns(forByte: 5)
+    #expect(hex.lines.first?.searchColumns == [columns.hex, columns.ascii])
+}
+
+@Test func viewerRevealInOversizedLineWorksWhenWrapped() async throws {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let marker = 16 * 1024 * 1024 + 8
+    var bytes = Data(repeating: 0x78, count: marker)
+    bytes.append(contentsOf: "hit\n".utf8)
+    try bytes.write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try FileViewerDocument(url: url)
+    let page = try await document.page(.reveal(byteOffset: Int64(marker)), rows: 2,
+                                       wrapColumns: 80,
+                                       activeRange: Int64(marker)..<Int64(marker + 3))
+    #expect(page.lines.first?.text.contains("hit") == true)
+    #expect(page.lines.first?.searchColumns.count == 3)
+}
+
+@Test func viewerNewlineHighlightUsesGraphemeColumn() async throws {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try Data("a\u{301}\r\nnext".utf8).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try FileViewerDocument(url: url)
+    let page = try await document.page(.reveal(byteOffset: 3), rows: 2,
+                                       activeRange: 3..<5)
+    #expect(page.lines.first?.text.count == 1)
+    #expect(page.lines.first?.searchColumns == [0..<1])
+}
+
+@Test func viewerUnwrappedRowDecodeScalesLinearlyWithoutSearch() async throws {
+    func elapsed(_ length: Int) async throws -> Double {
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        try Data(repeating: 0x78, count: length).write(to: url)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let document = try FileViewerDocument(url: url)
+        let clock = ContinuousClock()
+        let start = clock.now
+        let page = try await document.page(rows: 1)
+        #expect(page.lines.first?.text.count == length)
+        let duration = start.duration(to: clock.now).components
+        return Double(duration.seconds) + Double(duration.attoseconds) / 1e18
+    }
+    let small = try await elapsed(80_000)
+    let large = try await elapsed(320_000)
+    #expect(large < max(0.02, small) * 8)
 }

@@ -10,6 +10,12 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
     let path: String
     var onSave: (() -> Void)?
     var onClose: (() -> Void)?
+    var onSearchAction: ((DocumentSearchKeyAction) -> Void)?
+    var onManualNavigation: ((Int) -> Void)?
+    var onContentChange: ((Int) -> Void)?
+    static let searchBarHeight: CGFloat = 34
+    var searchActive = false { didSet { if oldValue != searchActive { changed() } } }
+    private var observedContentVersion: Int
     private(set) var topLine = 0
     private var leftOffset: CGFloat = 0
     private var scrollRemainder: CGFloat = 0
@@ -23,13 +29,18 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
     private var cell: CGFloat { TerminalTheme.cellAdvance }
     var visibleRows: Int { textGeometry.visibleRows }
     private var rows: Int { visibleRows }
-    private var textGeometry: TerminalTextGeometry { TerminalTextGeometry(bounds: bounds) }
+    private var textGeometry: TerminalTextGeometry {
+        var viewport = bounds
+        if searchActive { viewport.size.height = max(0, viewport.height - Self.searchBarHeight) }
+        return TerminalTextGeometry(bounds: viewport)
+    }
     private var textWidth: CGFloat { max(cell, bounds.width - 4) }
 
     init(document: any EditorDocument, path: String) {
         self.document = document
         self.selection = EditorSelection(document: document)
         self.path = path
+        self.observedContentVersion = document.contentVersion
         super.init(frame: .zero)
         addSubview(insertionIndicator.view)
         setAccessibilityElement(true)
@@ -185,6 +196,10 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
     private func cursorX() -> CGFloat { cursorX(for: selection) }
     func changed(ensureVisible: Bool = true) {
         selection.coalesceCarets()
+        if observedContentVersion != document.contentVersion {
+            observedContentVersion = document.contentVersion
+            onContentChange?(selection.range.location)
+        }
         if ensureVisible {
             topLine = min(topLine, selection.line)
             topLine = max(topLine, selection.line - rows + 1)
@@ -251,18 +266,24 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
             }
         }
         NSGraphicsContext.restoreGraphicsState()
-        TerminalFunctionKeys.draw(in: footerRect, labels: [2: "Save", 10: "Close"])
+        TerminalFunctionKeys.draw(in: footerRect, labels: [2: "Save", 7: "Search", 10: "Close"])
     }
     private var footerRect: NSRect {
         NSRect(x: 0, y: bounds.height - TerminalTheme.lineHeight, width: bounds.width, height: TerminalTheme.lineHeight)
     }
 
     override func keyDown(with event: NSEvent) {
+        let searchAction = DocumentSearchKeyAction.action(for: event, searchActive: searchActive)
+        if searchAction != .none, !hasMarkedText() {
+            onSearchAction?(searchAction)
+            return
+        }
         if event.modifierFlags.contains([.command, .option]),
            !event.modifierFlags.contains(.shift), [125, 126].contains(event.keyCode) {
             unmarkText()
             selection.addCaretVertically(event.keyCode == 126 ? -1 : 1)
             changed()
+            onManualNavigation?(selection.range.location)
             return
         }
         if event.modifierFlags.contains(.command) {
@@ -318,6 +339,9 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         default: super.doCommand(by: selector)
         }
         changed()
+        if command.hasPrefix("move") || command.hasPrefix("scroll") || command.hasPrefix("page") {
+            onManualNavigation?(selection.range.location)
+        }
     }
     private func moveWord(_ direction: Int, caret selection: EditorSelection, extending: Bool) {
         let forward = direction > 0
@@ -384,6 +408,7 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         selection.clearAdditionalCarets()
         selection.select(NSRange(location: 0, length: document.length))
         changed()
+        onManualNavigation?(selection.range.location)
     }
 
     // Native text input handles dead keys, keyboard layouts and IME composition.
@@ -449,7 +474,9 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         let point = convert(event.locationInWindow, from: nil)
         if let number = TerminalFunctionKeys.number(at: point, in: footerRect) {
             unmarkText()
-            if number == 2 { onSave?() } else if number == 10 { onClose?() }
+            if number == 2 { onSave?() }
+            else if number == 7 { onSearchAction?(.focus) }
+            else if number == 10 { onClose?() }
             return
         }
         window?.makeFirstResponder(self)
@@ -471,11 +498,13 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         }
         dragging = true
         changed()
+        onManualNavigation?(selection.range.location)
     }
     override func mouseDragged(with event: NSEvent) {
         guard dragging else { return }
         selection.set(offset(at: convert(event.locationInWindow, from: nil)), extending: true)
         changed()
+        onManualNavigation?(selection.range.location)
     }
     override func mouseUp(with event: NSEvent) {
         dragging = false

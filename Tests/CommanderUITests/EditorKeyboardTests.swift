@@ -10,6 +10,43 @@ import EditorCore
         characters: characters, charactersIgnoringModifiers: characters, isARepeat: false, keyCode: code))
 }
 
+@Test @MainActor func editorSearchKeysRouteWithoutChangingDocumentOrUndo() throws {
+    _ = NSApplication.shared
+    let document = EditorDocuments.make(text: "target target")
+    let editor = TerminalFileEditor(document: document, path: "/tmp/search.txt")
+    var actions: [DocumentSearchKeyAction] = []
+    editor.onSearchAction = { actions.append($0) }
+    editor.keyDown(with: try editorKey(String(NSEvent.SpecialKey.f7.unicodeScalar), code: 98, modifiers: []))
+    editor.keyDown(with: try editorKey(String(NSEvent.SpecialKey.f7.unicodeScalar), code: 98, modifiers: .shift))
+    editor.keyDown(with: try editorKey(String(NSEvent.SpecialKey.f7.unicodeScalar), code: 98, modifiers: .option))
+    editor.keyDown(with: try editorKey("f", code: 3, modifiers: .command))
+    editor.keyDown(with: try editorKey("g", code: 5, modifiers: .command))
+    editor.keyDown(with: try editorKey("g", code: 5, modifiers: [.command, .shift]))
+    editor.searchActive = true
+    editor.keyDown(with: try editorKey("\u{1B}", code: 53, modifiers: []))
+    #expect(actions == [.focus, .forward, .backward, .focus, .forward, .backward, .dismiss])
+    #expect(document.contentVersion == 0)
+    #expect(!document.isModified)
+    #expect(!document.canUndo)
+}
+
+@Test @MainActor func editorSelectAllAndVerticalCaretKeysResetSearchOrigin() throws {
+    _ = NSApplication.shared
+    let document = EditorDocuments.make(text: "one\ntwo")
+    let editor = TerminalFileEditor(document: document, path: "/tmp/search-navigation.txt")
+    var origins: [Int] = []
+    editor.onManualNavigation = { origins.append($0) }
+    editor.selectAll(nil)
+    #expect(origins == [0])
+    editor.selection.set(0)
+    editor.keyDown(with: try editorKey(String(NSEvent.SpecialKey.downArrow.unicodeScalar),
+                                       code: 125, modifiers: [.command, .option]))
+    #expect(origins.last == editor.selection.range.location)
+    #expect(origins.count == 2)
+    #expect(!document.isModified)
+    #expect(!document.canUndo)
+}
+
 @Test @MainActor func editorCommandYDeletesLineAndSupportsUndoRedo() throws {
     _ = NSApplication.shared
     let document = EditorDocuments.make(text: "first\nsecond\nthird")

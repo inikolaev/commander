@@ -66,6 +66,490 @@ import SyntaxCore
     #expect(window.firstResponder === pane)
 }
 
+@Test @MainActor func viewerSearchKeysRevealAndDismissWithoutClosing() async throws {
+    _ = NSApplication.shared
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try Data("first\nneedle\nlast needle\n".utf8).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 400),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+    window.contentView = NSView(frame: window.contentRect(forFrameRect: window.frame))
+    let coordinator = FileViewerCoordinator()
+    coordinator.present(url: url, window: window)
+    for _ in 0..<200 {
+        if coordinator.view != nil { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    let viewer = try #require(coordinator.view)
+    func key(_ code: UInt16, _ flags: NSEvent.ModifierFlags = []) throws -> NSEvent {
+        try #require(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags,
+            timestamp: 1, windowNumber: window.windowNumber, context: nil,
+            characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: code))
+    }
+    viewer.keyDown(with: try key(98)) // F7
+    let surface = try #require(viewer.subviews.compactMap { $0 as? DocumentSearchSurface }.first)
+    surface.onQueryChange?(DocumentSearchQuery(text: "needle"))
+    for _ in 0..<200 {
+        if viewer.page?.offset == 6 && viewer.page?.lines.first?.searchColumns.count == 6 { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.page?.offset == 6)
+    #expect(viewer.page?.lines.first?.searchColumns.map(\.lowerBound) == Array(0..<6))
+    viewer.keyDown(with: try key(98, .shift)) // Shift-F7
+    for _ in 0..<200 {
+        if viewer.page?.offset == 13 { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.page?.offset == 13)
+    let click = try #require(NSEvent.mouseEvent(with: .leftMouseDown,
+        location: viewer.convert(NSPoint(x: 20, y: TerminalTheme.lineHeight * 2), to: nil),
+        modifierFlags: [], timestamp: 1, windowNumber: window.windowNumber,
+        context: nil, eventNumber: 0, clickCount: 1, pressure: 1))
+    viewer.mouseDown(with: click)
+    #expect(window.firstResponder === viewer)
+    viewer.keyDown(with: try key(53)) // Escape from content while search remains open
+    #expect(viewer.subviews.compactMap { $0 as? DocumentSearchSurface }.isEmpty)
+    #expect(coordinator.view === viewer)
+    #expect(window.firstResponder === viewer)
+    coordinator.close()
+}
+
+@Test @MainActor func oversizedUnwrappedViewerRecoversToWrappedMode() async throws {
+    _ = NSApplication.shared
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    var bytes = Data(repeating: 0x78, count: 16 * 1024 * 1024 + 4)
+    bytes.append(0x0A)
+    try bytes.write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 400),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+    window.contentView = NSView(frame: window.contentRect(forFrameRect: window.frame))
+    let coordinator = FileViewerCoordinator()
+    coordinator.present(url: url, window: window)
+    for _ in 0..<200 {
+        if coordinator.view != nil { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    let viewer = try #require(coordinator.view)
+    coordinator.toggleWrap()
+    for _ in 0..<200 {
+        if viewer.wrapsText { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(coordinator.view === viewer)
+    #expect(viewer.wrapsText)
+    coordinator.close()
+}
+
+@Test @MainActor func viewerSearchHitSurvivesModeAndWrapSwitches() async throws {
+    _ = NSApplication.shared
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try Data((String(repeating: "x", count: 900) + "needle\n").utf8).write(to: url)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 400),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+    window.contentView = NSView(frame: window.contentRect(forFrameRect: window.frame))
+    let coordinator = FileViewerCoordinator()
+    coordinator.present(url: url, window: window)
+    for _ in 0..<200 {
+        if coordinator.view != nil { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    let viewer = try #require(coordinator.view)
+    coordinator.toggleWrap()
+    coordinator.openSearch()
+    let surface = try #require(viewer.subviews.compactMap { $0 as? DocumentSearchSurface }.first)
+    surface.onQueryChange?(DocumentSearchQuery(text: "needle"))
+    for _ in 0..<200 {
+        if viewer.activeSearchRange?.lowerBound == 900 && viewer.horizontalOffset > 0 { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.horizontalOffset > 0)
+    coordinator.toggleMode()
+    for _ in 0..<200 {
+        if viewer.page?.mode == .hex { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.page?.mode == .hex)
+    #expect(viewer.page?.lines.first?.offset == 896)
+    #expect(viewer.page?.lines.first?.searchColumns.count == 12)
+    coordinator.toggleMode()
+    for _ in 0..<200 {
+        if viewer.page?.mode == .text { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.page?.mode == .text)
+    #expect(viewer.horizontalOffset > 0)
+    coordinator.toggleWrap()
+    for _ in 0..<200 {
+        if viewer.wrapsText && viewer.page?.lines.first?.offset ?? 0 > 0 { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.page?.lines.first?.offset ?? 0 > 0)
+    #expect(viewer.activeSearchRange?.lowerBound == 900)
+    coordinator.close()
+}
+
+private actor MutableViewerTestSource: FileContentSource {
+    var data: Data
+    var revision: UInt64 = 1
+    var metadataCalls = 0
+    var mutationCall: Int?
+    var replacement: Data?
+    var pauseRevealRead = false
+    var pausePageRead = false
+    var readBlocked = false
+    var readContinuation: CheckedContinuation<Void, Never>?
+    init(_ text: String) { data = Data(text.utf8) }
+    func metadata() -> ContentMetadata {
+        metadataCalls += 1
+        if metadataCalls == mutationCall, let replacement {
+            data = replacement
+            revision += 1
+            mutationCall = nil
+        }
+        return ContentMetadata(size: Int64(data.count), revision: revision)
+    }
+    func length() -> Int64 { Int64(data.count) }
+    func read(at offset: Int64, count: Int) async -> Data {
+        if pausePageRead && offset == 0 {
+            pausePageRead = false
+            readBlocked = true
+            await withCheckedContinuation { readContinuation = $0 }
+        }
+        if pauseRevealRead && offset >= 4_000 && count < 1_000 {
+            pauseRevealRead = false
+            readBlocked = true
+            await withCheckedContinuation { readContinuation = $0 }
+        }
+        let start = Int(offset)
+        guard start < data.count else { return Data() }
+        return data[start..<min(data.count, start + count)]
+    }
+    func replace(_ text: String) { data = Data(text.utf8); revision += 1 }
+    func mutateOnSixthMetadata(_ text: String) {
+        mutationCall = metadataCalls + 6
+        replacement = Data(text.utf8)
+    }
+    func armRevealPause() { pauseRevealRead = true }
+    func armPagePause() { pausePageRead = true }
+    func isReadBlocked() -> Bool { readBlocked }
+    func releaseRead() { readContinuation?.resume(); readContinuation = nil }
+}
+
+@Test @MainActor func viewerSearchBarReducesPagingByObscuredRows() throws {
+    _ = NSApplication.shared
+    let viewer = TerminalFileViewer(path: "/tmp/test.txt")
+    viewer.frame = NSRect(x: 0, y: 0, width: 780, height: 400)
+    let fullRows = viewer.visibleRows
+    viewer.searchActive = true
+    #expect(viewer.visibleRows < fullRows)
+    var requestedScroll: Int?
+    viewer.onInput = { input in
+        if case .navigate(.scroll(let rows)) = input { requestedScroll = rows }
+    }
+    let pageDown = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
+        modifierFlags: [], timestamp: 1, windowNumber: 0, context: nil,
+        characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 121))
+    viewer.keyDown(with: pageDown)
+    #expect(requestedScroll == viewer.visibleRows)
+}
+
+@Test @MainActor func viewerContinuationClearsStaleHighlightAfterSourceMutation() async throws {
+    _ = NSApplication.shared
+    let source = MutableViewerTestSource("needle\n")
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 400),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+    window.contentView = NSView(frame: window.contentRect(forFrameRect: window.frame))
+    let coordinator = FileViewerCoordinator()
+    coordinator.present(url: URL(fileURLWithPath: "/tmp/test.txt"), displayPath: "/tmp/test.txt",
+                        window: window, openSource: { source })
+    for _ in 0..<200 {
+        if coordinator.view != nil { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    let viewer = try #require(coordinator.view)
+    coordinator.openSearch()
+    let surface = try #require(viewer.subviews.compactMap { $0 as? DocumentSearchSurface }.first)
+    surface.onQueryChange?(DocumentSearchQuery(text: "needle"))
+    for _ in 0..<200 {
+        if viewer.activeSearchRange == 0..<6 { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.activeSearchRange == 0..<6)
+    await source.replace("xxxxxx\n")
+    surface.onContinue?(.forward)
+    for _ in 0..<200 {
+        if viewer.activeSearchRange == nil { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.activeSearchRange == nil)
+    #expect(viewer.visibleSearchColumns(forRow: 0).isEmpty)
+    coordinator.close()
+}
+
+@Test @MainActor func viewerRefreshInvalidatesSameSizeEditedHit() async throws {
+    _ = NSApplication.shared
+    let source = MutableViewerTestSource("needle\n")
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 400),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+    window.contentView = NSView(frame: window.contentRect(forFrameRect: window.frame))
+    let coordinator = FileViewerCoordinator()
+    coordinator.present(url: URL(fileURLWithPath: "/tmp/test.txt"), displayPath: "/tmp/test.txt", window: window,
+                        openSource: { source })
+    for _ in 0..<200 {
+        if coordinator.view != nil { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    let viewer = try #require(coordinator.view)
+    coordinator.openSearch()
+    let surface = try #require(viewer.subviews.compactMap { $0 as? DocumentSearchSurface }.first)
+    surface.onQueryChange?(DocumentSearchQuery(text: "needle"))
+    for _ in 0..<200 {
+        if viewer.activeSearchRange != nil { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.activeSearchRange == 0..<6)
+    await source.replace("xxxxxx\n")
+    coordinator.request(.stay)
+    for _ in 0..<200 {
+        if viewer.page?.revision == 2 { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.page?.revision == 2)
+    #expect(viewer.activeSearchRange == nil)
+    #expect(viewer.page?.lines.first?.searchColumns.isEmpty == true)
+    #expect(coordinator.view === viewer)
+    coordinator.close()
+}
+
+@Test @MainActor func viewerDoesNotDrawStaleProjectionAfterValidationRace() async throws {
+    _ = NSApplication.shared
+    let source = MutableViewerTestSource("needle\n")
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 400),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+    window.contentView = NSView(frame: window.contentRect(forFrameRect: window.frame))
+    let coordinator = FileViewerCoordinator()
+    coordinator.present(url: URL(fileURLWithPath: "/tmp/test.txt"), displayPath: "/tmp/test.txt",
+                        window: window, openSource: { source })
+    for _ in 0..<200 {
+        if coordinator.view != nil { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    let viewer = try #require(coordinator.view)
+    coordinator.openSearch()
+    let surface = try #require(viewer.subviews.compactMap { $0 as? DocumentSearchSurface }.first)
+    surface.onQueryChange?(DocumentSearchQuery(text: "needle"))
+    for _ in 0..<200 {
+        if viewer.activeSearchRange == 0..<6 && !coordinator.isBusy { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.visibleSearchColumns(forRow: 0).count == 6)
+    await source.mutateOnSixthMetadata("xxxxxx\n")
+    coordinator.request(.stay)
+    for _ in 0..<200 {
+        if viewer.page?.revision == 2 { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.page?.revision == 2)
+    #expect(viewer.activeSearchRange == nil)
+    #expect(viewer.page?.lines.first?.searchColumns.count == 6)
+    #expect(viewer.visibleSearchColumns(forRow: 0).isEmpty)
+    coordinator.close()
+}
+
+private actor ResolvingViewerTestSource: FileContentSource {
+    let data: Data
+    var known = false
+    init(_ text: String) { data = Data(text.utf8) }
+    func metadata() -> ContentMetadata {
+        ContentMetadata(size: known ? Int64(data.count) : nil, revision: 1)
+    }
+    func length() -> Int64 { known = true; return Int64(data.count) }
+    func read(at offset: Int64, count: Int) -> Data {
+        let start = Int(offset)
+        guard start < data.count else { known = true; return Data() }
+        let end = min(data.count, start + count)
+        if end - start < count { known = true }
+        return data[start..<end]
+    }
+}
+
+@Test @MainActor func viewerUnknownSizeResolutionRetainsActiveHit() async throws {
+    _ = NSApplication.shared
+    let source = ResolvingViewerTestSource(String(repeating: "x\n", count: 5_000) + "needle\n")
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 400),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+    window.contentView = NSView(frame: window.contentRect(forFrameRect: window.frame))
+    let coordinator = FileViewerCoordinator()
+    coordinator.present(url: URL(fileURLWithPath: "/tmp/test.txt"), displayPath: "/tmp/test.txt",
+                        window: window, openSource: { source })
+    for _ in 0..<200 {
+        if coordinator.view != nil { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    let viewer = try #require(coordinator.view)
+    #expect(viewer.page?.fileSize == nil)
+    coordinator.openSearch()
+    let surface = try #require(viewer.subviews.compactMap { $0 as? DocumentSearchSurface }.first)
+    surface.onQueryChange?(DocumentSearchQuery(text: "needle"))
+    for _ in 0..<200 {
+        if viewer.page?.offset == 10_000 && viewer.page?.fileSize != nil &&
+           viewer.activeSearchRange?.lowerBound == 10_000 { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.page?.fileSize == 10_007)
+    #expect(viewer.page?.offset == 10_000)
+    #expect(viewer.activeSearchRange?.lowerBound == 10_000)
+    #expect(!viewer.visibleSearchColumns(forRow: 0).isEmpty)
+    coordinator.close()
+}
+
+@Test @MainActor func viewerFreshQueryHitSurvivesOldPageRevision() async throws {
+    _ = NSApplication.shared
+    let source = MutableViewerTestSource("xxxxxx\n")
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 400),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+    window.contentView = NSView(frame: window.contentRect(forFrameRect: window.frame))
+    let coordinator = FileViewerCoordinator()
+    coordinator.present(url: URL(fileURLWithPath: "/tmp/test.txt"), displayPath: "/tmp/test.txt",
+                        window: window, openSource: { source })
+    for _ in 0..<200 {
+        if coordinator.view != nil { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    let viewer = try #require(coordinator.view)
+    #expect(viewer.page?.revision == 1)
+    await source.replace("needle\n")
+    coordinator.openSearch()
+    let surface = try #require(viewer.subviews.compactMap { $0 as? DocumentSearchSurface }.first)
+    surface.onQueryChange?(DocumentSearchQuery(text: "needle"))
+    for _ in 0..<200 {
+        if viewer.page?.revision == 2 && viewer.activeSearchRange == 0..<6 { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.page?.revision == 2)
+    #expect(viewer.activeSearchRange == 0..<6)
+    #expect(viewer.visibleSearchColumns(forRow: 0).count == 6)
+    coordinator.close()
+}
+
+@Test @MainActor func viewerDismissedSearchDoesNotCompletePausedReveal() async throws {
+    _ = NSApplication.shared
+    let source = MutableViewerTestSource(String(repeating: "x\n", count: 2_000) + "needle\n")
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 400),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+    window.contentView = NSView(frame: window.contentRect(forFrameRect: window.frame))
+    let coordinator = FileViewerCoordinator()
+    coordinator.present(url: URL(fileURLWithPath: "/tmp/test.txt"), displayPath: "/tmp/test.txt",
+                        window: window, openSource: { source })
+    for _ in 0..<200 {
+        if coordinator.view != nil { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    let viewer = try #require(coordinator.view)
+    await source.armRevealPause()
+    coordinator.openSearch()
+    let surface = try #require(viewer.subviews.compactMap { $0 as? DocumentSearchSurface }.first)
+    surface.onQueryChange?(DocumentSearchQuery(text: "needle"))
+    for _ in 0..<200 {
+        if await source.isReadBlocked() { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(await source.isReadBlocked())
+    #expect(viewer.page?.offset == 0)
+    surface.dismissAndRestoreFocus()
+    await source.releaseRead()
+    for _ in 0..<200 {
+        if !coordinator.isBusy { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.page?.offset == 0)
+    #expect(!viewer.searchActive)
+    #expect(viewer.activeSearchRange == nil)
+    coordinator.close()
+}
+
+@Test @MainActor func viewerManualScrollSupersedesPausedSearchReveal() async throws {
+    _ = NSApplication.shared
+    let source = MutableViewerTestSource(String(repeating: "x\n", count: 2_000) + "needle\n")
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 400),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+    window.contentView = NSView(frame: window.contentRect(forFrameRect: window.frame))
+    let coordinator = FileViewerCoordinator()
+    coordinator.present(url: URL(fileURLWithPath: "/tmp/test.txt"), displayPath: "/tmp/test.txt",
+                        window: window, openSource: { source })
+    for _ in 0..<200 {
+        if coordinator.view != nil { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    let viewer = try #require(coordinator.view)
+    await source.armRevealPause()
+    coordinator.openSearch()
+    let surface = try #require(viewer.subviews.compactMap { $0 as? DocumentSearchSurface }.first)
+    surface.onQueryChange?(DocumentSearchQuery(text: "needle"))
+    for _ in 0..<200 {
+        if await source.isReadBlocked() { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(await source.isReadBlocked())
+    #expect(viewer.page?.offset == 0)
+    coordinator.request(.scroll(1))
+    await source.releaseRead()
+    for _ in 0..<200 {
+        if !coordinator.isBusy { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.page?.offset == 2)
+    #expect(viewer.activeSearchRange == nil)
+    coordinator.close()
+}
+
+@Test @MainActor func viewerDismissalDropsRevealQueuedBehindPageRead() async throws {
+    _ = NSApplication.shared
+    let source = MutableViewerTestSource(String(repeating: "x\n", count: 2_000) + "needle\n")
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 400),
+                          styleMask: [.titled], backing: .buffered, defer: false)
+    window.contentView = NSView(frame: window.contentRect(forFrameRect: window.frame))
+    let coordinator = FileViewerCoordinator()
+    coordinator.present(url: URL(fileURLWithPath: "/tmp/test.txt"), displayPath: "/tmp/test.txt",
+                        window: window, openSource: { source })
+    for _ in 0..<200 {
+        if coordinator.view != nil { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    let viewer = try #require(coordinator.view)
+    for _ in 0..<200 {
+        if !coordinator.isBusy { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    await source.armPagePause()
+    coordinator.request(.stay)
+    for _ in 0..<200 {
+        if await source.isReadBlocked() { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(await source.isReadBlocked())
+    coordinator.openSearch()
+    let surface = try #require(viewer.subviews.compactMap { $0 as? DocumentSearchSurface }.first)
+    surface.onQueryChange?(DocumentSearchQuery(text: "needle"))
+    for _ in 0..<200 {
+        if viewer.activeSearchRange?.lowerBound == 4_000 { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.activeSearchRange?.lowerBound == 4_000)
+    surface.dismissAndRestoreFocus()
+    await source.releaseRead()
+    for _ in 0..<200 {
+        if !coordinator.isBusy { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.page?.offset == 0)
+    #expect(!viewer.searchActive)
+    #expect(viewer.activeSearchRange == nil)
+    coordinator.close()
+}
+
 @Test @MainActor func failedViewerOpenKeepsPanesVisibleAndRestoresFocus() async throws {
     _ = NSApplication.shared
     let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 400), styleMask: [.titled], backing: .buffered, defer: false)

@@ -36,6 +36,7 @@ public protocol EditorDocument: AnyObject {
     var canUndo: Bool { get }
     var canRedo: Bool { get }
     func text(in range: NSRange) -> String
+    @MainActor func makeSearchSnapshot() -> EditorSearchSnapshot
     func lineRange(_ index: Int) -> NSRange
     func lineIndex(at offset: Int) -> Int
     func replace(_ range: NSRange, with text: String)
@@ -123,6 +124,9 @@ private final class RopeDocument: EditorDocument {
         precondition(range.location >= 0 && range.length >= 0 && NSMaxRange(range) <= length)
         // Our callers use validated UTF-16 coordinates; buffer failures indicate a bug.
         return try! buffer.content(in: range)
+    }
+    @MainActor func makeSearchSnapshot() -> EditorSearchSnapshot {
+        EditorSearchSnapshot(buffer: TransferableUndoable(buffer).sendableSnapshot(), contentVersion: contentVersion)
     }
     func lineRange(_ index: Int) -> NSRange {
         let index = min(max(0, index), starts.count - 1)
