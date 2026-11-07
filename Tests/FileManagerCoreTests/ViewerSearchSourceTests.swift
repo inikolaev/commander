@@ -1,7 +1,7 @@
 import Foundation
 import Testing
-import TextSearchCore
-@testable import FileManagerCore
+@_spi(Benchmark) import TextSearchCore
+@_spi(Benchmark) @testable import FileManagerCore
 
 private final class SearchCancellationFlag: @unchecked Sendable {
     private let lock = NSLock()
@@ -284,6 +284,48 @@ private func found(_ result: ViewerSearchResult) -> ViewerSearchHit? {
         let expected = try await scalar.search(exact, direction: direction, fromByteOffset: anchor)
         #expect(actual == expected)
     }
+}
+
+@Test func viewerSIMDBlocksFallBackBeforeLaterASCIIHitsInBothDirections() async throws {
+    let text = String(repeating: "x", count: 32) + "ßSS" + String(repeating: "x", count: 40)
+    let source = SearchBytes(Array(text.utf8))
+    let fast = ViewerSearchSource(source: source, chunkSize: 64)
+    let scalar = ViewerSearchSource(source: source, chunkSize: 1)
+    let folded = TextSearchQuery(text: "ss")
+    for (direction, anchor) in [(SearchDirection.forward, Int64(0)),
+                                (.backward, Int64(text.utf8.count - 1)),
+                                (.backward, Int64(32))] {
+        let actual = try await fast.search(folded, direction: direction, fromByteOffset: anchor)
+        let expected = try await scalar.search(folded, direction: direction, fromByteOffset: anchor)
+        #expect(actual == expected)
+    }
+    #expect(found(try await fast.search(folded, direction: .forward, fromByteOffset: 0))?.lowerBound == 32)
+    #expect(found(try await fast.search(folded, direction: .backward,
+                                        fromByteOffset: Int64(text.utf8.count - 1)))?.lowerBound == 34)
+    let sensitive = TextSearchQuery(text: "SS", caseSensitive: true)
+    #expect(found(try await fast.search(sensitive, direction: .forward, fromByteOffset: 0))?.lowerBound == 34)
+}
+
+@Test func viewerAlternateMatchersMatchDefaultAcrossDirectionAndUnicodeFallback() async throws {
+    let text = String(repeating: "x", count: 32) + "ßSS" + String(repeating: "x", count: 40)
+    let source = SearchBytes(Array(text.utf8))
+    let search = ViewerSearchSource(source: source, chunkSize: 64)
+    for query in [TextSearchQuery(text: "ss"), TextSearchQuery(text: "SS", caseSensitive: true)] {
+        for (direction, anchor) in [(SearchDirection.forward, Int64(0)),
+                                    (.backward, Int64(text.utf8.count - 1)),
+                                    (.backward, Int64(32))] {
+            let ordinary = try await search.search(query, direction: direction, fromByteOffset: anchor)
+            for matcher in [ASCIILiteralMatcher.darwinMemmem, .simdShort, .ahoCorasick] {
+                let candidate = try await search.search(query, direction: direction, fromByteOffset: anchor,
+                                                        matcher: matcher)
+                #expect(candidate == ordinary)
+            }
+        }
+    }
+    #expect(found(try await search.search(.init(text: "ss"), direction: .forward,
+                                          fromByteOffset: 0, matcher: .darwinMemmem))?.lowerBound == 32)
+    #expect(found(try await search.search(.init(text: "SS", caseSensitive: true), direction: .forward,
+                                          fromByteOffset: 0, matcher: .simdShort))?.lowerBound == 34)
 }
 
 @Test func viewerASCIIPathHandlesUnknownLengthAndLargeByteOffsets() async throws {

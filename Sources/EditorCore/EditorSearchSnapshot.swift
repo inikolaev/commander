@@ -1,5 +1,5 @@
 import Foundation
-import TextSearchCore
+@_spi(Benchmark) import TextSearchCore
 internal import TextBuffer
 
 /// A hit in editor UTF-16 coordinates. Use `exactRange` to continue a search;
@@ -31,6 +31,38 @@ public struct EditorSearchSnapshot: Sendable {
         self.length = buffer.range.length
     }
 
+    /// A search-free read control for performance measurements. It follows the
+    /// ASCII search path's rope slices and UTF-8 materialization, omitting only
+    /// query preparation and matching. The checksum samples block boundaries
+    /// so it does not add a second byte-by-byte pass.
+    @_spi(Benchmark)
+    @inline(never)
+    public func scanBlocks(direction: SearchDirection, chunkSize: Int = 65_536) -> (units: Int, checksum: UInt64) {
+        precondition(chunkSize > 0)
+        var cursor = direction == .forward ? 0 : length
+        var units = 0
+        var checksum: UInt64 = 0xcbf29ce484222325
+        while direction == .forward ? cursor < length : cursor > 0 {
+            let start: Int
+            let end: Int
+            if direction == .forward {
+                start = cursor
+                end = forwardChunkEnd(from: cursor, target: cursor + min(chunkSize, length - cursor))
+            } else {
+                start = reverseChunkStart(to: cursor, target: cursor - min(chunkSize, cursor))
+                end = cursor
+            }
+            let bytes = Data(buffer.rope.content(in: start..<end).utf8)
+            if let first = bytes.first, let last = bytes.last {
+                checksum = (checksum &* 0x100000001b3) ^ UInt64(first)
+                    ^ (UInt64(last) << 8) ^ UInt64(bytes.count)
+            }
+            units += end - start
+            cursor = direction == .forward ? end : start
+        }
+        return (units, checksum)
+    }
+
     /// The anchor is an inclusive match-start offset. Navigation advances it
     /// by one UTF-16 unit to find overlapping matches. There is no wrap here.
     public func search(
@@ -41,13 +73,43 @@ public struct EditorSearchSnapshot: Sendable {
         chunkSize: Int = 65_536,
         isCancelled: @Sendable () -> Bool = { false }
     ) -> EditorSearchResult {
+        searchImpl(query, direction: direction, fromUTF16Offset: anchor,
+                   exclusiveStartLimit: exclusiveStartLimit, chunkSize: chunkSize,
+                   matcher: .foundation, isCancelled: isCancelled)
+    }
+
+    @_spi(Benchmark)
+    public func search(
+        _ query: TextSearchQuery,
+        direction: SearchDirection,
+        fromUTF16Offset anchor: Int,
+        exclusiveStartLimit: Int? = nil,
+        chunkSize: Int = 65_536,
+        matcher: ASCIILiteralMatcher,
+        isCancelled: @Sendable () -> Bool = { false }
+    ) -> EditorSearchResult {
+        searchImpl(query, direction: direction, fromUTF16Offset: anchor,
+                   exclusiveStartLimit: exclusiveStartLimit, chunkSize: chunkSize,
+                   matcher: matcher, isCancelled: isCancelled)
+    }
+
+    private func searchImpl(
+        _ query: TextSearchQuery,
+        direction: SearchDirection,
+        fromUTF16Offset anchor: Int,
+        exclusiveStartLimit: Int?,
+        chunkSize: Int,
+        matcher: ASCIILiteralMatcher,
+        isCancelled: @Sendable () -> Bool
+    ) -> EditorSearchResult {
         precondition(chunkSize > 0)
         guard !query.isEmpty else { return .exhausted }
         if Task.isCancelled || isCancelled() { return .cancelled }
         if let ascii = ASCIILiteralQuery(query: query, maximumLength: chunkSize),
            let result = searchASCII(ascii, direction: direction, anchor: anchor,
                                     exclusiveStartLimit: exclusiveStartLimit,
-                                    chunkSize: chunkSize, isCancelled: isCancelled) {
+                                    chunkSize: chunkSize, matcher: matcher,
+                                    isCancelled: isCancelled) {
             return result
         }
         guard var machine = LiteralSearchMachine<Int>(query: query, direction: direction) else {
@@ -140,11 +202,12 @@ public struct EditorSearchSnapshot: Sendable {
         anchor: Int,
         exclusiveStartLimit: Int?,
         chunkSize: Int,
+        matcher: ASCIILiteralMatcher,
         isCancelled: @Sendable () -> Bool
     ) -> EditorSearchResult? {
         let pattern = ascii.pattern
         let overlap = pattern.count - 1
-        var scanner = ASCIILiteralScanner<Int>(query: ascii, direction: direction)
+        var scanner = ASCIILiteralScanner<Int>(query: ascii, direction: direction, matcher: matcher)
         if direction == .forward {
             if let exclusiveStartLimit, anchor >= exclusiveStartLimit { return .exhausted }
             var cursor = scalarBoundary(atOrAfter: min(length, max(0, anchor)))

@@ -70,3 +70,12 @@ own offset coordinates, source checks, and Unicode fallback. A failed ASCII
 assumption requests a restart with the scalar matcher. `TextSearchQuery` also
 provides the maximum source-scalar span of a match so adapters do not encode
 case-fold expansion limits themselves.
+
+The scanner delegates byte matching through the internal `ByteLiteralMatching`
+interface. Each algorithm lives in its own source file and returns an offset
+relative to the supplied `Data`, including slices with nonzero `startIndex`.
+The scanner calls the prepared strategy at most twice per block; there is no
+dynamic dispatch inside an algorithm's byte loop. Production constructs the
+Foundation strategy. The benchmark selector chooses another built-in strategy
+once during scanner construction. New internal strategies can be injected
+without changing the scanner or its public API.

@@ -1,7 +1,7 @@
 import Foundation
 import Testing
-import EditorCore
-import TextSearchCore
+@_spi(Benchmark) import EditorCore
+@_spi(Benchmark) import TextSearchCore
 
 private func found(_ result: EditorSearchResult) -> EditorSearchHit? {
     if case .found(let hit) = result { return hit }
@@ -64,6 +64,49 @@ private final class CancellationProbe: @unchecked Sendable {
             == emoji.search(exact, direction: .forward, fromUTF16Offset: 1, chunkSize: 2))
     #expect(emoji.search(exact, direction: .backward, fromUTF16Offset: 2, chunkSize: 8)
             == emoji.search(exact, direction: .backward, fromUTF16Offset: 2, chunkSize: 2))
+}
+
+@Test @MainActor func editorSIMDBlocksFallBackBeforeLaterASCIIHitsInBothDirections() {
+    let text = String(repeating: "x", count: 32) + "ßSS" + String(repeating: "x", count: 40)
+    let snapshot = EditorDocuments.make(text: text).makeSearchSnapshot()
+    let folded = TextSearchQuery(text: "ss")
+    for (direction, anchor) in [(SearchDirection.forward, 0),
+                                (.backward, snapshot.length - 1),
+                                (.backward, 32)] {
+        let fast = snapshot.search(folded, direction: direction, fromUTF16Offset: anchor, chunkSize: 64)
+        let scalar = snapshot.search(folded, direction: direction, fromUTF16Offset: anchor, chunkSize: 1)
+        #expect(fast == scalar)
+    }
+    #expect(found(snapshot.search(folded, direction: .forward,
+                                  fromUTF16Offset: 0, chunkSize: 64))?.exactRange.location == 32)
+    #expect(found(snapshot.search(folded, direction: .backward,
+                                  fromUTF16Offset: snapshot.length - 1, chunkSize: 64))?.exactRange.location == 33)
+    let sensitive = TextSearchQuery(text: "SS", caseSensitive: true)
+    #expect(found(snapshot.search(sensitive, direction: .forward,
+                                  fromUTF16Offset: 0, chunkSize: 64))?.exactRange.location == 33)
+}
+
+@Test @MainActor func editorAlternateMatchersMatchDefaultAcrossDirectionAndUnicodeFallback() {
+    let text = String(repeating: "x", count: 32) + "ßSS" + String(repeating: "x", count: 40)
+    let snapshot = EditorDocuments.make(text: text).makeSearchSnapshot()
+    for query in [TextSearchQuery(text: "ss"), TextSearchQuery(text: "SS", caseSensitive: true)] {
+        for (direction, anchor) in [(SearchDirection.forward, 0),
+                                    (.backward, snapshot.length - 1),
+                                    (.backward, 32)] {
+            let ordinary = snapshot.search(query, direction: direction, fromUTF16Offset: anchor, chunkSize: 64)
+            for matcher in [ASCIILiteralMatcher.darwinMemmem, .simdShort, .ahoCorasick] {
+                let candidate = snapshot.search(query, direction: direction, fromUTF16Offset: anchor,
+                                                chunkSize: 64, matcher: matcher)
+                #expect(candidate == ordinary)
+            }
+        }
+    }
+    #expect(found(snapshot.search(.init(text: "ss"), direction: .forward,
+                                  fromUTF16Offset: 0, chunkSize: 64,
+                                  matcher: .darwinMemmem))?.exactRange.location == 32)
+    #expect(found(snapshot.search(.init(text: "SS", caseSensitive: true), direction: .forward,
+                                  fromUTF16Offset: 0, chunkSize: 64,
+                                  matcher: .simdShort))?.exactRange.location == 33)
 }
 
 @Test @MainActor func editorASCIIPathAgreesWithScalarScannerForGeneratedUnicodeInputs() {

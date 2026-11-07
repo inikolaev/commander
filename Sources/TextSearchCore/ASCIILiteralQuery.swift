@@ -23,8 +23,16 @@ public struct ASCIILiteralQuery: Sendable {
         if !requireASCII && !isCaseInsensitive { return bytes }
         if !isCaseInsensitive {
             let isASCII = bytes.withUnsafeBytes { raw in
-                for byte in raw.bindMemory(to: UInt8.self) {
-                    if byte >= 0x80 { return false }
+                let vectorEnd = raw.count - raw.count % 16
+                var index = 0
+                while index < vectorEnd {
+                    let block = raw.loadUnaligned(fromByteOffset: index, as: SIMD16<UInt8>.self)
+                    if Self.containsNonASCII(block) { return false }
+                    index += 16
+                }
+                while index < raw.count {
+                    if raw[index] >= 0x80 { return false }
+                    index += 1
                 }
                 return true
             }
@@ -33,12 +41,24 @@ public struct ASCIILiteralQuery: Sendable {
         var folded = Data(count: bytes.count)
         let isASCII = bytes.withUnsafeBytes { source in
             folded.withUnsafeMutableBytes { destination -> Bool in
-                let source = source.bindMemory(to: UInt8.self)
-                let destination = destination.bindMemory(to: UInt8.self)
-                for index in source.indices {
+                let upperA = SIMD16<UInt8>(repeating: 65)
+                let upperZ = SIMD16<UInt8>(repeating: 90)
+                let lowercaseBit = SIMD16<UInt8>(repeating: 32)
+                let vectorEnd = source.count - source.count % 16
+                var index = 0
+                while index < vectorEnd {
+                    let block = source.loadUnaligned(fromByteOffset: index, as: SIMD16<UInt8>.self)
+                    if Self.containsNonASCII(block) { return false }
+                    let uppercase = (block .>= upperA) .& (block .<= upperZ)
+                    let lowered = block.replacing(with: block | lowercaseBit, where: uppercase)
+                    destination.storeBytes(of: lowered, toByteOffset: index, as: SIMD16<UInt8>.self)
+                    index += 16
+                }
+                while index < source.count {
                     let byte = source[index]
                     if byte >= 0x80 { return false }
                     destination[index] = Self.lowercase(byte)
+                    index += 1
                 }
                 return true
             }
@@ -48,6 +68,13 @@ public struct ASCIILiteralQuery: Sendable {
 
     private static func lowercase(_ byte: UInt8) -> UInt8 {
         (65...90).contains(byte) ? byte + 32 : byte
+    }
+
+    @inline(__always)
+    private static func containsNonASCII(_ block: SIMD16<UInt8>) -> Bool {
+        // Both vectors are 16 bytes; masking both 64-bit words tests each byte's high bit.
+        let words = unsafeBitCast(block, to: SIMD2<UInt64>.self)
+        return ((words[0] | words[1]) & 0x8080_8080_8080_8080) != 0
     }
 }
 
@@ -64,11 +91,27 @@ public enum ASCIILiteralScanResult<Offset: FixedWidthInteger & Sendable>: Sendab
 public struct ASCIILiteralScanner<Offset: FixedWidthInteger & Sendable> {
     private let query: ASCIILiteralQuery
     private let direction: SearchDirection
+    private var matcher: any ByteLiteralMatching
     private var carry = Data()
 
     public init(query: ASCIILiteralQuery, direction: SearchDirection) {
+        self.init(query: query, direction: direction,
+                  preparedMatcher: FoundationByteMatcher(pattern: query.pattern,
+                                                         direction: direction))
+    }
+
+    @_spi(Benchmark)
+    public init(query: ASCIILiteralQuery, direction: SearchDirection, matcher: ASCIILiteralMatcher) {
+        self.init(query: query, direction: direction,
+                  preparedMatcher: matcher.prepare(pattern: query.pattern, direction: direction))
+    }
+
+    // Internal seam for independently defined matchers; no selector case is needed.
+    init(query: ASCIILiteralQuery, direction: SearchDirection,
+         preparedMatcher: any ByteLiteralMatching) {
         self.query = query
         self.direction = direction
+        matcher = preparedMatcher
     }
 
     public mutating func consume(_ bytes: Data, startingAt start: Offset,
@@ -80,11 +123,11 @@ public struct ASCIILiteralScanner<Offset: FixedWidthInteger & Sendable> {
         if direction == .forward {
             var boundary = carry
             boundary.append(block.prefix(overlap))
-            if let range = boundary.range(of: query.pattern) {
-                return match(start - Offset(carry.count) + Offset(range.lowerBound - boundary.startIndex))
+            if let offset = matcher.find(in: boundary) {
+                return match(start - Offset(carry.count) + Offset(offset))
             }
-            if let range = block.range(of: query.pattern) {
-                return match(start + Offset(range.lowerBound - block.startIndex))
+            if let offset = matcher.find(in: block) {
+                return match(start + Offset(offset))
             }
             if block.count >= overlap {
                 carry = Data(block.suffix(overlap))
@@ -96,12 +139,12 @@ public struct ASCIILiteralScanner<Offset: FixedWidthInteger & Sendable> {
             let suffix = block.suffix(overlap)
             var boundary = Data(suffix)
             boundary.append(carry)
-            if let range = boundary.range(of: query.pattern, options: .backwards) {
+            if let offset = matcher.find(in: boundary) {
                 return match(start + Offset(block.count - suffix.count)
-                             + Offset(range.lowerBound - boundary.startIndex))
+                             + Offset(offset))
             }
-            if let range = block.range(of: query.pattern, options: .backwards) {
-                return match(start + Offset(range.lowerBound - block.startIndex))
+            if let offset = matcher.find(in: block) {
+                return match(start + Offset(offset))
             }
             if block.count >= overlap {
                 carry = Data(block.prefix(overlap))
