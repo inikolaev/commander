@@ -42,7 +42,9 @@ materialization in the editor. In the final end-short profile, Foundation's
 substring matching accounted for 30.9% of viewer and 44.6% of editor search
 samples. These shares are diagnostic; differences between runs do not directly
 measure time saved. Whole-word and Unicode fallback use the scalar matcher
-and were outside this profile set.
+and were outside this profile set. The [profile data appendix](search-profile-data.md)
+preserves 25 ranked frames, sample counts, timestamps, and binary hashes for
+each of the eight runs so future profiles can be compared under the same setup.
 
 ## Baseline before SIMD
 
