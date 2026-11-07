@@ -34,10 +34,9 @@ lower is better.
 | Editor absent | 65.7 | 59.9 |
 
 All 44 scenarios and 352 iteration records in each matrix were correct.
-Full results include beginning/middle/end, case-sensitive, and reverse cases:
-[Foundation JSONL](profiles/search-matcher-foundation-100mib.jsonl),
-[memmem JSONL](profiles/search-matcher-memmem-100mib.jsonl), and
-[build provenance](profiles/search-matcher-memmem-provenance.txt).
+Full results included beginning/middle/end, case-sensitive, and reverse cases.
+[Build provenance](profiles/search-matcher-memmem-provenance.txt) is retained;
+the raw JSON Lines output can be regenerated with the benchmark scripts.
 
 The separate mixed and adversarial corpus checks show the same pattern for
 multi-byte queries. On a reusable 16 MiB mixed text file, `memmem` took
@@ -46,7 +45,7 @@ editor. A repeated-text near miss (`xxxyxx` in a mostly `x` file) took
 190.5 versus 105.3 ms in the viewer, and 181.5 versus 95.7 ms in the editor.
 The one-byte absent query was an exception: 24.4 versus 45.8 ms in the
 viewer and 15.2 versus 36.3 ms in the editor. All 48 extra scenarios and
-384 iteration records were correct; see the [extra JSONL](profiles/search-matcher-extra-memmem.jsonl).
+384 iteration records were correct.
 
 The mixed file is made by `scripts/generate-matcher-corpus.py` only if
 missing. `scripts/run-matcher-cases.py` runs the additional cases. Neither
@@ -130,15 +129,9 @@ and losing workloads. The enum selector gives future candidates, including
 Aho-Corasick variants, the same scanner and adapter path without adding a
 public matcher contract or per-byte protocol dispatch.
 
-Raw runs: [100 MiB Foundation](profiles/search-matcher-simd-foundation-100mib.jsonl),
-[100 MiB SIMD](profiles/search-matcher-simd-100mib.jsonl),
-[1 GiB Foundation](profiles/search-matcher-simd-foundation-1gib.jsonl),
-[1 GiB SIMD](profiles/search-matcher-simd-1gib.jsonl),
-[10 GiB viewer Foundation](profiles/search-matcher-simd-foundation-10gib-viewer.jsonl),
-[10 GiB viewer SIMD](profiles/search-matcher-simd-10gib-viewer.jsonl), and
-[mixed/adversarial](profiles/search-matcher-simd-extra.jsonl). The final
-[binary provenance](profiles/search-matcher-simd-final-provenance.txt) records
-source and executable hashes.
+The [binary provenance](profiles/search-matcher-simd-final-provenance.txt)
+records source and executable hashes. Raw JSON Lines output is kept outside
+the repository and can be regenerated with the benchmark scripts.
 
 ## Experiment 3: Swift single-pattern Aho-Corasick
 
@@ -215,16 +208,9 @@ absent case is an exception, but it does not offset the hit and reverse
 regressions. This result does not predict the performance of Zed's Rust
 `aho-corasick` library or multi-pattern searches.
 
-Raw results: [100 MiB Foundation](profiles/search-algorithms-foundation-100mib.jsonl),
-[100 MiB `memmem`](profiles/search-algorithms-memmem-100mib.jsonl),
-[100 MiB SIMD](profiles/search-algorithms-simd-100mib.jsonl),
-[100 MiB Swift AC](profiles/search-algorithms-aho-100mib.jsonl),
-[mixed/adversarial](profiles/search-algorithms-extra.jsonl),
-[1 GiB Foundation](profiles/search-algorithms-foundation-1gib.jsonl),
-[1 GiB Swift AC](profiles/search-algorithms-aho-1gib.jsonl),
-[10 GiB viewer Foundation](profiles/search-algorithms-foundation-10gib-viewer-end-short.jsonl),
-[10 GiB viewer Swift AC](profiles/search-algorithms-aho-10gib-viewer-end-short.jsonl),
-and [binary provenance](profiles/search-algorithms-provenance.txt). The binary
+The [binary provenance](profiles/search-algorithms-provenance.txt) is retained.
+Raw JSON Lines output is kept outside the repository and can be regenerated
+with the benchmark scripts. The binary
 was built before the Aho candidate was committed, so provenance records the
 parent revision plus hashes of the candidate sources and measured executable.
 The benchmark, corpus generator, and profiler remain manual tools outside CI.

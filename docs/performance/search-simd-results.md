@@ -29,12 +29,8 @@ long-query controls stayed within about 4%, so this small-case difference is
 reported as observed variation, not attributed to SIMD. Every one of the 496
 post-change iteration records reports
 `correct: true`; the first iteration of each case is excluded from the
-medians. Full case data, including BOF, midpoint, reverse, setup time, and
-per-iteration spread:
-
-- [100 MiB JSONL](profiles/search-simd-100mib.jsonl)
-- [1 GiB JSONL](profiles/search-simd-1gib.jsonl)
-- [10 GiB viewer JSONL](profiles/search-simd-10gib-viewer.jsonl)
+medians. The benchmark harness can regenerate detailed JSON Lines output for
+BOF, midpoint, reverse, setup time, and per-iteration spread.
 
 The 10 GiB editor case remains unmeasured for the memory reason described in
 the baseline report. These measurements are warm-cache samples of the
@@ -45,8 +41,7 @@ deterministic fixture, not a broad corpus or cold-disk estimate.
 The profiler was run separately from timing, using the same 100 MiB
 case-insensitive end-short query and 1 ms sampling interval. Interactive
 flame graphs: [viewer](profiles/search-viewer-ci-simd.html) and
-[editor](profiles/search-editor-ci-simd.html). Raw sample call trees, folded
-stacks, SVG, JSON, and top-function summaries are alongside the HTML files.
+[editor](profiles/search-editor-ci-simd.html).
 
 Block preparation fell from 58.0% to 26.2% of inclusive viewer search
 samples, and from 65.9% to 36.2% of editor samples. Foundation byte matching

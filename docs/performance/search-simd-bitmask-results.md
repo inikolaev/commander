@@ -22,12 +22,9 @@ divided by this step's time.
 | 10 GiB | Viewer | 1.90 → 1.91 s (0.99×) | 3.93 → 3.34 s (1.18×) | 3.05 → 2.45 s (1.25×) | 8.22 → 7.67 s (1.07×) | 2.10 → 2.07 s (1.02×) |
 
 The scan-only and viewer case-sensitive controls remain close to their
-first-SIMD times. All 496 iteration records report `correct: true`. Full
-results include beginning, middle, end, absent, and reverse searches:
-
-- [100 MiB JSONL](profiles/search-simd-bitmask-100mib.jsonl)
-- [1 GiB JSONL](profiles/search-simd-bitmask-1gib.jsonl)
-- [10 GiB viewer JSONL](profiles/search-simd-bitmask-10gib-viewer.jsonl)
+first-SIMD times. All 496 iteration records report `correct: true`. The
+benchmark harness can regenerate detailed beginning, middle, end, absent,
+and reverse results.
 
 The 10 GiB editor case remains unmeasured because of the memory estimate in
 the [baseline report](search-simd-baseline.md). These are warm-cache runs of
@@ -39,8 +36,7 @@ normal reruns, and writes large files only when missing or explicitly forced.
 
 The profiler sampled a separate 100 MiB case-insensitive end-short run at
 1 ms intervals. Interactive flame graphs: [viewer](profiles/search-viewer-ci-bitmask.html)
-and [editor](profiles/search-editor-ci-bitmask.html). Raw call trees, folded
-stacks, SVG, JSON, and top-function summaries are next to the HTML files.
+and [editor](profiles/search-editor-ci-bitmask.html).
 
 `ASCIILiteralQuery.preparedBlock` accounted for 13.2% of inclusive viewer
 search samples and 16.5% of editor samples, down from 26.2% and 36.2% in the

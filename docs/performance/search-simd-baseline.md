@@ -41,12 +41,9 @@ The 100 MiB/1 GiB CI absent search costs about 5.7–5.8× the viewer scan
 control and 10.5–10.7× the editor scan control. A near-BOF hit takes only
 roughly 18–52 microseconds because it does not traverse the entire file;
 its latency should not be presented as whole-file throughput. Midpoint and
-reverse cases, per-iteration values, setup times, expected offsets, and
-correctness checks are retained in the raw JSON Lines results:
-
-- [100 MiB](profiles/search-baseline-100mib.jsonl)
-- [1 GiB](profiles/search-baseline-1gib.jsonl)
-- [10 GiB viewer](profiles/search-baseline-10gib-viewer.jsonl)
+reverse cases, setup times, expected offsets, and correctness checks were
+measured with the same benchmark harness. Generated JSON Lines output is kept
+outside the repository; this report records the summarized results.
 
 The 1 GiB editor process peaked at **3.82 GB resident memory** (`/usr/bin/time
 -l`). A 10 GiB editor document would approach 38 GB if that ratio holds,
@@ -58,15 +55,14 @@ separate from the search scanner.
 ## Sampled profiles
 
 `sample` collected 1 ms stack samples during repeated 100 MiB runs, separate
-from the latency measurements. The flame graphs are clickable HTML and SVG;
-raw sample call trees, folded stacks, JSON, and summaries are alongside them.
+from the latency measurements. Representative flame graphs are clickable HTML.
 
 | Profile | Flame graph | Main observation |
 | --- | --- | --- |
-| Viewer CI end hit | [HTML](profiles/search-viewer-ci-baseline.html), [SVG](profiles/search-viewer-ci-baseline.svg) | 58.0% of search samples in `ASCIILiteralQuery.preparedBlock`; 13.7% in `Data.range(of:)` |
-| Editor CI end hit | [HTML](profiles/search-editor-ci-baseline.html), [SVG](profiles/search-editor-ci-baseline.svg) | 65.9% in block preparation; 17.0% in `Data.range(of:)` |
-| Viewer scan only | [HTML](profiles/search-viewer-scan-baseline.html), [SVG](profiles/search-viewer-scan-baseline.svg) | Dominated by `LocalFileContentSource.read` and `Data` copying |
-| Editor scan only | [HTML](profiles/search-editor-scan-baseline.html), [SVG](profiles/search-editor-scan-baseline.svg) | Dominated by `TextRope.content(in:)` and UTF-8 materialization |
+| Viewer CI end hit | [HTML](profiles/search-viewer-ci-baseline.html) | 58.0% of search samples in `ASCIILiteralQuery.preparedBlock`; 13.7% in `Data.range(of:)` |
+| Editor CI end hit | [HTML](profiles/search-editor-ci-baseline.html) | 65.9% in block preparation; 17.0% in `Data.range(of:)` |
+| Viewer scan only | [HTML](profiles/search-viewer-scan-baseline.html) | Dominated by `LocalFileContentSource.read` and `Data` copying |
+| Editor scan only | [HTML](profiles/search-editor-scan-baseline.html) | Dominated by `TextRope.content(in:)` and UTF-8 materialization |
 
 These are inclusive sample shares, not exact cycle attribution. The
 case-insensitive ASCII block preparation is the first optimization target.
