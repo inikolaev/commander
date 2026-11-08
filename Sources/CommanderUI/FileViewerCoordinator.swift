@@ -34,6 +34,7 @@ final class FileViewerCoordinator {
     private var reload = false
     private var mode: ViewerMode = .text
     private var wrapsText = true
+    private var wrapStyle: ViewerWrapStyle = .character
     private var closed = false
     private var showingError = false
     private let errors = OperationDialogPresenter()
@@ -76,9 +77,11 @@ final class FileViewerCoordinator {
                 let viewer = TerminalFileViewer(path: displayPath, syntaxHighlighter: syntaxHighlighter)
                 viewer.frame = content.bounds
                 viewer.wrapsText = self.wrapsText
+                viewer.wrapStyle = self.wrapStyle
                 let page = try await document.page(
                     rows: viewer.visibleRows,
                     wrapColumns: self.wrapsText ? viewer.visibleColumns : nil,
+                    wrapStyle: self.wrapStyle,
                     includeSourceText: syntaxHighlighter.isActive
                 )
                 guard !self.closed, !Task.isCancelled else { return }
@@ -119,6 +122,7 @@ final class FileViewerCoordinator {
             case .close: self?.close()
             case .toggleMode: self?.toggleMode()
             case .toggleWrap: self?.toggleWrap()
+            case .toggleWrapType: self?.toggleWrapType()
             case .navigate(let command): self?.request(command)
             case .search(let action): self?.handleSearch(action)
             }
@@ -143,6 +147,18 @@ final class FileViewerCoordinator {
         guard !closed, !showingError, mode == .text else { return }
         wrapsText.toggle()
         view?.wrapsText = wrapsText
+        pendingScroll = 0
+        pendingJump = nil
+        pendingJumpIsSearchReveal = false
+        request(activeSearchHit.map { .reveal(byteOffset: $0.lowerBound) } ?? .stay)
+    }
+
+    func toggleWrapType() {
+        guard !closed, !showingError, mode == .text else { return }
+        wrapStyle = wrapStyle == .character ? .word : .character
+        wrapsText = true
+        view?.wrapStyle = wrapStyle
+        view?.wrapsText = true
         pendingScroll = 0
         pendingJump = nil
         pendingJumpIsSearchReveal = false
@@ -191,6 +207,7 @@ final class FileViewerCoordinator {
                     self.reload = false
                     let requestedMode = self.mode
                     let requestedWrap = self.wrapsText
+                    let requestedWrapStyle = self.wrapStyle
                     let requestedSearchGeneration = self.searchGeneration
                     let previousOffset = self.view?.page?.offset ?? 0
                     let wrapColumns = requestedMode == .text && requestedWrap ? self.view?.visibleColumns : nil
@@ -209,6 +226,7 @@ final class FileViewerCoordinator {
                         rows: self.view?.visibleRows ?? 1,
                         mode: requestedMode,
                         wrapColumns: wrapColumns,
+                        wrapStyle: requestedWrapStyle,
                         includeSourceText: highlighter.isActive,
                         activeRange: self.activeSearchRange
                     )
@@ -230,7 +248,8 @@ final class FileViewerCoordinator {
                         }
                         continue
                     }
-                    if requestedMode == self.mode && requestedWrap == self.wrapsText {
+                    if requestedMode == self.mode && requestedWrap == self.wrapsText &&
+                        requestedWrapStyle == self.wrapStyle {
                         let oldIdentity = self.view?.page.map {
                             PageIdentity(revision: $0.revision, size: $0.fileSize)
                         }
