@@ -81,6 +81,9 @@ to package a Release build instead.
 | F8 | Move selected file or folder to macOS Trash after confirmation |
 | F10 / Command-Q | Confirm quitting |
 
+Command-L opens a terminal-style path dialog for the active pane. Its current path
+is selected so a copied path can be pasted directly.
+
 Click to activate a pane; double-click to enter a folder or open a file. Mouse wheel/trackpad
 scrolling moves selection; typing a filename prefix selects the first match.
 The prefix resets after one second or Escape. The bottom shortcut strip has ten numbered slots: 3 View, 4 Edit, 5 Copy, 6 Move, 7 Mkdir, 8 Delete,
@@ -440,6 +443,8 @@ The terminal runs `/bin/zsh` as an interactive login shell and reads your normal
 zsh startup files. Changing the active pane or its directory updates the shell
 directory without adding a command to history or disturbing unfinished input.
 While a command runs, the latest directory change waits for the next prompt.
+Changing directory in the shell with `cd`, `pushd`, or another zsh directory
+command updates the active pane when the next prompt appears.
 The full view supports libghostty scrolling, selection, copy/paste, terminal key
 handling, and resizing. Cmd-O is reserved, including inside terminal programs.
 

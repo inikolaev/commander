@@ -1,4 +1,4 @@
-import fcntl, os, pty, select, signal, struct, tempfile, termios, time, uuid
+import fcntl, os, pty, select, shlex, signal, struct, tempfile, termios, time, uuid
 from pathlib import Path
 resources = Path(__file__).resolve().parents[1] / 'Sources/CommanderUI/Resources/TerminalShell'
 with tempfile.TemporaryDirectory() as tmp:
@@ -100,7 +100,13 @@ with tempfile.TemporaryDirectory() as tmp:
         assert (root/'busy').read_bytes()==os.fsencode(second)+b'\n'
         os.write(fd,b'pwd > '+os.fsencode(root/'after')+b'\n'); drain()
         assert (root/'after').read_bytes()==os.fsencode(third)+b'\n'
-        events()
+        assert not any(event.startswith('directory ') for event in events()), 'Pane-driven changes must not echo back'
+        os.write(fd,b'cd -- '+shlex.quote(str(first)).encode()+b'\n'); drain()
+        assert any(event.startswith('directory ') for event in events()), 'Shell cd must report its directory'
+        assert (mailbox/'shell-directory').read_bytes()==os.fsencode(first)
+        os.write(fd,b'cd -- '+shlex.quote(str(second)).encode()+b'\n'); drain()
+        assert any(event.startswith('directory ') for event in events()), 'Shell cd must report paths with special characters'
+        assert (mailbox/'shell-directory').read_bytes()==os.fsencode(second)
         compact()
         os.write(fd,b'\n'); drain()
         assert 'open' in events(), 'Empty prompt must open pane selection'
@@ -124,7 +130,7 @@ with tempfile.TemporaryDirectory() as tmp:
         assert not any(x.startswith('prompt ') for x in events()), 'Continuation must stay expanded'
         os.write(fd,b" text'\n"); drain()
         assert 'prompt 0' in events()
-        print('PASS: directory sync, literal paths, preserved editing, busy deferral, empty/erased Enter, resize handshake, bottom-anchored resize redraws, user resize hooks, exit status, history, and multiline input')
+        print('PASS: bidirectional directory sync, literal paths, preserved editing, busy deferral, empty/erased Enter, resize handshake, bottom-anchored resize redraws, user resize hooks, exit status, history, and multiline input')
     finally:
         os.kill(pid,signal.SIGHUP); os.waitpid(pid,0); os.close(fd)
         for handle in handles.values(): os.close(handle)

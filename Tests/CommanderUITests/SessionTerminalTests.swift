@@ -30,8 +30,36 @@ private func terminalContents(_ terminal: SessionTerminal, viewportOnly: Bool = 
     #expect(first.suffix(path.path.utf8.count + 1) == Data((path.path + "\0").utf8))
     try mailbox?.request(path, force: true)
     #expect(try Data(contentsOf: directory.appendingPathComponent("directory")) != first)
+    let token = try #require(mailbox?.requestToken)
+    try Data(path.path.utf8).write(to: directory.appendingPathComponent("shell-directory"))
+    #expect(mailbox?.shellDirectory(for: token) == path.standardizedFileURL)
+    try mailbox?.request(URL(fileURLWithPath: "/tmp/another"))
+    #expect(mailbox?.shellDirectory(for: token) == nil)
     mailbox = nil
     #expect(!FileManager.default.fileExists(atPath: directory.path))
+}
+
+@Test @MainActor func terminalDirectoryEventNavigatesActivePane() async throws {
+    _ = NSApplication.shared
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let destination = root.appendingPathComponent("from shell", isDirectory: true)
+    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let controller = CommanderWindowController()
+    let tab = controller.selectedTab
+    defer { tab.closeTerminal(); controller.window?.orderOut(nil) }
+    tab.start()
+    let terminal = try #require(tab.terminal)
+    let panes = tab.root.children.compactMap { $0 as? PaneViewController }
+    try Data(destination.path.utf8).write(to: terminal.mailbox.directory.appendingPathComponent("shell-directory"))
+    let token = try #require(terminal.mailbox.requestToken)
+    terminal.handleShellEvent("directory \(token)")
+    for _ in 0..<200 {
+        if panes[0].state.directory == destination { break }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(panes[0].state.directory == destination)
+    #expect(panes[1].state.directory != destination)
 }
 
 @Test @MainActor func terminalShortcutRequiresOnlyCommand() throws {

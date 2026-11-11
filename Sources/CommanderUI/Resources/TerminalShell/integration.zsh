@@ -1,6 +1,7 @@
 # The shell owns input state. The host never reconstructs it from keystrokes.
 typeset -g _commander_mailbox=$COMMANDER_DIRECTORY_MAILBOX
 typeset -g _commander_last_request='' _commander_last_input=''
+typeset -g _commander_last_reported_directory=''
 typeset -gi _commander_sequence=0
 exec {_commander_notify}<>"$_commander_mailbox/notify"
 exec {_commander_events}<>"$_commander_mailbox/events"
@@ -23,6 +24,16 @@ _commander_apply_directory() {
     [[ $request == $_commander_last_request ]] && return
     _commander_last_request=$request
     builtin cd -- "$destination"
+    # Host-initiated changes must not navigate the pane back through the event channel.
+    _commander_last_reported_directory=$PWD
+}
+_commander_report_directory() {
+    emulate -L zsh
+    [[ $PWD == $_commander_last_reported_directory ]] && return
+    _commander_last_reported_directory=$PWD
+    # Keep arbitrary path characters out of the line-based event protocol.
+    builtin print -rn -- "$PWD" > "$_commander_mailbox/shell-directory"
+    _commander_event "directory $_commander_last_request"
 }
 _commander_directory_ready() {
     emulate -L zsh
@@ -125,6 +136,7 @@ _commander_accept_line() {
 _commander_precmd() {
     local exit_status=$?
     _commander_apply_directory
+    _commander_report_directory
     _commander_update_prompt
     # CUP clamps to the last row. Output remains above the fresh prompt;
     # no terminal resize or screen clear is needed to reveal the panes.

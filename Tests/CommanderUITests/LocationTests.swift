@@ -21,6 +21,32 @@ private func waitForLocations(_ window: NSWindow) async throws -> TerminalOperat
     throw NSError(domain: "LocationTests", code: 1, userInfo: [NSLocalizedDescriptionKey: "Location picker did not finish loading"])
 }
 
+@Test @MainActor func commandLUsesTerminalStyleDialog() async throws {
+    _ = NSApplication.shared
+    let fm = FileManager.default
+    let root = fm.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let destination = root.appendingPathComponent("pasted folder", isDirectory: true)
+    try fm.createDirectory(at: destination, withIntermediateDirectories: true)
+    defer { try? fm.removeItem(at: root) }
+    let controller = CommanderWindowController()
+    let window = try #require(controller.window)
+    defer { window.orderOut(nil) }
+    let panes = controller.selectedTab.root.children.compactMap { $0 as? PaneViewController }
+    panes[0].load(root)
+    for _ in 0..<200 where panes[0].isLoading { try await Task.sleep(for: .milliseconds(10)) }
+    controller.goToFolder(nil)
+    let dialog = try #require(window.contentView?.subviews.compactMap { $0 as? TerminalOperationDialog }.first)
+    if case .textInput(let title, _, let value, let confirmTitle) = dialog.mode {
+        #expect(title == "Go to folder")
+        #expect(value == root.path)
+        #expect(confirmTitle == "Go")
+    } else { Issue.record("Expected a terminal-style path input") }
+    #expect(window.attachedSheet == nil)
+    dialog.onConfirm?("pasted folder")
+    for _ in 0..<200 where panes[0].isLoading { try await Task.sleep(for: .milliseconds(10)) }
+    #expect(panes[0].state.directory == destination)
+}
+
 @Test @MainActor func locationsChooseTargetPaneCancelAndRefreshList() async throws {
     _ = NSApplication.shared
     let fm = FileManager.default
