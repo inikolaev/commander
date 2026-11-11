@@ -38,6 +38,8 @@ final class CommanderTabSession: NSObject {
     private var activeIndex = 0
     private let fileOpenCoordinator = FileOpenCoordinator()
     private let locationCoordinator: LocationCoordinator
+    private let goToFolderPresenter = OperationDialogPresenter()
+    private var isGoToFolderPresented = false
     private let copyCoordinator = CopyCoordinator()
     private let renameCoordinator = RenameCoordinator()
     private let shortcuts = TerminalKeyBar()
@@ -46,7 +48,7 @@ final class CommanderTabSession: NSObject {
     private let deleteCoordinator = DeleteCoordinator()
     private var editor: FileEditorCoordinator?
     private var viewer: FileViewerCoordinator?
-    var fileOperationInProgress: Bool { locationCoordinator.isPresented || fileOpenCoordinator.isBusy || editor?.isBusy == true || viewer?.isBusy == true || renameCoordinator.isBusy || moveCoordinator.isBusy || createDirectoryCoordinator.isBusy || copyCoordinator.isBusy || deleteCoordinator.isBusy }
+    var fileOperationInProgress: Bool { isGoToFolderPresented || locationCoordinator.isPresented || fileOpenCoordinator.isBusy || editor?.isBusy == true || viewer?.isBusy == true || renameCoordinator.isBusy || moveCoordinator.isBusy || createDirectoryCoordinator.isBusy || copyCoordinator.isBusy || deleteCoordinator.isBusy }
     private var operationInProgress: Bool { isTerminalVisible || isExitPromptVisible || fileOperationInProgress || viewer != nil || editor != nil }
     private var activePane: PaneViewController { panes[activeIndex] }
 
@@ -204,6 +206,10 @@ final class CommanderTabSession: NSObject {
                 self.automaticallyExpanded = false
                 self.setTerminalExpanded(false)
             }
+            terminal.onDirectoryChanged = { [weak self] directory in
+                guard let self else { return }
+                self.activePane.load(directory)
+            }
             var previouslyHadInput = false
             terminal.onInputChanged = { [weak self] hasInput, _ in
                 let cleared = previouslyHadInput && !hasInput
@@ -259,7 +265,9 @@ final class CommanderTabSession: NSObject {
         panes.forEach { $0.view.isHidden = expanded }
         paneCover.isHidden = expanded
         root.view.layoutSubtreeIfNeeded()
-        if !expanded { panes.forEach { $0.refresh() } }
+        // A shell cd may have just started loading its destination. Refreshing
+        // that pane here would cancel the navigation and reload the old path.
+        if !expanded { panes.filter { !$0.isLoading }.forEach { $0.refresh() } }
         restoreFocus()
         return true
     }
@@ -615,24 +623,25 @@ final class CommanderTabSession: NSObject {
     }
 
     @objc func goToFolder(_ sender: Any?) {
-        guard let window, !operationInProgress else { return }
+        guard let window, !operationInProgress, window.attachedSheet == nil else { return }
         let pane = activePane
-        let alert = NSAlert()
-        alert.messageText = "Go to folder"
-        alert.informativeText = "Enter an absolute path, a path relative to this pane, or use ~ for your home folder."
-        alert.addButton(withTitle: "Go")
-        alert.addButton(withTitle: "Cancel")
-        let field = NSTextField(string: pane.state.session.hostDirectory.path)
-        field.frame = NSRect(x: 0, y: 0, width: 440, height: 24)
-        alert.accessoryView = field
-        alert.window.initialFirstResponder = field
-        alert.beginSheetModal(for: window) { response in
-            if response == .alertFirstButtonReturn, !field.stringValue.isEmpty {
-                let path = (field.stringValue as NSString).expandingTildeInPath
-                let url = path.hasPrefix("/") ? URL(fileURLWithPath: path) : pane.state.session.hostDirectory.appendingPathComponent(path)
-                pane.load(url.standardizedFileURL)
-            }
-            pane.focus()
+        isGoToFolderPresented = true
+        let dialog = TerminalOperationDialog(mode: .textInput(title: "Go to folder",
+            prompt: "Path (absolute, relative, or ~):", value: pane.state.session.hostDirectory.path,
+            confirmTitle: "Go"))
+        dialog.onCancel = { [weak self] in
+            guard let self else { return }
+            self.goToFolderPresenter.dismiss(window: window)
+            self.isGoToFolderPresented = false
         }
+        dialog.onConfirm = { [weak self] value in
+            guard let self, !value.isEmpty else { return }
+            self.goToFolderPresenter.dismiss(window: window)
+            self.isGoToFolderPresented = false
+            let path = (value as NSString).expandingTildeInPath
+            let url = path.hasPrefix("/") ? URL(fileURLWithPath: path) : pane.state.session.hostDirectory.appendingPathComponent(path)
+            pane.load(url.standardizedFileURL)
+        }
+        goToFolderPresenter.present(dialog, window: window)
     }
 }

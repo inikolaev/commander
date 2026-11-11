@@ -30,8 +30,79 @@ private func terminalContents(_ terminal: SessionTerminal, viewportOnly: Bool = 
     #expect(first.suffix(path.path.utf8.count + 1) == Data((path.path + "\0").utf8))
     try mailbox?.request(path, force: true)
     #expect(try Data(contentsOf: directory.appendingPathComponent("directory")) != first)
+    let token = try #require(mailbox?.requestToken)
+    try Data(path.path.utf8).write(to: directory.appendingPathComponent("shell-directory"))
+    let reported = try #require(mailbox?.shellDirectory(for: token))
+    #expect(reported.path == path.standardizedFileURL.path)
+    #expect(reported.hasDirectoryPath)
+    try mailbox?.request(URL(fileURLWithPath: "/tmp/another"))
+    #expect(mailbox?.shellDirectory(for: token) == nil)
     mailbox = nil
     #expect(!FileManager.default.fileExists(atPath: directory.path))
+}
+
+@Test @MainActor func terminalDirectoryEventNavigatesActivePane() async throws {
+    _ = NSApplication.shared
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let destination = root.appendingPathComponent("from shell", isDirectory: true)
+    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let controller = CommanderWindowController()
+    let tab = controller.selectedTab
+    defer { tab.closeTerminal(); controller.window?.orderOut(nil) }
+    tab.start()
+    let terminal = try #require(tab.terminal)
+    let panes = tab.root.children.compactMap { $0 as? PaneViewController }
+    for _ in 0..<200 where panes.contains(where: { $0.isLoading }) {
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    terminal.handleShellEvent("prompt 0")
+    terminal.handleShellEvent("execute test")
+    #expect(tab.isTerminalVisible)
+    try Data(destination.path.utf8).write(to: terminal.mailbox.directory.appendingPathComponent("shell-directory"))
+    let token = try #require(terminal.mailbox.requestToken)
+    terminal.handleShellEvent("directory \(token)")
+    terminal.handleShellEvent("prompt 0")
+    #expect(!tab.isTerminalVisible)
+    for _ in 0..<200 {
+        if panes[0].state.directory == destination { break }
+        try await Task.sleep(for: .milliseconds(10))
+    }
+    #expect(panes[0].state.directory == destination)
+    #expect(panes[1].state.directory != destination)
+}
+
+@Test @MainActor func shellCdNavigatesActivePaneFromCompactPrompt() async throws {
+    _ = NSApplication.shared
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let destination = root.appendingPathComponent("from shell", isDirectory: true)
+    let config = root.appendingPathComponent("config", isDirectory: true)
+    try FileManager.default.createDirectory(at: destination, withIntermediateDirectories: true)
+    try FileManager.default.createDirectory(at: config, withIntermediateDirectories: true)
+    try "HISTFILE=/dev/null\nSAVEHIST=0\nPS1='cd> '\nRPROMPT=''\n"
+        .write(to: config.appendingPathComponent(".zshrc"), atomically: true, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: root) }
+    let controller = CommanderWindowController()
+    let tab = controller.selectedTab
+    tab.start { try SessionTerminal(directory: $0, shellConfigurationDirectory: config) }
+    defer { tab.closeTerminal(); controller.window?.orderOut(nil) }
+    let terminal = try #require(tab.terminal)
+    let panes = tab.root.children.compactMap { $0 as? PaneViewController }
+    for _ in 0..<150 where !terminal.isAtPrompt || panes.contains(where: { $0.isLoading }) {
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    #expect(terminal.isAtPrompt)
+    #expect(!tab.isTerminalVisible)
+    #expect(terminal.view.paste(text: "cd -- \(SessionTerminal.shellArgument(destination.path))"))
+    #expect(terminal.view.sendKey(.enter))
+    for _ in 0..<150 {
+        if terminal.isAtPrompt, !tab.isTerminalVisible, panes[0].state.directory == destination { break }
+        try await Task.sleep(for: .milliseconds(20))
+    }
+    #expect(terminal.isAtPrompt)
+    #expect(!tab.isTerminalVisible)
+    #expect(panes[0].state.directory == destination)
+    #expect(panes[1].state.directory != destination)
 }
 
 @Test @MainActor func terminalShortcutRequiresOnlyCommand() throws {

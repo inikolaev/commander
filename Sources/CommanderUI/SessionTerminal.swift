@@ -11,6 +11,7 @@ final class TerminalDirectoryMailbox {
     private let responseDescriptor: Int32
     private var pendingEvents = Data()
     private(set) var requestedDirectory: URL?
+    private(set) var requestToken: String?
 
     init() throws {
         directory = FileManager.default.temporaryDirectory.appendingPathComponent("commander-terminal-" + UUID().uuidString)
@@ -39,8 +40,10 @@ final class TerminalDirectoryMailbox {
     func request(_ url: URL, force: Bool = false) throws {
         guard force || requestedDirectory != url else { return }
         // NUL termination preserves quotes, spaces, newlines and shell metacharacters.
-        try Data((UUID().uuidString + "\0" + url.path + "\0").utf8).write(to: directory.appendingPathComponent("directory"), options: .atomic)
+        let token = UUID().uuidString
+        try Data((token + "\0" + url.path + "\0").utf8).write(to: directory.appendingPathComponent("directory"), options: .atomic)
         requestedDirectory = url
+        requestToken = token
         notifyShell()
     }
 
@@ -74,6 +77,17 @@ final class TerminalDirectoryMailbox {
             pendingEvents.removeSubrange(...newline)
         }
         return result
+    }
+
+    func shellDirectory(for token: String) -> URL? {
+        // A newer pane navigation wins over a shell report still in the event FIFO.
+        guard token == requestToken else { return nil }
+        let file = directory.appendingPathComponent("shell-directory")
+        guard let data = try? Data(contentsOf: file),
+              let path = String(data: data, encoding: .utf8), !path.isEmpty else { return nil }
+        let url = URL(fileURLWithPath: path, isDirectory: true).standardizedFileURL
+        requestedDirectory = url
+        return url
     }
 
     deinit {
@@ -111,6 +125,7 @@ final class SessionTerminal: TerminalSurfaceCloseDelegate, TerminalSurfaceGridRe
     var onOpenSelection: (() -> Void)?
     var onExecute: (() -> Bool)?
     var onPrompt: ((Int) -> Void)?
+    var onDirectoryChanged: ((URL) -> Void)?
     var onInputChanged: ((Bool, Int) -> Void)?
     var onCellHeightChanged: (() -> Void)?
     private(set) var hasInput = false
@@ -185,6 +200,9 @@ final class SessionTerminal: TerminalSurfaceCloseDelegate, TerminalSurfaceGridRe
             // shell's accept-line widget cannot start the command before this.
             mailbox.acknowledge(String(fields[1]))
         case "running": isAtPrompt = false
+        case "directory":
+            guard fields.count == 2, let directory = mailbox.shellDirectory(for: String(fields[1])) else { return }
+            onDirectoryChanged?(directory)
         case "prompt":
             guard fields.count == 2, let status = Int(fields[1]) else { return }
             isAtPrompt = true
