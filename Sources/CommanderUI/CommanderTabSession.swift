@@ -265,7 +265,9 @@ final class CommanderTabSession: NSObject {
         panes.forEach { $0.view.isHidden = expanded }
         paneCover.isHidden = expanded
         root.view.layoutSubtreeIfNeeded()
-        if !expanded { panes.forEach { $0.refresh() } }
+        // A shell cd may have just started loading its destination. Refreshing
+        // that pane here would cancel the navigation and reload the old path.
+        if !expanded { panes.filter { !$0.isLoading }.forEach { $0.refresh() } }
         restoreFocus()
         return true
     }
