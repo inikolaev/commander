@@ -32,7 +32,9 @@ private func terminalContents(_ terminal: SessionTerminal, viewportOnly: Bool = 
     #expect(try Data(contentsOf: directory.appendingPathComponent("directory")) != first)
     let token = try #require(mailbox?.requestToken)
     try Data(path.path.utf8).write(to: directory.appendingPathComponent("shell-directory"))
-    #expect(mailbox?.shellDirectory(for: token) == path.standardizedFileURL)
+    let reported = try #require(mailbox?.shellDirectory(for: token))
+    #expect(reported.path == path.standardizedFileURL.path)
+    #expect(reported.hasDirectoryPath)
     try mailbox?.request(URL(fileURLWithPath: "/tmp/another"))
     #expect(mailbox?.shellDirectory(for: token) == nil)
     mailbox = nil
