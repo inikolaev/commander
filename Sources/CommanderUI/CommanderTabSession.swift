@@ -78,6 +78,7 @@ final class CommanderTabSession: NSObject {
             case .editFile: self.editSelected()
             case .createFile: self.createFile()
             case .copy: self.copySelected()
+            case .copyInPlace: self.copyInPlace()
             case .move: self.moveSelected()
             case .rename: self.renameSelected()
             case .createDirectory: self.createDirectory()
@@ -175,6 +176,7 @@ final class CommanderTabSession: NSObject {
         case .editFile: editSelected()
         case .createFile: createFile()
         case .copy: copySelected()
+        case .copyInPlace: copyInPlace()
         case .move: moveSelected()
         case .rename: renameSelected()
         case .createDirectory: createDirectory()
@@ -397,7 +399,7 @@ final class CommanderTabSession: NSObject {
     private func updateCapabilities() {
         var disabled: Set<TerminalKeyBar.Command> = []
         if !activePane.state.session.fileSystem.supportsFileOperations {
-            disabled.formUnion([.editFile, .createFile, .createDirectory, .rename, .delete])
+            disabled.formUnion([.editFile, .createFile, .createDirectory, .rename, .copyInPlace, .delete])
         }
         if let row = activePane.state.selectedRow,
            !activePane.state.session.fileSystem.canViewFile(at: FileSystemPath(row.url)) { disabled.insert(.viewFile) }
@@ -520,6 +522,28 @@ final class CommanderTabSession: NSObject {
                 // A stopped batch may already have published some complete items.
                 // Refresh both panes even on cancellation or failure; keep marks then.
                 for pane in self.panes { pane.refresh() }
+            })
+    }
+
+    private func copyInPlace() {
+        let sourcePane = activePane
+        guard sourcePane.state.session.fileSystem.supportsFileOperations,
+              let window, !operationInProgress, !sourcePane.isLoading,
+              case .entry(let entry) = sourcePane.state.selectedRow else { return }
+        copyCoordinator.begin(source: entry.url, directory: sourcePane.state.directory, window: window,
+            onStart: { sourcePane.showStatus("Copying \(entry.name)…") },
+            onFinish: { [weak self] result in
+                guard let self else { return }
+                for pane in self.panes {
+                    let selection: URL?
+                    if pane === sourcePane, case .success(let destination) = result,
+                       destination.deletingLastPathComponent().resolvingSymlinksInPath() == pane.state.directory.resolvingSymlinksInPath() {
+                        selection = destination
+                    } else {
+                        selection = pane.state.selectedRow?.url
+                    }
+                    pane.load(pane.state.directory, preferredSelection: selection)
+                }
             })
     }
 

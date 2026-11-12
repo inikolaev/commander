@@ -122,3 +122,61 @@ private struct FailingCopier: FileCopying {
     #expect(succeeded)
     for source in sources { #expect(manager.fileExists(atPath: target.appendingPathComponent(source.lastPathComponent).path)) }
 }
+
+@Test @MainActor func shiftF5CopiesOnlyCursorItemIntoActiveDirectory() async throws {
+    _ = NSApplication.shared
+    let manager = FileManager.default
+    let root = manager.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let leftDirectory = root.appendingPathComponent("left")
+    let rightDirectory = root.appendingPathComponent("right")
+    try manager.createDirectory(at: leftDirectory, withIntermediateDirectories: true)
+    try manager.createDirectory(at: rightDirectory, withIntermediateDirectories: true)
+    defer { try? manager.removeItem(at: root) }
+    for name in ["one.txt", "two.txt", "cursor.txt"] {
+        try Data(name.utf8).write(to: leftDirectory.appendingPathComponent(name))
+    }
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 900, height: 500),
+        styleMask: [.titled], backing: .buffered, defer: false)
+    let tab = CommanderTabSession(window: window, directories: [leftDirectory, rightDirectory],
+        locationReader: LocalLocationReader())
+    window.contentViewController = tab.root
+    let panes = tab.root.children.compactMap { $0 as? PaneViewController }
+    let sourcePane = try #require(panes.first)
+    let sourceView = try #require(sourcePane.view as? TerminalPaneView)
+    for pane in panes { pane.load(pane.state.directory) }
+    for _ in 0..<200 where panes.contains(where: \.isLoading) {
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    let finishedLoading = !panes.contains(where: \.isLoading)
+    #expect(finishedLoading)
+    func select(_ name: String) throws {
+        let index = try #require(sourcePane.state.rows.firstIndex { $0.name == name })
+        sourceView.onInput?(.select(index))
+    }
+    for name in ["one.txt", "two.txt"] {
+        try select(name)
+        sourceView.onInput?(.toggleMark)
+    }
+    try select("cursor.txt")
+    let marked = sourcePane.state.markedURLs
+    #expect(marked.count == 2)
+    let f5 = String(NSEvent.SpecialKey.f5.unicodeScalar)
+    let event = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
+        modifierFlags: .shift, timestamp: 1, windowNumber: window.windowNumber,
+        context: nil, characters: f5, charactersIgnoringModifiers: f5, isARepeat: false, keyCode: 0))
+    sourceView.keyDown(with: event)
+    let dialog = try #require(window.contentView?.subviews.compactMap { $0 as? TerminalOperationDialog }.first)
+    let field = try #require(dialog.subviews.compactMap { $0 as? NSTextField }.first)
+    #expect(field.stringValue == leftDirectory.appendingPathComponent("cursor.txt").path)
+    dialog.onConfirm?("cursor-copy.txt")
+    for _ in 0..<200 {
+        if !tab.fileOperationInProgress && !panes.contains(where: \.isLoading) { break }
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(!tab.fileOperationInProgress)
+    #expect(try String(contentsOf: leftDirectory.appendingPathComponent("cursor-copy.txt"), encoding: .utf8) == "cursor.txt")
+    #expect(sourcePane.state.selectedRow?.name == "cursor-copy.txt")
+    #expect(sourcePane.state.markedURLs == marked)
+    #expect(try manager.contentsOfDirectory(atPath: rightDirectory.path).isEmpty)
+    #expect(try manager.contentsOfDirectory(atPath: leftDirectory.path).count == 4)
+}

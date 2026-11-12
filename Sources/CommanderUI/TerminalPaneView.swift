@@ -28,7 +28,7 @@ struct PaneGeometry {
 enum PaneInput {
     case toggleMark
     case extendSelection(Int), endRangeSelection
-    case activate, switchPane, matchDirectory, open, parent, copy, move, rename, delete, viewFile, editFile, createFile, quit, createDirectory
+    case activate, switchPane, matchDirectory, open, parent, copy, copyInPlace, move, rename, delete, viewFile, editFile, createFile, quit, createDirectory
     case locations(Int)
     case select(Int)
 }
@@ -182,6 +182,7 @@ final class TerminalPaneView: NSView {
         if event.modifierFlags.contains(.shift), [.f3, .f4, .f5, .f6, .f7, .f8, .f10].contains(key) {
             if key == .f6 { onInput?(.rename) }
             if key == .f4 { onInput?(.createFile) }
+            if key == .f5 { onInput?(.copyInPlace) }
             return
         }
         if event.charactersIgnoringModifiers == " " {

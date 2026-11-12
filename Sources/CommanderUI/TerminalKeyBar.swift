@@ -3,7 +3,7 @@ import AppKit
 @MainActor
 final class TerminalKeyBar: NSView {
     enum Command: Int, CaseIterable {
-        case viewFile = 3, editFile = 4, copy = 5, move = 6, createDirectory = 7, delete = 8, quit = 10, leftLocations = 101, rightLocations = 102, rename = 106, createFile = 104
+        case viewFile = 3, editFile = 4, copy = 5, move = 6, createDirectory = 7, delete = 8, quit = 10, leftLocations = 101, rightLocations = 102, rename = 106, createFile = 104, copyInPlace = 105
         var label: String {
             switch self {
             case .leftLocations: "Left"
@@ -12,6 +12,7 @@ final class TerminalKeyBar: NSView {
             case .editFile: "Edit"
             case .createFile: "New file"
             case .copy: "Copy"
+            case .copyInPlace: "Copy here"
             case .move: "Move"
             case .rename: "Rename"
             case .createDirectory: "Mkdir"
@@ -32,7 +33,15 @@ final class TerminalKeyBar: NSView {
             guard !shift else { return nil }
             return number == 1 ? .leftLocations : number == 2 ? .rightLocations : nil
         }
-        return shift ? (number == 4 ? .createFile : number == 6 ? .rename : nil) : Command(rawValue: number)
+        if shift {
+            switch number {
+            case 4: return .createFile
+            case 5: return .copyInPlace
+            case 6: return .rename
+            default: return nil
+            }
+        }
+        return Command(rawValue: number)
     }
 
     var labels: [Int: String] {
