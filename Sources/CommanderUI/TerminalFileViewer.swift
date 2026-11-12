@@ -7,6 +7,8 @@ final class TerminalFileViewer: NSView {
     enum Input { case navigate(ViewerCommand), close, toggleMode, toggleWrap, toggleWrapType,
         search(DocumentSearchKeyAction) }
     var onInput: ((Input) -> Void)?
+    var onSelectionChanged: (() -> Void)?
+    var onWordContinuationNeeded: ((ViewerWordContinuationRequest) -> Void)?
     let path: String
     private let syntaxHighlighter: any SyntaxHighlighter
     var syntaxHighlightingEnabled: Bool { syntaxHighlighter.isActive }
@@ -22,18 +24,27 @@ final class TerminalFileViewer: NSView {
     private var anchor: Position?
     private var endpoint: Position?
     private var isSelecting = false
+    private var wordSelectedOnMouseDown = false
+    private var isWordSelection = false
+    private var wordSelectionToken: UInt64 = 0
+    private var wordPrefix = ""
+    private var wordSuffix = ""
+    private var wordClickPosition: Position?
+    private var isResolvingWord = false
+    private var pendingCopyChangeCount: Int?
     private var selection: (start: Position, end: Position)? {
         guard let anchor, let endpoint, anchor != endpoint else { return nil }
         return (min(anchor, endpoint), max(anchor, endpoint))
     }
     var selectedText: String {
         guard let page, let selection else { return "" }
-        return (selection.start.row...selection.end.row).map { row in
+        let visible = (selection.start.row...selection.end.row).map { row in
             let text = page.lines[row].text
             let start = row == selection.start.row ? selection.start.column : 0
             let end = row == selection.end.row ? selection.end.column : text.count
             return String(text.dropFirst(start).prefix(end - start))
-        }.joined(separator: "\n")
+        }.joined(separator: isWordSelection ? "" : "\n")
+        return wordPrefix + visible + wordSuffix
     }
     private(set) var horizontalOffset = 0
     var activeSearchRange: Range<Int64>? { didSet { needsDisplay = true } }
@@ -80,10 +91,18 @@ final class TerminalFileViewer: NSView {
     func update(_ page: ViewerPage, syntaxProjection: ViewerSyntaxProjection = .empty) {
         if self.page?.mode != page.mode || wrapsText { horizontalOffset = 0 }
         if self.page?.mode != page.mode || self.page?.offset != page.offset
-            || self.page?.lines.map(\.text) != page.lines.map(\.text) {
+            || self.page?.revision != page.revision
+            || (self.page?.fileSize != nil && page.fileSize != nil && self.page?.fileSize != page.fileSize)
+            || self.page?.lines.map(\.text) != page.lines.map(\.text)
+            || self.page?.lines.map(\.offset) != page.lines.map(\.offset)
+            || self.page?.lines.map(\.endOffset) != page.lines.map(\.endOffset) {
+            onSelectionChanged?()
             anchor = nil
             endpoint = nil
             isSelecting = false
+            wordSelectedOnMouseDown = false
+            isWordSelection = false
+            invalidateWordContinuation()
         }
         self.page = page
         self.syntaxProjection = syntaxProjection
@@ -162,7 +181,7 @@ final class TerminalFileViewer: NSView {
                         let left = rect.minX + textWidth(String(displayed.prefix(max(0, start - horizontalOffset))))
                         var right = rect.minX + textWidth(String(displayed.prefix(max(0, end - horizontalOffset))))
                         // Give selected line breaks a visible cell, including on empty lines.
-                        if index < selection.end.row { right += textWidth(" ") }
+                        if index < selection.end.row && !isWordSelection { right += textWidth(" ") }
                         if right > left {
                             NSGraphicsContext.saveGraphicsState()
                             NSRect(x: left, y: rect.minY, width: right - left, height: rect.height).clip()
@@ -268,6 +287,7 @@ final class TerminalFileViewer: NSView {
     }
     override func mouseDown(with event: NSEvent) {
         isSelecting = false
+        wordSelectedOnMouseDown = false
         window?.makeFirstResponder(self)
         let point = convert(event.locationInWindow, from: nil)
         let footer = NSRect(x: 0, y: bounds.height - TerminalTheme.lineHeight, width: bounds.width, height: TerminalTheme.lineHeight)
@@ -279,6 +299,55 @@ final class TerminalFileViewer: NSView {
             return
         }
         guard TerminalTextGeometry(bounds: bounds).contentRect.contains(point), let position = position(at: point) else { return }
+        onSelectionChanged?()
+        invalidateWordContinuation()
+        if event.clickCount >= 2, isVisibleTextHit(point, position: position),
+            let word = wordSelection(at: position) ?? leadingFragmentSelection(at: position) {
+            anchor = word.start
+            endpoint = word.end
+            isSelecting = true
+            wordSelectedOnMouseDown = true
+            isWordSelection = true
+            wordClickPosition = position
+            if let page, page.mode == .text, wrapsText {
+                let first = page.lines.first!
+                let last = page.lines.last!
+                let provisional = wordSelection(at: position) == nil
+                let continuousToStart = position.row == 0 || (1...position.row).allSatisfy {
+                    page.lines[$0 - 1].endOffset == page.lines[$0].offset
+                }
+                let touchesStart = word.start.row == 0 && word.start.column == 0
+                let mayJoinStart = hasLeadingGraphemeFragment(before: word.start, page: page)
+                let before = continuousToStart && (touchesStart || mayJoinStart) && first.offset > 0
+                    ? first.offset : nil
+                let after = ((word.end.row == page.lines.count - 1 && word.end.column == last.text.count)
+                    || (provisional && provisionalMayReachPageEnd(page)))
+                    && last.endOffset == page.endOffset
+                    && (page.fileSize == nil || page.endOffset < page.fileSize!)
+                    ? page.endOffset : nil
+                if (before != nil || after != nil), let onWordContinuationNeeded {
+                    isResolvingWord = true
+                    let visibleWord = selectedText
+                    var leadingText = first.text
+                    if page.lines.count > 1 {
+                        for row in 1..<page.lines.count {
+                            guard page.lines[row - 1].endOffset == page.lines[row].offset else { break }
+                            leadingText += page.lines[row].text
+                        }
+                    }
+                    onWordContinuationNeeded(ViewerWordContinuationRequest(
+                        token: wordSelectionToken, before: before,
+                        beforeContext: before == nil ? "" : String(leadingText.first ?? visibleWord.first!),
+                        after: after,
+                        afterContext: after == nil ? "" : String(provisional
+                            ? (leadingText.last ?? last.text.last!) : visibleWord.last!),
+                        revision: page.revision, fileSize: page.fileSize))
+                }
+            }
+            needsDisplay = true
+            return
+        }
+        isWordSelection = false
         if !event.modifierFlags.contains(.shift) || anchor == nil { anchor = position }
         endpoint = position
         isSelecting = true
@@ -287,14 +356,23 @@ final class TerminalFileViewer: NSView {
 
     override func mouseDragged(with event: NSEvent) {
         guard isSelecting else { return }
+        if isWordSelection {
+            onSelectionChanged?()
+            invalidateWordContinuation()
+        }
+        wordSelectedOnMouseDown = false
+        isWordSelection = false
         endpoint = position(at: convert(event.locationInWindow, from: nil))
         needsDisplay = true
     }
 
     override func mouseUp(with event: NSEvent) {
         guard isSelecting else { return }
-        endpoint = position(at: convert(event.locationInWindow, from: nil))
+        if !wordSelectedOnMouseDown {
+            endpoint = position(at: convert(event.locationInWindow, from: nil))
+        }
         isSelecting = false
+        wordSelectedOnMouseDown = false
         needsDisplay = true
     }
 
@@ -303,6 +381,10 @@ final class TerminalFileViewer: NSView {
     }
 
     @objc func copy(_ sender: Any?) {
+        if isResolvingWord {
+            pendingCopyChangeCount = NSPasteboard.general.changeCount
+            return
+        }
         let text = selectedText
         guard !text.isEmpty else { return }
         NSPasteboard.general.clearContents()
@@ -311,6 +393,160 @@ final class TerminalFileViewer: NSView {
 
     private func textWidth(_ text: String) -> CGFloat {
         (text as NSString).size(withAttributes: [.font: TerminalTheme.font]).width
+    }
+
+    func completeWordContinuation(_ continuation: ViewerWordContinuation,
+                                  token: UInt64) {
+        guard isWordSelection, token == wordSelectionToken else { return }
+        if let click = wordClickPosition {
+            guard let resolved = wordSelection(at: click, prefix: continuation.prefix) else {
+                failWordContinuation(token: token)
+                return
+            }
+            anchor = resolved.start
+            endpoint = resolved.end
+            wordPrefix = resolved.usesPrefix ? continuation.prefix : ""
+            let reachesEnd = page.map { resolved.end.row == $0.lines.count - 1 &&
+                resolved.end.column == $0.lines[resolved.end.row].text.count } ?? false
+            wordSuffix = reachesEnd ? continuation.suffix : ""
+            needsDisplay = true
+        }
+        isResolvingWord = false
+        if let changeCount = pendingCopyChangeCount,
+            NSPasteboard.general.changeCount == changeCount {
+            pendingCopyChangeCount = nil
+            copy(nil)
+        } else {
+            pendingCopyChangeCount = nil
+        }
+    }
+
+    @discardableResult
+    func failWordContinuation(token: UInt64) -> Bool {
+        guard isWordSelection, token == wordSelectionToken else { return false }
+        anchor = nil
+        endpoint = nil
+        isWordSelection = false
+        wordClickPosition = nil
+        isResolvingWord = false
+        pendingCopyChangeCount = nil
+        needsDisplay = true
+        return true
+    }
+
+    private func invalidateWordContinuation() {
+        wordSelectionToken &+= 1
+        wordPrefix = ""
+        wordSuffix = ""
+        wordClickPosition = nil
+        isResolvingWord = false
+        pendingCopyChangeCount = nil
+    }
+
+    private func wordRange(at position: Position) -> Range<Int>? {
+        guard let page, page.lines.indices.contains(position.row) else { return nil }
+        return WordSelectionRange.characters(in: page.lines[position.row].text, at: position.column)
+    }
+
+    private func isVisibleTextHit(_ point: NSPoint, position: Position) -> Bool {
+        guard let page, page.lines.indices.contains(position.row),
+            point.y < CGFloat(min(visibleRows, page.lines.count) + 1) * TerminalTheme.lineHeight else {
+            return false
+        }
+        let displayed = String(page.lines[position.row].text.dropFirst(horizontalOffset).prefix(visibleColumns))
+        return !displayed.isEmpty && point.x <= 1 + textWidth(displayed)
+    }
+
+    private func wordSelection(at position: Position, prefix: String = "")
+        -> (start: Position, end: Position, usesPrefix: Bool)? {
+        guard let page else { return nil }
+        guard page.mode == .text, wrapsText else {
+            guard let word = wordRange(at: position) else { return nil }
+            return (Position(row: position.row, column: word.lowerBound),
+                Position(row: position.row, column: word.upperBound), false)
+        }
+        var first = position.row
+        var last = position.row
+        while first > 0 && page.lines[first - 1].endOffset == page.lines[first].offset {
+            first -= 1
+        }
+        while last + 1 < page.lines.count && page.lines[last].endOffset == page.lines[last + 1].offset {
+            last += 1
+        }
+        let context = first == 0 ? (prefix.last.map(String.init) ?? "") : ""
+        let logicalText = context + (first...last).map { page.lines[$0].text }.joined()
+        let contextLength = context.utf16.count
+        let preceding = (first..<position.row).reduce(0) { $0 + page.lines[$1].text.utf16.count }
+        let clicked = contextLength + preceding +
+            String(page.lines[position.row].text.prefix(position.column)).utf16.count
+        guard let word = WordSelectionRange.utf16(in: logicalText, at: clicked) else { return nil }
+        let start = word.lowerBound < contextLength
+            ? Position(row: first, column: 0)
+            : self.position(atUTF16Offset: word.lowerBound - contextLength, rows: first...last,
+                page: page, preferNextAtSeam: true)
+        let end = self.position(atUTF16Offset: word.upperBound - contextLength, rows: first...last,
+            page: page, preferNextAtSeam: false)
+        return (start, end, word.lowerBound < contextLength)
+    }
+
+    private func position(atUTF16Offset offset: Int, rows: ClosedRange<Int>, page: ViewerPage,
+                          preferNextAtSeam: Bool) -> Position {
+        var cursor = 0
+        for row in rows {
+            let text = page.lines[row].text
+            let width = text.utf16.count
+            if offset < cursor + width || row == rows.upperBound ||
+                (offset == cursor + width && !preferNextAtSeam) {
+                let local = max(0, offset - cursor)
+                var consumed = 0
+                var column = 0
+                for character in text {
+                    if consumed >= local { break }
+                    consumed += String(character).utf16.count
+                    column += 1
+                }
+                return Position(row: row, column: column)
+            }
+            cursor += width
+        }
+        return Position(row: rows.upperBound, column: page.lines[rows.upperBound].text.count)
+    }
+
+    private func leadingFragmentSelection(at position: Position)
+        -> (start: Position, end: Position, usesPrefix: Bool)? {
+        guard let page, page.mode == .text, wrapsText, position.row == 0,
+            page.lines[0].offset > 0, onWordContinuationNeeded != nil,
+            position.column <= 1, let first = page.lines[0].text.first,
+            first.unicodeScalars.allSatisfy(isGraphemeContinuation) else { return nil }
+        return (Position(row: 0, column: 0), Position(row: 0, column: 1), false)
+    }
+
+    private func provisionalMayReachPageEnd(_ page: ViewerPage) -> Bool {
+        guard !page.lines.isEmpty else { return false }
+        if page.lines.count > 1 {
+            for row in 1..<page.lines.count
+                where page.lines[row - 1].endOffset != page.lines[row].offset {
+                return false
+            }
+        }
+        let text = page.lines.map(\.text).joined()
+        return !text.isEmpty && text.allSatisfy { character in
+            WordSelectionRange.isWord(character) ||
+                character.unicodeScalars.allSatisfy(isGraphemeContinuation)
+        }
+    }
+
+    private func hasLeadingGraphemeFragment(before position: Position, page: ViewerPage) -> Bool {
+        guard position.row < page.lines.count else { return false }
+        let preceding = (0..<position.row).map { page.lines[$0].text }.joined() +
+            String(page.lines[position.row].text.prefix(position.column))
+        return !preceding.isEmpty && preceding.unicodeScalars.allSatisfy(isGraphemeContinuation)
+    }
+
+    private func isGraphemeContinuation(_ scalar: Unicode.Scalar) -> Bool {
+        let value = scalar.value
+        return CharacterSet.nonBaseCharacters.contains(scalar) || value == 0x200D ||
+            (0xFE00...0xFE0F).contains(value) || (0x1F3FB...0x1F3FF).contains(value)
     }
 
     private func position(at point: NSPoint) -> Position? {

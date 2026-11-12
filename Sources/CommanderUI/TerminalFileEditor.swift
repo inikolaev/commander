@@ -366,21 +366,8 @@ final class TerminalFileEditor: NSView, @preconcurrency NSTextInputClient {
         let lineRange = document.lineRange(document.lineIndex(at: offset))
         let line = document.text(in: lineRange)
         let local = offset - lineRange.location
-        let characters = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_"))
-        var parts: [(start: Int, end: Int, word: Bool)] = []
-        var position = 0
-        for character in line {
-            let end = position + String(character).utf16.count
-            parts.append((position, end, character.unicodeScalars.contains { characters.contains($0) }))
-            position = end
-        }
-        guard let index = parts.firstIndex(where: { $0.word && $0.start <= local && local <= $0.end }) else { return nil }
-        var first = index
-        var last = index
-        while first > 0 && parts[first - 1].word { first -= 1 }
-        while last + 1 < parts.count && parts[last + 1].word { last += 1 }
-        return NSRange(location: lineRange.location + parts[first].start,
-            length: parts[last].end - parts[first].start)
+        guard let word = WordSelectionRange.utf16(in: line, at: local) else { return nil }
+        return NSRange(location: lineRange.location + word.lowerBound, length: word.count)
     }
 
     @objc func copy(_ sender: Any?) {
