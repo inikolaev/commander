@@ -16,7 +16,8 @@ against the containing local folder.
 
 F3 views regular member files in the built-in text/hex viewer. Edit, new file,
 mkdir, rename, delete, and opening members in external applications remain disabled.
-Copy and move are disabled whenever either participating pane is inside an archive.
+F5 copy and move are disabled whenever either participating pane is inside an archive.
+Shift-F5 remains available for a local active pane because it copies into that pane's directory.
 The shortcut bar hides unavailable labels and action handlers enforce the same
 rules. Nested archives and link targets cannot be entered. Terminal commands run
 in the archive's containing local folder, as shown by the shell prompt; virtual

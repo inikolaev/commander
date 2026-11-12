@@ -65,14 +65,15 @@ import FileManagerCore
             modifierFlags: [.shift], timestamp: 0, windowNumber: 0, context: nil,
             characters: String(key.unicodeScalar), charactersIgnoringModifiers: String(key.unicodeScalar), isARepeat: false, keyCode: 0)))
     }
-    #expect(actions.count == 2)
+    #expect(actions.count == 3)
     if case .createFile = actions.first {} else { Issue.record("Expected create file") }
+    if case .copyInPlace = actions[1] {} else { Issue.record("Expected copy in place") }
     if case .rename = actions.last {} else { Issue.record("Expected rename") }
     let bar = TerminalKeyBar()
     #expect(bar.labels[6] == "Move")
     bar.shiftPressed = true
-    #expect(bar.labels == [4: "New file", 6: "Rename"])
-    #expect(TerminalKeyBar.command(number: 5, shift: true) == nil)
+    #expect(bar.labels == [4: "New file", 5: "Copy", 6: "Rename"])
+    #expect(TerminalKeyBar.command(number: 5, shift: true) == .copyInPlace)
     #expect(TerminalKeyBar.command(number: 6, shift: true) == .rename)
     bar.shiftPressed = false
     #expect(bar.labels[3] == "View")

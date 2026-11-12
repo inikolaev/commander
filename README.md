@@ -75,6 +75,7 @@ to package a Release build instead.
 | F3 | Open selected file in the read-only text viewer |
 | F4 | Open the selected file in the text editor |
 | F5 | Copy marked items or the cursor item to the opposite pane (editable destination) |
+| Shift-F5 | Copy only the cursor item in the active pane, even when other items are marked (editable name) |
 | F6 | Move marked entries or the cursor entry |
 | Shift-F6 | Rename the entry under the cursor |
 | F7 | Create a directory in the active pane |
@@ -293,6 +294,9 @@ bytes copied and percentage, with Cancel/Escape to stop the operation. Copy erro
 use a red dialog dismissed with OK, Enter, or Escape. Items copy in the background; existing destinations are
 never overwritten. Successful copies refresh panes showing the destination folder.
 Folders copy recursively. Symlinks are copied as links; relative link targets remain unchanged.
+Shift-F5 (or Shift-click on the footer Copy button) starts with the active directory as
+the destination and copies only the item under the cursor. Enter a new name or path
+in the destination dialog; marked items remain marked.
 
 F8 (or Fn-F8) and the footer Delete button open a red confirmation dialog.
 Marked entries are trashed together; with no marks, the cursor entry is used.
