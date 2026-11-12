@@ -61,7 +61,7 @@ discarded before reaching the renderer.
 
 | Language | Extensions / filenames |
 | --- | --- |
-| JSON | `.json` |
+| JSON / GeoJSON | `.json`, `.geojson` |
 | Python | `.py`, `.pyi`, `.pyw` |
 | Ruby | `.rb`, `.rake`, `.gemspec`, `Gemfile`, `Rakefile`, `Guardfile`, `Capfile`, `Vagrantfile`, `Brewfile` |
 | C / C++ | `.c`, `.h` / `.cc`, `.cpp`, `.cxx`, `.c++`, `.hh`, `.hpp`, `.hxx`, `.h++`, `.ipp`, `.tpp` |

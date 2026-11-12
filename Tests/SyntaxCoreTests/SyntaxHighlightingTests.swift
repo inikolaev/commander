@@ -10,9 +10,10 @@ private func syntaxFixture(_ name: String, contents: String) throws -> URL {
     return url
 }
 
-@Test func jsonRegistryProducesSemanticHighlightSpans() throws {
+@Test(arguments: ["json", "geojson"])
+func jsonRegistryProducesSemanticHighlightSpans(fileExtension: String) throws {
     let source = #"{"name":"Commander","count":42,"enabled":true,"nothing":null}"#
-    let url = try syntaxFixture("sample.json", contents: source)
+    let url = try syntaxFixture("sample.\(fileExtension)", contents: source)
     defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
 
     let highlighter = SyntaxRegistry.viewer.highlighter(for: url)
