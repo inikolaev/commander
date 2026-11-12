@@ -4,7 +4,7 @@ import TreeSitterJSON
 extension SyntaxLanguageDefinition {
     static let json = SyntaxLanguageDefinition(
         id: "json",
-        fileExtensions: ["json"],
+        fileExtensions: ["json", "geojson"],
         syntax: { .json }
     )
 }
