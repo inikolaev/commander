@@ -28,6 +28,7 @@ final class FileViewerCoordinator {
     private var searchGeneration: UInt64 = 0
     private var syntaxHighlighter: any SyntaxHighlighter = PlainTextSyntaxHighlighter.shared
     private var task: Task<Void, Never>?
+    private var wordContinuationTask: Task<ViewerWordContinuation, Error>?
     private var pendingScroll = 0
     private var pendingJump: ViewerCommand?
     private var pendingJumpIsSearchReveal = false
@@ -130,6 +131,31 @@ final class FileViewerCoordinator {
         viewer.onResize = { [weak self, weak viewer] in
             guard viewer?.window != nil else { return }
             self?.request(.stay)
+        }
+        viewer.onSelectionChanged = { [weak self] in
+            self?.wordContinuationTask?.cancel()
+            self?.wordContinuationTask = nil
+        }
+        viewer.onWordContinuationNeeded = { [weak self, weak viewer] request in
+            guard let self, let viewer, let source = self.contentSource, !self.closed else { return }
+            let worker = Task.detached(priority: .userInitiated) {
+                try await ViewerWordContinuation.load(from: source, request: request)
+            }
+            self.wordContinuationTask = worker
+            Task { [weak self, weak viewer] in
+                do {
+                    let continuation = try await worker.value
+                    guard let self, !self.closed, self.view === viewer else { return }
+                    viewer?.completeWordContinuation(continuation, token: request.token)
+                } catch is CancellationError {
+                    // A later selection superseded this read.
+                } catch {
+                    guard let self, !self.closed, self.view === viewer else { return }
+                    guard viewer?.failWordContinuation(token: request.token) == true else { return }
+                    if case FileViewerError.sourceChanged = error { self.request(.stay) }
+                    else { self.showError(error) }
+                }
+            }
         }
         window.makeFirstResponder(viewer)
     }
@@ -461,6 +487,8 @@ final class FileViewerCoordinator {
         if showingError, let window { errors.dismiss(window: window) }
         task?.cancel()
         task = nil
+        wordContinuationTask?.cancel()
+        wordContinuationTask = nil
         searchController?.close()
         searchController = nil
         searchSurface?.removeFromSuperview()

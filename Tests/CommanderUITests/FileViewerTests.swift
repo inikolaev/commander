@@ -216,6 +216,7 @@ private actor MutableViewerTestSource: FileContentSource {
     var pauseRevealRead = false
     var pausePageRead = false
     var readBlocked = false
+    var maxReadCount = 0
     var readContinuation: CheckedContinuation<Void, Never>?
     init(_ text: String) { data = Data(text.utf8) }
     func metadata() -> ContentMetadata {
@@ -229,6 +230,7 @@ private actor MutableViewerTestSource: FileContentSource {
     }
     func length() -> Int64 { Int64(data.count) }
     func read(at offset: Int64, count: Int) async -> Data {
+        maxReadCount = max(maxReadCount, count)
         if pausePageRead && offset == 0 {
             pausePageRead = false
             readBlocked = true
@@ -252,6 +254,7 @@ private actor MutableViewerTestSource: FileContentSource {
     func armPagePause() { pausePageRead = true }
     func isReadBlocked() -> Bool { readBlocked }
     func releaseRead() { readContinuation?.resume(); readContinuation = nil }
+    func largestRead() -> Int { maxReadCount }
 }
 
 @Test @MainActor func viewerSearchBarReducesPagingByObscuredRows() throws {
@@ -667,6 +670,286 @@ private actor ResolvingViewerTestSource: FileContentSource {
     #expect(viewer.horizontalOffset == 21)
     viewer.update(try await document.page(.scroll(1), rows: 10))
     #expect(viewer.selectedText.isEmpty)
+}
+
+@Test @MainActor func viewerDoubleClickSelectsWord() async throws {
+    _ = NSApplication.shared
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try "😀 cafe\u{301}_42, next".write(to: url, atomically: false, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try FileViewerDocument(url: url)
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 400),
+        styleMask: [.titled], backing: .buffered, defer: false)
+    let viewer = TerminalFileViewer(path: url.path)
+    window.contentView = viewer
+    viewer.update(try await document.page(rows: 10))
+    func mouse(_ type: NSEvent.EventType, after prefix: String, clicks: Int, row: Int = 0) throws -> NSEvent {
+        let x = 1 + (prefix as NSString).size(withAttributes: [.font: TerminalTheme.font]).width
+        let point = viewer.convert(NSPoint(x: x, y: CGFloat(row + 1) * TerminalTheme.lineHeight + 4), to: nil)
+        return try #require(NSEvent.mouseEvent(with: type, location: point, modifierFlags: [],
+            timestamp: 1, windowNumber: window.windowNumber, context: nil,
+            eventNumber: 0, clickCount: clicks, pressure: 1))
+    }
+    viewer.mouseDown(with: try mouse(.leftMouseDown, after: "😀 caf", clicks: 2))
+    viewer.mouseUp(with: try mouse(.leftMouseUp, after: "😀 caf", clicks: 2))
+    #expect(viewer.selectedText == "cafe\u{301}_42")
+
+    viewer.mouseDown(with: try mouse(.leftMouseDown, after: "😀 cafe\u{301}_42,", clicks: 2))
+    viewer.mouseUp(with: try mouse(.leftMouseUp, after: "😀 cafe\u{301}_42,", clicks: 2))
+    #expect(viewer.selectedText.isEmpty)
+
+    viewer.mouseDown(with: try mouse(.leftMouseDown, after: "😀 cafe\u{301}_42, ne", clicks: 2))
+    viewer.mouseUp(with: try mouse(.leftMouseUp, after: "😀 cafe\u{301}_42, ne", clicks: 2))
+    #expect(viewer.selectedText == "next")
+    viewer.mouseDown(with: try mouse(.leftMouseDown, after: "😀 caf", clicks: 1))
+    viewer.mouseUp(with: try mouse(.leftMouseUp, after: "😀 caf", clicks: 1))
+    #expect(viewer.selectedText.isEmpty)
+    viewer.mouseDown(with: try mouse(.leftMouseDown, after: "😀 caf", clicks: 2, row: 3))
+    viewer.mouseUp(with: try mouse(.leftMouseUp, after: "😀 caf", clicks: 2, row: 3))
+    #expect(viewer.selectedText.isEmpty)
+
+    viewer.wrapsText = false
+    let right = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
+        modifierFlags: [], timestamp: 1, windowNumber: window.windowNumber,
+        context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 124))
+    viewer.keyDown(with: right)
+    #expect(viewer.horizontalOffset == 1)
+    viewer.mouseDown(with: try mouse(.leftMouseDown, after: " ca", clicks: 2))
+    viewer.mouseUp(with: try mouse(.leftMouseUp, after: " ca", clicks: 2))
+    #expect(viewer.selectedText == "cafe\u{301}_42")
+
+    let farRight = try #require(NSEvent.keyEvent(with: .keyDown, location: .zero,
+        modifierFlags: .control, timestamp: 1, windowNumber: window.windowNumber,
+        context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 124))
+    viewer.keyDown(with: farRight)
+    viewer.mouseDown(with: try mouse(.leftMouseDown, after: "", clicks: 2))
+    viewer.mouseUp(with: try mouse(.leftMouseUp, after: "", clicks: 2))
+    #expect(viewer.selectedText.isEmpty)
+}
+
+@Test @MainActor func viewerDoubleClickSelectsWordAcrossSoftWraps() async throws {
+    _ = NSApplication.shared
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try "abcdefghi\n123456".write(to: url, atomically: false, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let document = try FileViewerDocument(url: url)
+    let page = try await document.page(rows: 10, wrapColumns: 3)
+    #expect(page.lines.map(\.text) == ["abc", "def", "ghi", "123", "456"])
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 780, height: 400),
+        styleMask: [.titled], backing: .buffered, defer: false)
+    let viewer = TerminalFileViewer(path: url.path)
+    window.contentView = viewer
+    viewer.update(page)
+    func doubleClick(row: Int) throws {
+        let point = viewer.convert(NSPoint(x: 1 + TerminalTheme.cellAdvance,
+            y: CGFloat(row + 1) * TerminalTheme.lineHeight + 4), to: nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = try #require(NSEvent.mouseEvent(with: type, location: point,
+                modifierFlags: [], timestamp: 1, windowNumber: window.windowNumber,
+                context: nil, eventNumber: 0, clickCount: 2, pressure: 1))
+            if type == .leftMouseDown { viewer.mouseDown(with: event) }
+            else { viewer.mouseUp(with: event) }
+        }
+    }
+    try doubleClick(row: 1)
+    #expect(viewer.selectedText == "abcdefghi")
+    let headerPoint = viewer.convert(NSPoint(x: 2, y: 2), to: nil)
+    let headerClick = try #require(NSEvent.mouseEvent(with: .leftMouseDown,
+        location: headerPoint, modifierFlags: [], timestamp: 1,
+        windowNumber: window.windowNumber, context: nil, eventNumber: 0,
+        clickCount: 1, pressure: 1))
+    viewer.mouseDown(with: headerClick)
+    #expect(viewer.selectedText == "abcdefghi")
+    try doubleClick(row: 3)
+    #expect(viewer.selectedText == "123456")
+}
+
+@Test @MainActor func viewerDoubleClickLoadsWordBeyondVisiblePage() async throws {
+    _ = NSApplication.shared
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let word = String(repeating: "a", count: 12_000) + "Z"
+    try ("start\n" + word + ", end").write(to: url, atomically: false, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 130, height: 150),
+        styleMask: [.titled], backing: .buffered, defer: false)
+    window.contentView = NSView(frame: window.contentRect(forFrameRect: window.frame))
+    let coordinator = FileViewerCoordinator()
+    coordinator.present(url: url, window: window)
+    for _ in 0..<200 where coordinator.view == nil {
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    let viewer = try #require(coordinator.view)
+    let firstPage = try #require(viewer.page)
+    #expect(firstPage.lines.last?.endOffset ?? 0 < Int64(word.utf8.count + 6))
+
+    func doubleClick(row: Int) throws {
+        let point = viewer.convert(NSPoint(x: 1 + TerminalTheme.cellAdvance,
+            y: CGFloat(row + 1) * TerminalTheme.lineHeight + 4), to: nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = try #require(NSEvent.mouseEvent(with: type, location: point,
+                modifierFlags: [], timestamp: 1, windowNumber: window.windowNumber,
+                context: nil, eventNumber: 0, clickCount: 2, pressure: 1))
+            if type == .leftMouseDown { viewer.mouseDown(with: event) }
+            else { viewer.mouseUp(with: event) }
+        }
+    }
+    try doubleClick(row: firstPage.lines.count - 1)
+    for _ in 0..<200 where viewer.selectedText != word {
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.selectedText == word)
+    #expect(viewer.page?.offset == firstPage.offset)
+
+    coordinator.request(.scroll(2))
+    for _ in 0..<200 where viewer.page?.offset == firstPage.offset {
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    let middlePage = try #require(viewer.page)
+    try doubleClick(row: 0)
+    for _ in 0..<200 where viewer.selectedText != word {
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.selectedText == word)
+    #expect(viewer.page?.offset == middlePage.offset)
+    coordinator.close()
+}
+
+@Test func viewerWordContinuationStreamsAcrossUnicodeChunkBoundaries() async throws {
+    let word = "𐐀" + String(repeating: "a", count: 4093)
+    let source = MutableViewerTestSource("!" + word + ",")
+    let backward = ViewerWordContinuationRequest(token: 1,
+        before: Int64(1 + word.utf8.count), beforeContext: "",
+        after: nil, afterContext: "", revision: 1,
+        fileSize: Int64(1 + word.utf8.count + 1))
+    let prefix = try await ViewerWordContinuation.load(from: source, request: backward)
+    #expect(prefix.prefix == word)
+    let forwardLong = ViewerWordContinuationRequest(token: 1,
+        before: nil, beforeContext: "", after: 1, afterContext: "",
+        revision: 1, fileSize: Int64(1 + word.utf8.count + 1))
+    let fullWord = try await ViewerWordContinuation.load(from: source, request: forwardLong)
+    #expect(fullWord.suffix == word)
+    #expect(await source.largestRead() <= 4096)
+
+    let seam = MutableViewerTestSource("A🏻B!")
+    let forward = ViewerWordContinuationRequest(token: 1,
+        before: nil, beforeContext: "", after: 1, afterContext: "A",
+        revision: 1, fileSize: Int64("A🏻B!".utf8.count))
+    let suffix = try await ViewerWordContinuation.load(from: seam, request: forward)
+    #expect("A" + suffix.suffix == "A🏻B")
+    let reverse = ViewerWordContinuationRequest(token: 1,
+        before: 1, beforeContext: "🏻", after: nil, afterContext: "",
+        revision: 1, fileSize: Int64("A🏻B!".utf8.count))
+    let preceding = try await ViewerWordContinuation.load(from: seam, request: reverse)
+    #expect(preceding.prefix + "🏻" == "A🏻")
+}
+
+@Test @MainActor func viewerDoubleClickFollowsGraphemeAcrossPageSeams() async throws {
+    _ = NSApplication.shared
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try "A🏻BC!".write(to: url, atomically: false, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let source = try LocalFileContentSource(url: url)
+    let document = FileViewerDocument(source: source)
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 120),
+        styleMask: [.titled], backing: .buffered, defer: false)
+    let viewer = TerminalFileViewer(path: url.path)
+    window.contentView = viewer
+    viewer.onWordContinuationNeeded = { request in
+        Task {
+            let continuation = try await ViewerWordContinuation.load(from: source, request: request)
+            viewer.completeWordContinuation(continuation, token: request.token)
+        }
+    }
+    func doubleClick(row: Int) throws {
+        let point = viewer.convert(NSPoint(x: 1 + TerminalTheme.cellAdvance / 4,
+            y: CGFloat(row + 1) * TerminalTheme.lineHeight + 4), to: nil)
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            let event = try #require(NSEvent.mouseEvent(with: type, location: point,
+                modifierFlags: [], timestamp: 1, windowNumber: window.windowNumber,
+                context: nil, eventNumber: 0, clickCount: 2, pressure: 1))
+            if type == .leftMouseDown { viewer.mouseDown(with: event) }
+            else { viewer.mouseUp(with: event) }
+        }
+    }
+    viewer.update(try await document.page(rows: 2, wrapColumns: 1))
+    try doubleClick(row: 0)
+    for _ in 0..<200 where viewer.selectedText != "A🏻BC" {
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.selectedText == "A🏻BC")
+
+    viewer.update(try await document.page(.scroll(1), rows: 2, wrapColumns: 1))
+    try doubleClick(row: 1)
+    for _ in 0..<200 where viewer.selectedText != "A🏻BC" {
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.selectedText == "A🏻BC")
+
+    try doubleClick(row: 0)
+    for _ in 0..<200 where viewer.selectedText != "A🏻BC" {
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.selectedText == "A🏻BC")
+}
+
+@Test @MainActor func viewerDoesNotSelectLeadingStandaloneModifier() async throws {
+    _ = NSApplication.shared
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try "🏻!".write(to: url, atomically: false, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 120),
+        styleMask: [.titled], backing: .buffered, defer: false)
+    let viewer = TerminalFileViewer(path: url.path)
+    window.contentView = viewer
+    viewer.update(try await FileViewerDocument(url: url).page(rows: 2, wrapColumns: 1))
+    let point = viewer.convert(NSPoint(x: 1 + TerminalTheme.cellAdvance / 4,
+        y: TerminalTheme.lineHeight + 4), to: nil)
+    for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+        let event = try #require(NSEvent.mouseEvent(with: type, location: point,
+            modifierFlags: [], timestamp: 1, windowNumber: window.windowNumber,
+            context: nil, eventNumber: 0, clickCount: 2, pressure: 1))
+        if type == .leftMouseDown { viewer.mouseDown(with: event) }
+        else { viewer.mouseUp(with: event) }
+    }
+    #expect(viewer.selectedText.isEmpty)
+}
+
+@Test @MainActor func viewerLeadingFragmentStopsBeforeVisibleWhitespace() async throws {
+    _ = NSApplication.shared
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    try ("A🏻 " + String(repeating: "x", count: 10_000)).write(to: url,
+        atomically: false, encoding: .utf8)
+    defer { try? FileManager.default.removeItem(at: url) }
+    let source = try LocalFileContentSource(url: url)
+    let document = FileViewerDocument(source: source)
+    let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 200, height: 120),
+        styleMask: [.titled], backing: .buffered, defer: false)
+    let viewer = TerminalFileViewer(path: url.path)
+    window.contentView = viewer
+    _ = try await document.page(rows: 3, wrapColumns: 1)
+    viewer.update(try await document.page(.scroll(1), rows: 3, wrapColumns: 1))
+    var requestedAfter: Int64?
+    viewer.onWordContinuationNeeded = { request in
+        requestedAfter = request.after
+        Task {
+            let continuation = try await ViewerWordContinuation.load(from: source, request: request)
+            viewer.completeWordContinuation(continuation, token: request.token)
+        }
+    }
+    let point = viewer.convert(NSPoint(x: 1 + TerminalTheme.cellAdvance / 4,
+        y: TerminalTheme.lineHeight + 4), to: nil)
+    for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+        let event = try #require(NSEvent.mouseEvent(with: type, location: point,
+            modifierFlags: [], timestamp: 1, windowNumber: window.windowNumber,
+            context: nil, eventNumber: 0, clickCount: 2, pressure: 1))
+        if type == .leftMouseDown { viewer.mouseDown(with: event) }
+        else { viewer.mouseUp(with: event) }
+    }
+    #expect(requestedAfter == nil)
+    for _ in 0..<200 where viewer.selectedText != "A🏻" {
+        try await Task.sleep(for: .milliseconds(5))
+    }
+    #expect(viewer.selectedText == "A🏻")
 }
 
 @Test @MainActor func viewerSelectionPreservesComposedCharactersAndEmptyLines() async throws {
