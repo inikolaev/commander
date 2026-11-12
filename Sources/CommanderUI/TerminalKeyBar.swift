@@ -12,7 +12,7 @@ final class TerminalKeyBar: NSView {
             case .editFile: "Edit"
             case .createFile: "New file"
             case .copy: "Copy"
-            case .copyInPlace: "Copy here"
+            case .copyInPlace: "Copy"
             case .move: "Move"
             case .rename: "Rename"
             case .createDirectory: "Mkdir"

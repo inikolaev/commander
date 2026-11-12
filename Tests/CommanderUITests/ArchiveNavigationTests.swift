@@ -87,7 +87,7 @@ import ArchiveTestSupport
     #expect(bar.labels[3] == "View")
     #expect(bar.labels[5] == nil)
     bar.shiftPressed = true
-    #expect(bar.labels[5] == "Copy here")
+    #expect(bar.labels[5] == "Copy")
     bar.shiftPressed = false
     for action: PaneAction in [.copy, .move] {
         panes[1].onAction?(action)

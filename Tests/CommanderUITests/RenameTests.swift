@@ -72,7 +72,7 @@ import FileManagerCore
     let bar = TerminalKeyBar()
     #expect(bar.labels[6] == "Move")
     bar.shiftPressed = true
-    #expect(bar.labels == [4: "New file", 5: "Copy here", 6: "Rename"])
+    #expect(bar.labels == [4: "New file", 5: "Copy", 6: "Rename"])
     #expect(TerminalKeyBar.command(number: 5, shift: true) == .copyInPlace)
     #expect(TerminalKeyBar.command(number: 6, shift: true) == .rename)
     bar.shiftPressed = false
