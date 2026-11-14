@@ -26,6 +26,13 @@ public struct ColumnViewport: Sendable {
         }
     }
 
+    /// Put a distant search hit in the leading column, leaving neighboring files visible.
+    public mutating func revealSearchResult(_ index: Int, itemCount: Int) {
+        guard (0..<itemCount).contains(index),
+              index < firstIndex || index >= firstIndex + capacity else { return }
+        firstIndex = (index / rowsPerColumn) * rowsPerColumn
+    }
+
     public func index(column: Int, row: Int, itemCount: Int) -> Int? {
         guard (0..<columnCount).contains(column), (0..<rowsPerColumn).contains(row) else { return nil }
         let index = firstIndex + column * rowsPerColumn + row

@@ -7,7 +7,12 @@ if [[ "$ARCH" != arm64 && "$ARCH" != x86_64 ]]; then
     printf 'Usage: %s [arm64|x86_64]\n' "$0" >&2
     exit 2
 fi
-APP="dist/$ARCH/Commander.app"
+case "${CONFIGURATION:-debug}" in
+    debug) APP_BASENAME="Commander [DEBUG].app" ;;
+    release) APP_BASENAME="Commander.app" ;;
+    *) printf 'CONFIGURATION must be debug or release.\n' >&2; exit 2 ;;
+esac
+APP="dist/$ARCH/$APP_BASENAME"
 if [[ ! -d "$APP" ]]; then
     echo "Expected packaged app at $APP" >&2
     exit 1
@@ -17,7 +22,7 @@ VERSION=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/C
 DMG="$PWD/dist/Commander-$VERSION-macOS-$ARCH.dmg"
 STAGING=$(mktemp -d "${TMPDIR:-/tmp}/commander-dmg.XXXXXX")
 trap 'rm -rf "$STAGING"' EXIT
-ditto "$APP" "$STAGING/Commander.app"
+ditto "$APP" "$STAGING/$APP_BASENAME"
 ln -s /Applications "$STAGING/Applications"
 hdiutil create -volname "Commander" -srcfolder "$STAGING" -ov -format UDZO "$DMG"
 

@@ -12,7 +12,7 @@ final class CommanderTabSession: NSObject {
     var onAppearanceChanged: (() -> Void)?
     var title: String { customTitle ?? (activePane.state.session.displayPath as NSString).abbreviatingWithTildeInPath }
     var directories: [URL] { panes.map { $0.state.session.hostDirectory } }
-    var canSwitch: Bool { !isExitPromptVisible && !fileOperationInProgress && window?.attachedSheet == nil }
+    var canSwitch: Bool { searchSurface == nil && !isExitPromptVisible && !fileOperationInProgress && window?.attachedSheet == nil }
     func updateModifiers(_ flags: NSEvent.ModifierFlags) {
         shortcuts.shiftPressed = flags.contains(.shift)
         shortcuts.optionPressed = flags.contains(.option)
@@ -29,6 +29,7 @@ final class CommanderTabSession: NSObject {
     private var editingPrompt = false
     func restoreFocus() {
         guard root.view.window === window else { return }
+        if let searchSurface { searchSurface.focus(); return }
         if (isTerminalVisible || editingPrompt) && editor == nil && viewer == nil, let terminal { window?.makeFirstResponder(terminal.view); return }
         window?.makeFirstResponder(editor?.responder ?? viewer?.view ?? activePane.view)
     }
@@ -48,14 +49,17 @@ final class CommanderTabSession: NSObject {
     private let deleteCoordinator = DeleteCoordinator()
     private var editor: FileEditorCoordinator?
     private var viewer: FileViewerCoordinator?
+    private var searchSurface: PaneFilenameSearchView?
+    private var searchDirectory: URL?
+    private var searchAwaitingLoad = false
     var fileOperationInProgress: Bool { isGoToFolderPresented || locationCoordinator.isPresented || fileOpenCoordinator.isBusy || editor?.isBusy == true || viewer?.isBusy == true || renameCoordinator.isBusy || moveCoordinator.isBusy || createDirectoryCoordinator.isBusy || copyCoordinator.isBusy || deleteCoordinator.isBusy }
-    private var operationInProgress: Bool { isTerminalVisible || isExitPromptVisible || fileOperationInProgress || viewer != nil || editor != nil }
+    private var operationInProgress: Bool { searchSurface != nil || isTerminalVisible || isExitPromptVisible || fileOperationInProgress || viewer != nil || editor != nil }
     private var activePane: PaneViewController { panes[activeIndex] }
 
-    init(window: NSWindow, directories: [URL], locationReader: any LocationReading) {
+    init(window: NSWindow, directories: [URL], locationReader: any LocationReading,
+         reader: any DirectoryReading = LocalDirectoryReader()) {
         self.window = window
         locationCoordinator = LocationCoordinator(reader: locationReader)
-        let reader = LocalDirectoryReader()
         panes = [
             PaneViewController(title: "LEFT PANE", directory: directories[0], reader: reader),
             PaneViewController(title: "RIGHT PANE", directory: directories[1], reader: reader),
@@ -133,6 +137,23 @@ final class CommanderTabSession: NSObject {
                 self.onTitleChanged?()
                 if self.activeIndex == index { self.syncTerminalDirectory() }
             }
+            pane.onLoadFinished = { [weak self] succeeded in
+                guard let self, self.activeIndex == index, let surface = self.searchSurface else { return }
+                if !succeeded {
+                    if self.searchAwaitingLoad { self.dismissFilenameSearch() }
+                    return
+                }
+                if self.searchAwaitingLoad {
+                    self.searchDirectory = self.panes[index].state.directory
+                    self.searchAwaitingLoad = false
+                } else if self.panes[index].state.directory != self.searchDirectory {
+                    self.dismissFilenameSearch()
+                    return
+                }
+                if let match = self.panes[index].state.filenamePrefixMatch(surface.query) {
+                    self.panes[index].selectSearchResult(match)
+                } else if !surface.query.isEmpty { surface.clearUnmatchedQuery() }
+            }
             pane.onAction = { [weak self] action in self?.handle(action, from: index) }
         }
     }
@@ -144,6 +165,7 @@ final class CommanderTabSession: NSObject {
     }
 
     private func activate(_ index: Int) {
+        if activeIndex != index { dismissFilenameSearch() }
         editingPrompt = false
         let changed = activeIndex != index
         activeIndex = index
@@ -157,6 +179,7 @@ final class CommanderTabSession: NSObject {
         switch action {
         case .activate:
             guard !isTerminalVisible else { return }
+            if activeIndex != index { dismissFilenameSearch() }
             editingPrompt = false
             let changed = activeIndex != index
             activeIndex = index
@@ -246,6 +269,7 @@ final class CommanderTabSession: NSObject {
 
     @discardableResult
     func toggleTerminal() -> Bool {
+        if searchSurface != nil { dismissFilenameSearch() }
         guard !isExitPromptVisible, !fileOperationInProgress, viewer == nil, editor == nil,
               window?.attachedSheet == nil else { return false }
         guard ensureTerminal() else { return true }
@@ -278,6 +302,34 @@ final class CommanderTabSession: NSObject {
     /// Enter always goes to ZLE; its accept-line widget reads the real buffer.
     func routeTerminalInput(_ event: NSEvent) -> Bool {
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
+        if event.type == .keyDown, let searchSurface {
+            // The input method owns key handling until its marked text is committed.
+            if searchSurface.isComposingText { return false }
+            let key = event.specialKey
+            if modifiers.isEmpty, event.charactersIgnoringModifiers == "\u{1B}" || key == .f10 {
+                dismissFilenameSearch()
+                return true
+            }
+            if modifiers == .control || modifiers == [.control, .shift],
+               key == .carriageReturn || key == .enter {
+                continueFilenameSearch(backwards: modifiers.contains(.shift))
+                return true
+            }
+            let navigation: [NSEvent.SpecialKey] = [.upArrow, .downArrow, .leftArrow, .rightArrow,
+                .home, .end, .pageUp, .pageDown, .tab, .backTab]
+            if modifiers.subtracting(.shift).isEmpty,
+               key == .carriageReturn || key == .enter || (key.map { navigation.contains($0) } == true) {
+                dismissFilenameSearch()
+                activePane.view.keyDown(with: event)
+                return true
+            }
+            if modifiers == .option || modifiers == [.option, .shift],
+               let character = Self.filenameSearchCharacter(from: event) {
+                searchSurface.append(character)
+                return true
+            }
+            return false
+        }
         // F10 belongs to the app even when the expanded terminal owns input.
         if event.type == .keyDown, event.specialKey == .f10, modifiers.isEmpty,
            isTerminalVisible, !isExitPromptVisible, window?.attachedSheet == nil,
@@ -291,6 +343,11 @@ final class CommanderTabSession: NSObject {
               responder === activePane.view || responder === terminal?.view else { return false }
         let key = event.specialKey
         let terminalFocused = responder === terminal?.view
+        if !terminalFocused, (modifiers == .option || modifiers == [.option, .shift]),
+           let character = Self.filenameSearchCharacter(from: event) {
+            openFilenameSearch(initial: character)
+            return true
+        }
         let isEnter = key == .carriageReturn || key == .enter
         let insertName = (isEnter && (modifiers == .command || modifiers == [.command, .shift]))
             || (modifiers == .control && event.charactersIgnoringModifiers?.lowercased() == "j")
@@ -369,6 +426,62 @@ final class CommanderTabSession: NSObject {
         if isPaste { terminal.view.performBindingAction("paste_from_clipboard") }
         else { terminal.view.keyDown(with: event) }
         return true
+    }
+
+    private static func filenameSearchCharacter(from event: NSEvent) -> String? {
+        guard event.specialKey == nil, let text = event.charactersIgnoringModifiers, !text.isEmpty,
+              !text.contains("/"), !text.contains("\0"),
+              text.unicodeScalars.allSatisfy({ !CharacterSet.controlCharacters.contains($0)
+                  && !(0xF700...0xF8FF).contains($0.value) }) else { return nil }
+        return text
+    }
+
+    private func openFilenameSearch(initial: String) {
+        let surface = PaneFilenameSearchView(frame: .zero)
+        searchSurface = surface
+        searchDirectory = activePane.state.directory
+        searchAwaitingLoad = activePane.isLoading
+        surface.onQueryChange = { [weak self] query in
+            guard let self else { return false }
+            if query.isEmpty { return true }
+            if self.activePane.isLoading { return true }
+            guard let match = self.activePane.state.filenamePrefixMatch(query) else { return false }
+            self.activePane.selectSearchResult(match)
+            return true
+        }
+        surface.onContinue = { [weak self] backwards in self?.continueFilenameSearch(backwards: backwards) }
+        surface.onDismiss = { [weak self] in self?.dismissFilenameSearch() }
+        surface.onFocusLost = { [weak self] in self?.dismissFilenameSearch(restoreFocus: false) }
+        surface.translatesAutoresizingMaskIntoConstraints = false
+        root.view.addSubview(surface)
+        let preferredWidth = surface.widthAnchor.constraint(equalToConstant: 262)
+        preferredWidth.priority = .defaultHigh
+        NSLayoutConstraint.activate([
+            surface.leadingAnchor.constraint(greaterThanOrEqualTo: activePane.view.leadingAnchor, constant: 10),
+            surface.trailingAnchor.constraint(lessThanOrEqualTo: activePane.view.trailingAnchor, constant: -10),
+            surface.centerXAnchor.constraint(equalTo: activePane.view.centerXAnchor),
+            surface.bottomAnchor.constraint(equalTo: root.view.bottomAnchor, constant: -7),
+            preferredWidth,
+            surface.heightAnchor.constraint(equalToConstant: 68),
+        ])
+        surface.focus()
+        surface.append(initial)
+    }
+
+    private func continueFilenameSearch(backwards: Bool) {
+        guard let query = searchSurface?.query,
+              let match = activePane.state.filenamePrefixMatch(query, afterCurrent: true, backwards: backwards) else { return }
+        activePane.selectSearchResult(match)
+    }
+
+    private func dismissFilenameSearch(restoreFocus: Bool = true) {
+        guard let surface = searchSurface else { return }
+        searchSurface = nil
+        searchDirectory = nil
+        searchAwaitingLoad = false
+        surface.restoreFieldEditor()
+        surface.removeFromSuperview()
+        if restoreFocus { self.restoreFocus() }
     }
 
     private func focusPrompt() -> SessionTerminal? {

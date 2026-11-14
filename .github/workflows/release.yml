@@ -184,11 +184,14 @@ jobs:
 
       - name: Package ZIP
         env:
+          CONFIGURATION: release
           PACKAGE_ONLY: '1'
           NOTARIZE: '1'
         run: bash scripts/package-app.sh "${{ matrix.arch }}"
 
       - name: Package DMG
+        env:
+          CONFIGURATION: release
         run: bash scripts/package-dmg.sh "${{ matrix.arch }}"
 
       - name: Notarize and validate DMG
