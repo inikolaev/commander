@@ -127,7 +127,8 @@ enum TerminalTheme {
     }
 
     static func text(_ string: String, in rect: NSRect, color: NSColor? = nil,
-                     alignment: NSTextAlignment = .left, truncate: NSLineBreakMode = .byTruncatingMiddle) {
+                     alignment: NSTextAlignment = .left, truncate: NSLineBreakMode = .byTruncatingMiddle,
+                     font textFont: NSFont = font) {
         guard rect.width > 0, rect.height > 0 else { return }
         let paragraph = NSMutableParagraphStyle()
         paragraph.alignment = alignment
@@ -140,7 +141,7 @@ enum TerminalTheme {
         NSGraphicsContext.saveGraphicsState()
         rect.clip()
         (safe as NSString).draw(in: rect, withAttributes: [
-            .font: font, .foregroundColor: color ?? accent, .paragraphStyle: paragraph,
+            .font: textFont, .foregroundColor: color ?? accent, .paragraphStyle: paragraph,
         ])
         NSGraphicsContext.restoreGraphicsState()
     }

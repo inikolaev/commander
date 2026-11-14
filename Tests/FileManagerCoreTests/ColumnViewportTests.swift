@@ -33,3 +33,15 @@ import Testing
     viewport.reveal(nil, itemCount: 0)
     #expect(viewport.firstIndex == 0)
 }
+
+@Test func distantSearchResultScrollsIntoLeadingColumn() {
+    var viewport = ColumnViewport()
+    viewport.resize(rows: 10, selectedIndex: 0, itemCount: 80)
+    viewport.revealSearchResult(47, itemCount: 80)
+    #expect(viewport.firstIndex == 40)
+    #expect(viewport.index(column: 0, row: 7, itemCount: 80) == 47)
+    viewport.resize(rows: 10, selectedIndex: 47, itemCount: 80)
+    #expect(viewport.firstIndex == 40)
+    viewport.revealSearchResult(52, itemCount: 80) // Already visible; avoid unnecessary jumps.
+    #expect(viewport.firstIndex == 40)
+}

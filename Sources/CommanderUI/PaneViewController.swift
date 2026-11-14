@@ -26,6 +26,7 @@ final class PaneViewController: NSViewController {
     var showHidden = false
     var onSelectionChanged: (() -> Void)?
     var onDirectoryChanged: (() -> Void)?
+    var onLoadFinished: ((Bool) -> Void)?
     var onAction: ((PaneAction) -> Void)?
 
     init(title: String, directory: URL, reader: any DirectoryReading) {
@@ -172,8 +173,10 @@ final class PaneViewController: NSViewController {
             guard !Task.isCancelled, let self, self.requestID == id else { return }
             self.loadTask = nil
             self.isLoading = false
+            let succeeded: Bool
             switch result {
             case .success(let (snapshot, target)):
+                succeeded = true
                 let entries = snapshot.entries
                 // Capture the cursor at completion: the user can move it during a background read.
                 let selection = automatic ? self.state.selectedRow?.url : preferredSelection
@@ -186,11 +189,13 @@ final class PaneViewController: NSViewController {
                     self.isError = false
                 }
             case .failure(let error):
+                succeeded = false
                 self.status = "Cannot open folder: \(error.localizedDescription)"
                 self.isError = true
                 if self.state.directory.isFileURL { self.monitor(self.state.directory) }
             }
             self.render()
+            self.onLoadFinished?(succeeded)
             if self.refreshPending {
                 self.refreshPending = false
                 self.scheduleRefresh()
@@ -212,6 +217,11 @@ final class PaneViewController: NSViewController {
 
     func refresh() { load(state.directory, preferredSelection: state.selectedRow?.url) }
     func clearMarks() { state.clearMarks(); render() }
+    func select(_ index: Int) { state.select(index); render() }
+    func selectSearchResult(_ index: Int) {
+        terminalView.revealSearchResult(index, itemCount: state.rows.count)
+        select(index)
+    }
 
     var canBrowseSelected: Bool {
         guard let row = state.selectedRow else { return false }

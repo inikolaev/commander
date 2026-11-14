@@ -131,8 +131,13 @@ public final class ApplicationDelegate: NSObject, NSApplicationDelegate,
     private func installMenu() {
         let menu = NSMenu()
         let appItem = NSMenuItem()
-        let appMenu = NSMenu(title: "Commander")
-        appMenu.addItem(withTitle: "About Commander", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
+        #if DEBUG
+        let appName = "Commander [DEBUG]"
+        #else
+        let appName = "Commander"
+        #endif
+        let appMenu = NSMenu(title: appName)
+        appMenu.addItem(withTitle: "About \(appName)", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         #if !DEBUG
         let checkForUpdates = appMenu.addItem(
             withTitle: "Check for Updates…",
@@ -142,8 +147,8 @@ public final class ApplicationDelegate: NSObject, NSApplicationDelegate,
         checkForUpdates.target = updaterController
         #endif
         appMenu.addItem(.separator())
-        appMenu.addItem(withTitle: "Hide Commander", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
-        appMenu.addItem(withTitle: "Quit Commander", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        appMenu.addItem(withTitle: "Hide \(appName)", action: #selector(NSApplication.hide(_:)), keyEquivalent: "h")
+        appMenu.addItem(withTitle: "Quit \(appName)", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         appItem.submenu = appMenu
         menu.addItem(appItem)
 

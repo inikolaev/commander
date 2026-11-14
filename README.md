@@ -18,7 +18,7 @@ To create a standalone, locally ad-hoc signed Debug app:
 
 ```sh
 bash scripts/build-app.sh
-open "dist/$(uname -m)/Commander.app"
+open "dist/$(uname -m)/Commander [DEBUG].app"
 ```
 
 Local app builds default to `CONFIGURATION=debug`, with bundle identifier
@@ -26,7 +26,8 @@ Local app builds default to `CONFIGURATION=debug`, with bundle identifier
 Debug builds do not check for updates. Use
 `CONFIGURATION=release bash scripts/build-app.sh` for an optimized build with the production identifier
 `io.github.inikolaev.commander`. Published releases explicitly use this configuration.
-Both configurations write to the same `dist/<architecture>/Commander.app` path.
+Debug and Release builds use separate `dist/<architecture>/Commander [DEBUG].app`
+and `dist/<architecture>/Commander.app` paths.
 
 Both panes initially open your home directory.
 

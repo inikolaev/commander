@@ -77,6 +77,11 @@ final class TerminalPaneView: NSView {
         viewport.resize(rows: geometry.rowsPerColumn, selectedIndex: state.selectedIndex, itemCount: state.rows.count)
     }
 
+    func revealSearchResult(_ index: Int, itemCount: Int) {
+        viewport.revealSearchResult(index, itemCount: itemCount)
+        needsDisplay = true
+    }
+
     override func setFrameSize(_ newSize: NSSize) {
         super.setFrameSize(newSize)
         updateViewport()

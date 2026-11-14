@@ -10,7 +10,12 @@ fi
 if [[ "${PACKAGE_ONLY:-0}" != 1 ]]; then
     bash scripts/build-app.sh "$ARCH"
 fi
-APP="dist/$ARCH/Commander.app"
+case "${CONFIGURATION:-debug}" in
+    debug) APP_BASENAME="Commander [DEBUG].app" ;;
+    release) APP_BASENAME="Commander.app" ;;
+    *) printf 'CONFIGURATION must be debug or release.\n' >&2; exit 2 ;;
+esac
+APP="dist/$ARCH/$APP_BASENAME"
 if [[ "${NOTARIZE:-0}" == 1 ]]; then
     if [[ "${PACKAGE_ONLY:-0}" != 1 ]]; then
         bash scripts/notarize-app.sh "$APP"
@@ -25,7 +30,7 @@ ARCHIVE="$PWD/dist/Commander-$VERSION-macOS-$ARCH.zip"
 STAGING=$(mktemp -d "${TMPDIR:-/tmp}/commander-package.XXXXXX")
 trap 'rm -rf "$STAGING"' EXIT
 mkdir "$STAGING/$NAME"
-ditto "$APP" "$STAGING/$NAME/Commander.app"
+ditto "$APP" "$STAGING/$NAME/$APP_BASENAME"
 cp LICENSE "$STAGING/$NAME/LICENSE"
 if [[ "${NOTARIZE:-0}" == 1 ]]; then
     SIGNING_NOTICE="This app is Developer ID signed and notarized by Apple."
@@ -38,7 +43,7 @@ Commander — macOS preview
 Requires macOS 13 or later. This download is for $ARCH Macs.
 No Xcode, Swift installation, or terminal is needed.
 
-Drag Commander.app to Applications and open it.
+Drag $APP_BASENAME to Applications and open it.
 $SIGNING_NOTICE
 
 Controls
@@ -57,7 +62,7 @@ The numbered footer buttons are clickable too.
 This is an early preview. Folder copying is not implemented.
 macOS may ask permission to access your folders.
 TEXT
-codesign --verify --deep --strict "$STAGING/$NAME/Commander.app"
+codesign --verify --deep --strict "$STAGING/$NAME/$APP_BASENAME"
 ditto -c -k --sequesterRsrc --keepParent "$STAGING/$NAME" "$ARCHIVE"
 (cd dist && shasum -a 256 "$(basename "$ARCHIVE")" > "$(basename "$ARCHIVE").sha256")
 printf 'Packaged %s\n' "$ARCHIVE"

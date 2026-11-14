@@ -56,7 +56,7 @@ jobs:
       - name: Build packaged app
         run: |
           bash scripts/build-app.sh
-          ditto -c -k --keepParent "dist/$(uname -m)/Commander.app" "$RUNNER_TEMP/Commander-smoke.zip"
+          ditto -c -k --keepParent "dist/$(uname -m)/Commander [DEBUG].app" "$RUNNER_TEMP/Commander-smoke.zip"
           cp scripts/smoke-test-app.py "$RUNNER_TEMP/smoke-test-app.py"
       - uses: actions/upload-artifact@v7
         with:
@@ -80,8 +80,8 @@ jobs:
         run: |
           cd "$RUNNER_TEMP/commander-smoke"
           ditto -x -k Commander-smoke.zip .
-          codesign --verify --deep --strict Commander.app
-          python3 smoke-test-app.py Commander.app
+          codesign --verify --deep --strict "Commander [DEBUG].app"
+          python3 smoke-test-app.py "Commander [DEBUG].app"
 
 
   release:
@@ -128,9 +128,9 @@ jobs:
           CONFIGURATION: debug
         run: |
           bash scripts/package-app.sh "${{ matrix.arch }}"
-          file "dist/${{ matrix.arch }}/Commander.app/Contents/MacOS/Commander"
-          lipo "dist/${{ matrix.arch }}/Commander.app/Contents/MacOS/Commander" -verify_arch "${{ matrix.arch }}"
-          codesign --verify --deep --strict "dist/${{ matrix.arch }}/Commander.app"
+          file "dist/${{ matrix.arch }}/Commander [DEBUG].app/Contents/MacOS/Commander"
+          lipo "dist/${{ matrix.arch }}/Commander [DEBUG].app/Contents/MacOS/Commander" -verify_arch "${{ matrix.arch }}"
+          codesign --verify --deep --strict "dist/${{ matrix.arch }}/Commander [DEBUG].app"
 
       - name: Upload preview
         uses: actions/upload-artifact@v7

@@ -98,6 +98,20 @@ public struct PaneState: Sendable {
         selectedIndex = rows.indices.contains(index) ? index : nil
     }
 
+    /// Find a filename in pane order, wrapping once. The parent row is never a match.
+    public func filenamePrefixMatch(_ query: String, afterCurrent: Bool = false, backwards: Bool = false) -> Int? {
+        guard !query.isEmpty, !rows.isEmpty else { return nil }
+        let count = rows.count
+        let start = selectedIndex ?? (backwards ? count - 1 : 0)
+        for offset in 0..<count {
+            let step = offset + (afterCurrent && selectedIndex != nil ? 1 : 0)
+            let index = backwards ? (start - step % count + count) % count : (start + step) % count
+            guard case .entry(let entry) = rows[index] else { continue }
+            if entry.name.range(of: query, options: [.anchored, .caseInsensitive]) != nil { return index }
+        }
+        return nil
+    }
+
     public mutating func replace(directory: URL, entries: [FileEntry], preferredSelection: URL? = nil, directoryModified: Date? = nil, session: FileSystemSession? = nil) {
         endRangeSelection()
         let sameDirectory = self.directory == directory.selectionAddress

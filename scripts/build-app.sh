@@ -10,11 +10,13 @@ case "$CONFIGURATION" in
     debug)
         BUNDLE_ID="io.github.inikolaev.commander.debug"
         DISPLAY_NAME="Commander [DEBUG]"
+        APP_BASENAME="Commander [DEBUG].app"
         AUTOMATIC_UPDATE_CHECKS=false
         ;;
     release)
         BUNDLE_ID="io.github.inikolaev.commander"
         DISPLAY_NAME="Commander"
+        APP_BASENAME="Commander.app"
         AUTOMATIC_UPDATE_CHECKS=true
         ;;
     *)
@@ -32,7 +34,12 @@ if [[ "$ARCH" != arm64 && "$ARCH" != x86_64 ]]; then
 fi
 
 BUILD_ARGS=(-c "$CONFIGURATION" --arch "$ARCH")
-APP="dist/$ARCH/Commander.app"
+ARTIFACTS_DIR=.build/artifacts
+if [[ -n "${SWIFT_SCRATCH_PATH:-}" ]]; then
+    BUILD_ARGS+=(--scratch-path "$SWIFT_SCRATCH_PATH")
+    ARTIFACTS_DIR="$SWIFT_SCRATCH_PATH/artifacts"
+fi
+APP="dist/$ARCH/$APP_BASENAME"
 # SwiftPM can regenerate accessors during planning. Patch only at the compiler
 # boundary, after planning, so the compiled code always uses Contents/Resources.
 export COMMANDER_REAL_SWIFTC="$(xcrun --find swiftc)"
@@ -49,7 +56,7 @@ for bundle in "$BIN_DIR"/*.bundle; do
     [[ -d "$bundle" ]] || continue
     ditto "$bundle" "$APP/Contents/Resources/$(basename "$bundle")"
 done
-SPARKLE_FRAMEWORK=$(find .build/artifacts -type d -name Sparkle.framework -print -quit)
+SPARKLE_FRAMEWORK=$(find "$ARTIFACTS_DIR" -type d -name Sparkle.framework -print -quit)
 if [[ -z "$SPARKLE_FRAMEWORK" ]]; then
     echo "Sparkle.framework was not found in SwiftPM artifacts" >&2
     exit 1

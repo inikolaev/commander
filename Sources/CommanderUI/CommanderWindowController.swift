@@ -25,8 +25,13 @@ final class CommanderWindowController: NSWindowController, NSWindowDelegate, NSM
         let window = CommanderWindow(
             contentRect: NSRect(x: 0, y: 0, width: 1080, height: 700),
             styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
+        #if DEBUG
+        let fallbackTitle = "Commander [DEBUG]"
+        #else
+        let fallbackTitle = "Commander"
+        #endif
         window.title = Bundle.main.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
-            ?? "Commander"
+            ?? fallbackTitle
         window.minSize = NSSize(width: 700, height: 380)
         window.backgroundColor = TerminalTheme.windowBackground
         window.titlebarAppearsTransparent = true

@@ -5,7 +5,7 @@ import FileManagerCore
 /// An in-window modal surface. Only the borderless path editor uses AppKit text
 /// editing; borders, labels, buttons, progress, and focus are drawn consistently.
 @MainActor
-final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
+final class TerminalOperationDialog: TerminalDialogView, NSTextFieldDelegate {
     enum Mode {
         case list(title: String, message: String, items: [String])
         case textInput(title: String, prompt: String, value: String, confirmTitle: String)
@@ -95,7 +95,6 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
         }
     }
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
-    override var isFlipped: Bool { true }
     override var acceptsFirstResponder: Bool { true }
 
     override func viewDidChangeEffectiveAppearance() {
@@ -152,24 +151,14 @@ final class TerminalOperationDialog: NSView, NSTextFieldDelegate {
         let panel = panelRect
         NSColor.black.withAlphaComponent(0.65).setFill()
         panel.offsetBy(dx: 10, dy: 10).fill()
-        background.setFill()
-        panel.fill()
-        foreground.setStroke()
-        for inset: CGFloat in [15.5, 18.5] {
-            let border = NSBezierPath(rect: panel.insetBy(dx: inset, dy: inset))
-            border.lineWidth = 1
-            border.stroke()
-        }
         let title: String
         switch mode {
         case .list(let heading, _, _), .error(_, let heading), .decision(let heading, _, _, _), .busy(let heading, _), .textInput(let heading, _, _, _), .choice(let heading, _, _): title = heading
         default: title = "Copy"
         }
-        let titleWidth = ceil((title as NSString).size(withAttributes: [.font: TerminalTheme.font]).width) + 8
-        let titleRect = NSRect(x: panel.midX - titleWidth / 2, y: panel.minY + 7, width: titleWidth, height: 20)
-        background.setFill()
-        titleRect.fill()
-        TerminalTheme.text(title.trimmingCharacters(in: .whitespaces), in: titleRect, color: foreground, alignment: .center)
+        drawDialogFrame(panel: panel, outerBorder: panel.insetBy(dx: 15.5, dy: 15.5),
+                        title: title, titleFont: TerminalTheme.font,
+                        background: background, foreground: foreground)
 
         switch mode {
         case .list(_, let message, let items):

@@ -36,7 +36,8 @@ Debug uses `io.github.inikolaev.commander.debug`, displays as `Commander [DEBUG]
 and disables the updater. `CONFIGURATION=release` selects optimized compilation
 and the production identifier `io.github.inikolaev.commander`; the release workflow
 sets this explicitly. PR previews use Debug. No preference migration or cleanup runs.
-Both configurations write to `dist/<architecture>/Commander.app`.
+Debug writes to `dist/<architecture>/Commander [DEBUG].app`; Release writes to
+`dist/<architecture>/Commander.app`.
 The command above creates `dist/Commander-2026.9.42-macOS-arm64.zip`
 and the matching `.zip.sha256` file.
 After downloading both release assets into one directory, verify with:
@@ -79,7 +80,8 @@ checksum verification. `SIGN_APP=0` defers signing in `build-app.sh`;
 `sign-app.sh` signs the existing bundle. `PACKAGE_ONLY=1` makes `package-app.sh`
 package the existing app without rebuilding or resubmitting it. With `NOTARIZE=1`,
 that packaging mode verifies the existing ticket before claiming notarization.
-Default local build and packaging commands keep their previous behavior.
+Default local build and packaging commands use Debug and place
+`Commander [DEBUG].app` in the output and archives.
 
 Signing timestamp requests, notarization waits, stapling, and ticket validation
 retry recognized network failures up to three attempts, with 15- and 30-second
